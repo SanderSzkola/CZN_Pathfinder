@@ -1,0 +1,33 @@
+CZN Pathfinder - find the best way to navigate chaos maps. 
+
+Once the full map is provided, you can define priority for different nodes (normal fights, elite, rest, etc), and script will show you the best possible path.
+Use the panel on the right side of the window, it updates map in real time.
+
+Now, how to get a full map? The game does not provide it at the moment (lets hope it changes in the future), so you have two options.
+
+Option 1: run automatic scan. This will move the mouse programmatically and do all work for you.
+This is not a bot / cheat, it simply drags the map until it sees the boss. It will not play through the map instead of you.
+Requirements:
+	The game is opened in windowed mode, at the start of a chaos run, the minimap is shown and in default position (not moved left/right).
+	The script is running with admin privileges (game is also admin, so it will ignore signals sent by a non-admin process).
+	It takes about 1-2s for a screenshot, and 5-7 screenshots for the full map. You MUST observe it working, at least first few times. This is alpha, it may break.
+	If you see it misbehaving, quickly move mouse to the top left corner to stop it.
+	Tested on windows, may not work with other systems.
+	Full source code is available on github if you want to inspect what it does.
+Selecting folder is optional, with folder it will output saved screenshots there. Use it if you want to know what the script sees.
+With map fragments, you can run detect_nodes.py / detect_connections.py and see how single step progresses.
+	
+Option 2: take screenshots by yourself. This may be annoying, you will be emulating what the script is doing.
+Professionally designed visual aid guide should be located somewhere in the project folder, you may want to check it.
+Instructions:
+	Make empty folder.
+	Open the game, show the map in the default position.
+	Take screenshot, save it as png.
+	Locate rightmost node, drag it into leftmost node position, so previous and current screenshots share one column of nodes.
+	Repeat until boss is visible.
+	Once you screenshotted whole map, select this folder in script and choose Offline Scanner.
+
+This is alpha version, main flow is more or less done, but there is no error handling. May be implemented in the future.
+It was tested on ~50 maps, and I'm still seeing new errors, running another 500 would not make me sure that I caught everything.
+If any subprocess breaks (like detect_nodes flagging Hugo face as Waypoint with 98% certainty), it may or may not tell you
+that it broke, you must notice and restart it by yourself.

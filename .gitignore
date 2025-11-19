@@ -1,0 +1,8 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+.idea/
+
+# Test material
+Map_*/
+pipeline_gui.log
