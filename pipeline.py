@@ -11,6 +11,7 @@ from grabber import switch_window, screenshot, do_drag_move, move_mouse, mock_sw
 from pathfinder import run_pathfinder
 from process_map import Finalizer
 from score_table import ScoreTable
+from path_converter import get_path
 
 """
 Full process:
@@ -86,7 +87,7 @@ def worker_nodes(detect_q: Queue, result: DetectResult, templates):
 
 
 def run_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lambda msg: None, score_table: ScoreTable = None):
-    templates = TemplateLibrary("Encounter_minimal")
+    templates = TemplateLibrary()
     finalizer = Finalizer()
 
     # connections worker
@@ -167,7 +168,7 @@ def run_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lambda ms
 
 
 def run_pipeline_offline(max_steps=30, save_folder=None, print_grid=False, log=lambda msg: None, score_table: ScoreTable = None):
-    templates = TemplateLibrary("Encounter_minimal")
+    templates = TemplateLibrary()
     finalizer = Finalizer()
     work_q = Queue()
     worker = threading.Thread(target=worker_connections, args=(work_q, finalizer, templates, print_grid),
@@ -215,4 +216,4 @@ def run_pipeline_offline(max_steps=30, save_folder=None, print_grid=False, log=l
 
 
 if __name__ == "__main__":
-    run_pipeline_offline(max_steps=20, save_folder="Map_live_test_dumpsite_10", print_grid=False, log=lambda msg: print(msg))
+    run_pipeline_offline(max_steps=20, save_folder=get_path("Example_scan_result"), print_grid=False, log=lambda msg: print(msg))

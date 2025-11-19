@@ -3,6 +3,7 @@ import json
 import os
 
 from detect_connections import detect_connections
+from path_converter import get_path
 
 MAX_VERTICAL_ROWS = 5
 HORIZONTAL_OFFSETS = [0, -1, -2, -3]
@@ -252,11 +253,11 @@ def main(folder, templates):
         nodes, edges, _ = detect_connections(path, templates, screenshot_index=i)
         F.add_fragment(nodes, edges, False)
 
-    F.finalize("merged_map.json")
+    F.finalize(os.path.join(folder, "merged_map.json"))
 
 
 if __name__ == "__main__":
     from detect_nodes import TemplateLibrary
 
-    templates = TemplateLibrary("Encounter_minimal")
-    main("Map_live_test_dumpsite_7", templates)
+    templates = TemplateLibrary()
+    main(get_path("Example_scan_result"), templates)

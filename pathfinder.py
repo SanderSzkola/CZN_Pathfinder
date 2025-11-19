@@ -2,6 +2,7 @@
 import json
 from typing import Dict, List, Tuple, Optional
 from score_table import ScoreTable
+from path_converter import get_path
 
 
 def load_map(path: str) -> Tuple[Dict[str, dict], List[Tuple[str, str]]]:
@@ -123,8 +124,7 @@ def run_pathfinder(
 
 
 if __name__ == "__main__":
-    best_path, total_score = run_pathfinder("Map_live_test_dumpsite_7/merged_map.json")
+    best_path, total_score = run_pathfinder(get_path(["Example_scan_result", "merged_map.json"]))
     print("Best path nodes:", best_path)
     print("Best path edges:", extract_edges_from_path(best_path))
     print("Total score:", total_score)
-    print("Best path written into merged_map.json")

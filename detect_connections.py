@@ -6,7 +6,7 @@ import numpy as np
 from PIL.Image import Image
 
 from detect_nodes import TemplateLibrary
-
+from path_converter import get_path
 
 PX_TOLERANCE = 16
 CORRIDOR_HALF = 16
@@ -223,8 +223,8 @@ def detect_connections(map_fragment, templates, nodes=None, screenshot_index=0):
                     continue
 
                 reversed_order = (
-                    (n1.row < n2.row and m1.row > m2.row) or
-                    (n1.row > n2.row and m1.row < m2.row)
+                        (n1.row < n2.row and m1.row > m2.row) or
+                        (n1.row > n2.row and m1.row < m2.row)
                 )
 
                 if reversed_order:
@@ -278,10 +278,10 @@ def render_preview(map_name, nodes, edges, corridor_debug):
     result = cv2.addWeighted(base, 0.2, overlay, 0.8, 0)
 
     type_to_file = {}
-    for file in os.listdir("Encounter"):
+    for file in os.listdir(get_path(["Images", "Encounter"])):
         if file.lower().endswith(".png"):
             name = os.path.splitext(file)[0].lower()
-            type_to_file[name[:2].upper()] = os.path.join("Encounter", file)
+            type_to_file[name[:2].upper()] = os.path.join(get_path(["Images", "Encounter"]), file)
 
     for n in nodes:
         if n.type not in type_to_file:
@@ -313,20 +313,19 @@ def render_preview(map_name, nodes, edges, corridor_debug):
         else:
             roi[:] = icon_rgb
 
-    cv2.imwrite(f"{map_name.split('.')[0]}_connections_preview.png", result)
-
+    cv2.imwrite(get_path(f"{map_name.split('.')[0]}_connections_preview.png"), result)
 
 
 if __name__ == "__main__":
-    map_folder = "Map_gui_test_1/"
-    maps = {"map_frag_0.png",}
-    #maps = os.listdir(map_folder)
+    map_folder = get_path("Example_scan_result")
+    maps = ["map_frag_0.png", ]
+    # maps = os.listdir(map_folder)
     templates = TemplateLibrary("Encounter_minimal")
     for i, map_name in enumerate(maps):
         name, ext = map_name.split('.')
         if name.endswith("preview") or name.startswith("merged") or not ext.endswith("png"):
             continue
-        map_path = map_folder + map_name
+        map_path = os.path.join(map_folder, map_name)
         nodes, edges, corridor_debug = detect_connections(map_path, templates, screenshot_index=i)
         render_preview(map_path, nodes, edges, corridor_debug)
         print(f"{map_name} done")

@@ -1,6 +1,7 @@
 import json
 import os
 from typing import List, Optional, Union
+from path_converter import get_path
 
 import cv2
 import numpy as np
@@ -112,14 +113,14 @@ def draw_map(
         map_data: Union[str, dict],
         best_path: Optional[List[str]] = None,
         output_path: str = None,
-        encounter_icon_dir: str = "Encounter",
-        modifier_icon_dir: str = "Modifier",
 ) -> np.ndarray:
     """
     Render a map visualization with optional best path overlay.
     Accepts either a dict (pipeline) or a file path (offline).
     """
 
+    encounter_icon_dir = get_path(["Images", "Encounter"])
+    modifier_icon_dir = get_path(["Images", "Modifier"])
     if isinstance(map_data, str):
         nodes, edges, _ = load_map(map_data)
     else:
@@ -206,8 +207,8 @@ def draw_map(
         px = int(x + Wn // 2 - Wm)
         py = int(y - Hm - 5)
         paste_icon_exact(canvas, mod_icon, px, py)
-
-    background = make_tiled_background("background_img.png", height, width)
+    background_path = get_path(["Images", "background_img.png"])
+    background = make_tiled_background(background_path, height, width)
 
     fg = canvas
     bg = background
@@ -231,7 +232,7 @@ def draw_map(
 
 # ----- STANDALONE MODE -----
 if __name__ == "__main__":
-    with open("Map_live_test_dumpsite_7/merged_map.json", "r") as f:
+    with open(get_path(["Example_scan_result", "merged_map.json"]), "r") as f:
         data = json.load(f)
     best_path = data.get("best_path", None)
-    draw_map(data, best_path,"Map_live_test_dumpsite_7/merged_map.png")
+    draw_map(data, best_path, get_path(["Example_scan_result", "merged_map.png"]))

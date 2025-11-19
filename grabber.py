@@ -1,9 +1,10 @@
 # grabber.py
+import os.path
 import time
 from typing import Optional
 
 import pyautogui
-import win32gui #TODO: test them and add ONE to requirements
+import win32gui  # TODO: test them and add ONE to requirements
 import pygetwindow as gw
 from PIL import Image
 
@@ -17,12 +18,14 @@ GAME_WINDOW = "Chaos Zero Nightmare"
 # GAME_WINDOW = "Spotify"
 SCRIPT_WINDOW = "CZN Pathfinder"
 
-def switch_window(step): #TODO: think about some other way, alt-tab is unreliable // pygetwindow? win32gui?
+
+def switch_window(step):  # TODO: think about some other way, alt-tab is unreliable // pygetwindow? win32gui?
     time.sleep(0.2)
     # pyautogui.hotkey("alt", "tab")
     # time.sleep(0.2)
     switch_window_win32gui(step)
     # switch_window_pygetwindow(step)
+
 
 def _find_hwnd(title_substring: str):
     result = []
@@ -38,7 +41,7 @@ def _find_hwnd(title_substring: str):
 
 
 def switch_window_win32gui(step):
-    if step==0:
+    if step == 0:
         hwnd = _find_hwnd(GAME_WINDOW)
         label = GAME_WINDOW
     else:
@@ -55,7 +58,7 @@ def switch_window_win32gui(step):
 
 
 def switch_window_pygetwindow(step):
-    name = GAME_WINDOW if step ==0 else SCRIPT_WINDOW
+    name = GAME_WINDOW if step == 0 else SCRIPT_WINDOW
 
     windows = [w for w in gw.getAllWindows() if name.lower() in w.title.lower()]
     if not windows:
@@ -67,18 +70,16 @@ def switch_window_pygetwindow(step):
     time.sleep(0.2)
 
 
-def screenshot(save_folder: Optional[str] = None, index:int = -1) -> Image.Image:
+def screenshot(save_folder: Optional[str] = None, index: int = -1) -> Image.Image:
     img = pyautogui.screenshot()
     if save_folder is not None:
-        if not save_folder.endswith("/"):
-            save_folder += "/"
         if index == -1:
             # for quick lookup only, can flip from 99 to 00 if timing is unfortunate, use index
             ts = int(time.time() * 10)
             ts = str(ts)[-5:]
-            img.save(f"{save_folder}map_frag_{ts}.png")
+            img.save(os.path.join(save_folder, f"map_frag_{ts}.png"))
         else:
-            img.save(f"{save_folder}map_frag_{index}.png")
+            img.save(os.path.join(save_folder, f"map_frag_{index}.png"))
     return img
 
 
@@ -112,4 +113,3 @@ def mock_screenshot(save_folder: Optional[str] = None) -> Image.Image:
 
 def mock_move_screen(node_from, node_to):
     time.sleep(0.5)
-

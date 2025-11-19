@@ -6,7 +6,7 @@ import numpy as np
 from PIL.Image import Image
 
 from node import Node
-
+from path_converter import get_path
 
 """
 Handles loading template images and providing them for node/modifier detection.
@@ -14,9 +14,9 @@ Handles loading template images and providing them for node/modifier detection.
 
 
 class TemplateLibrary:
-    def __init__(self, encounter_dir="Encounter", modifier_dir="Modifier"):
-        self.node_templates = self._load_templates(encounter_dir)
-        self.modifier_templates = self._load_templates(modifier_dir)
+    def __init__(self, encounter_dir="Encounter_minimal", modifier_dir="Modifier"):
+        self.node_templates = self._load_templates(get_path(["Images", encounter_dir]))
+        self.modifier_templates = self._load_templates(get_path(["Images", modifier_dir]))
 
     @staticmethod
     def _load_templates(directory):
@@ -180,16 +180,15 @@ def _preview(map_img, nodes, map_fragment, top_offset):
         )
 
     if isinstance(map_fragment, str):
-        base = ".".join(map_fragment.split(".")[:-1])
+        base = get_path(map_fragment.split(".")[:-1])
         cv2.imwrite(f"{base}_nodes_preview.png", preview)
     else:
         now = datetime.now().strftime("%H%M%S")
-        cv2.imwrite(f"nodes_preview_{now}.png", preview)
+        cv2.imwrite(get_path(f"nodes_preview_{now}.png"), preview)
 
 
 def detect_nodes(map_fragment, templates: TemplateLibrary, screenshot_index=0,
                  create_preview=False, threshold=0.98):
-
     map_img = _load_map_image(map_fragment)
     map_gray, map_rgb_trimmed = _trim_map(map_img)
 
@@ -237,10 +236,9 @@ def detect_nodes(map_fragment, templates: TemplateLibrary, screenshot_index=0,
     return nodes
 
 
-
 if __name__ == "__main__":
-    templates = TemplateLibrary(encounter_dir="Encounter_minimal")
-    folder = "Map_gui_test_1"
+    templates = TemplateLibrary()
+    folder = get_path("Example_scan_result")
 
     # SINGLE
     path = os.path.join(folder, "map_frag_0.png")

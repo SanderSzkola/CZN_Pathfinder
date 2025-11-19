@@ -9,6 +9,7 @@ from pipeline import run_pipeline, run_pipeline_offline
 from pathfinder import run_pathfinder
 from drawer import draw_map
 from score_table import ScoreTable
+from path_converter import get_path
 
 
 class PipelineGUI:
@@ -22,7 +23,7 @@ class PipelineGUI:
         self.last_image = None
         self.last_path = None
         self.log_buffer = []
-        self.log_file_path = os.path.join(os.getcwd(), "pipeline_gui.log")
+        self.log_file_path = get_path("pipeline_gui.log")
         self.score_table = ScoreTable()
         self._pathfinder_task_id = None
 
@@ -59,7 +60,6 @@ class PipelineGUI:
         )
         self.log_display.pack(pady=0, fill="x")
         self.log_lines = []
-        self.log_file_path = os.path.join(os.getcwd(), "pipeline_gui.log")
 
         # Folder selection
         self.folder_label = tk.Label(self.right_panel, text="Folder: None", anchor="w")
@@ -158,7 +158,7 @@ class PipelineGUI:
             create_row(right_col, key, val)
 
         # Load background image
-        img = Image.open("example_map.png")
+        img = Image.open(get_path(["Images","filler_map.png"]))
         self.display_image(img)
 
         # Poll UI updates
@@ -218,7 +218,7 @@ class PipelineGUI:
     # Folder selection
     # ------------------------------------------------------------
     def choose_folder(self):
-        f = filedialog.askdirectory()
+        f = filedialog.askdirectory(initialdir=get_path())
         if f:
             self.selected_folder = f
             self.folder_label.config(text=f"Folder: {f}")
@@ -371,7 +371,7 @@ class PipelineGUI:
             "Make sure alt-tab leads to the game, the game has minimap opened and in default position (not moved left/right).\n"
             "Do not touch mouse or keyboard until scanning is done.\n\n"
             "If the scanner behaves incorrectly, quickly move mouse to top left screen corner to stop it.\n"
-            "If the script failed to switch to the game window, alt-tab to game and back, then start again."))
+            "If the script failed to switch window, alt-tab to game and back, then start again."))
          .pack(padx=20, pady=15))
 
         result = {"value": False}
