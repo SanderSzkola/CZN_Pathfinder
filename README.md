@@ -17,7 +17,7 @@
 ## Automatic scan demo
 
 Here's how automatic scan looks in action:
-![demo](Images/demo.gif)
+![demo](Images/Demo.gif)
 
 ## Installation
 
@@ -35,8 +35,7 @@ Here's how automatic scan looks in action:
 ## Notes
 
 Automatic scanner requires admin elevation (right click / run as administrator).
-The game is elevated itself, and lower process cant send signals to higher process or something. Offline mode can work without it.
-This is a convenience  tool, not a bot or cheat. 
-It displays the full map and the optimal path. It does not run the map for you.
-It does not modify or inject any code into the game.
-It DOES emulate user input to scroll opened chaos map, but that action provides no gameplay advantage compared to something like autofarmers.
+The game is elevated itself, and lower process cant send signals to higher process or something. Offline mode can work without it.<br>
+This is a convenience  tool, not a bot or cheat. It displays the full map and the optimal path.<br>
+It does not run the map for you. It does not modify or inject any code into the game.<br>
+It DOES emulate user input to scroll opened chaos map, but that action provides no unfair account advantage compared to something like autofarmers.
