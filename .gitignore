@@ -2,9 +2,13 @@
 /shelf/
 /workspace.xml
 .idea/
+/build/
+/dist/
+/*.spec
+/*.exe
 
 # Test material
-Test_scans/
-pipeline_gui.log
+/Test_scans/
+/pipeline_gui.log
 /ScoreTable.json
-Example_scan_result/merged*
+/Example_scan_result/merged*

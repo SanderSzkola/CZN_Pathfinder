@@ -10,15 +10,16 @@ This is not a bot / cheat, it simply drags the map until it sees the boss. It wi
 Requirements:
 	The game is opened in windowed mode, at the start of a chaos run, the minimap is shown and in default position (not moved left/right).
 	The script is running with admin privileges (game is also admin, so it will ignore signals sent by a non-admin process).
-	It takes about 1-2s for a screenshot, and 5-7 screenshots for the full map. You MUST observe it working, at least first few times. This is alpha, it may break.
+	It takes about 1-2s for a screenshot, and 5-10 screenshots for the full map. You MUST observe it working, at least first few times. This is alpha, it may break.
 	If you see it misbehaving, quickly move mouse to the top left corner to stop it.
-	Tested on windows, may not work with other systems.
-	Full source code is available on github if you want to inspect what it does.
+	Tested on windows, may not work with other systems. All tests were done in 1920x1080 resolution, may not work with others.
+	Full source code is available on github if you want to inspect what it does. [https://github.com/SanderSzkola/CZN_Pathfinder]
 Selecting folder is optional, with folder it will output saved screenshots there. Use it if you want to know what the script sees.
 With map fragments, you can run detect_nodes.py / detect_connections.py and see how single step progresses.
 	
 Option 2: take screenshots by yourself. This may be annoying, you will be emulating what the script is doing.
 Professionally designed visual aid guide should be located somewhere in the project folder, you may want to check it.
+You can also see the pathfinder working by selecting Example_scan_result folder.
 Instructions:
 	Make empty folder.
 	Open the game, show the map in the default position.

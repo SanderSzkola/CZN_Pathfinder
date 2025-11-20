@@ -4,8 +4,8 @@ import time
 from typing import Optional
 
 import pyautogui
-import win32gui  # TODO: test them and add ONE to requirements
-import pygetwindow as gw
+import win32gui
+# import pygetwindow as gw
 from PIL import Image
 
 """
@@ -57,17 +57,17 @@ def switch_window_win32gui(step):
     time.sleep(0.2)
 
 
-def switch_window_pygetwindow(step):
-    name = GAME_WINDOW if step == 0 else SCRIPT_WINDOW
-
-    windows = [w for w in gw.getAllWindows() if name.lower() in w.title.lower()]
-    if not windows:
-        print("pygetwindow: Window not found:", name)
-        return
-
-    w = windows[0]
-    w.activate()
-    time.sleep(0.2)
+# def switch_window_pygetwindow(step):
+#     name = GAME_WINDOW if step == 0 else SCRIPT_WINDOW
+#
+#     windows = [w for w in gw.getAllWindows() if name.lower() in w.title.lower()]
+#     if not windows:
+#         print("pygetwindow: Window not found:", name)
+#         return
+#
+#     w = windows[0]
+#     w.activate()
+#     time.sleep(0.2)
 
 
 def screenshot(save_folder: Optional[str] = None, index: int = -1) -> Image.Image:

@@ -2,3 +2,4 @@ numpy>=2.3
 opencv_python>=4.10
 Pillow>=12.0
 PyAutoGUI>=0.9
+pywin32>=311
