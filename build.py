@@ -36,7 +36,6 @@ release_ignore = [
     "Images/Icon.ico",
     "Images/background_img_blank.png",
     "Images/gui_image.png",
-    ".gitignore",
 
 ]
 

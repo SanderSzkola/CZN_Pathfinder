@@ -2,27 +2,26 @@ import json
 from typing import Dict
 from path_converter import get_path
 
+
 class ScoreTable:
     def __init__(
-        self,
-        NO: int = -10,
-        EL: int = 2,
-        EV: int = 4,
-        RE: int = 0,
-        WA: int = 0,
-        RESH: int = 3,
-        NOOR: int = -10,
-        ELOR: int = 2
+            self,
+            NO: int = -10,
+            EL: int = 2,
+            RE: int = 0,
+            EV: int = 4,
+            NOOR: int = -10,
+            ELOR: int = 2,
+            RESH: int = 3,
     ):
         self.table: Dict[str, int] = {
             "NO": NO,
             "EL": EL,
-            "EV": EV,
             "RE": RE,
-            "WA": WA,
-            "RESH": RESH,
+            "EV": EV,
             "NOOR": NOOR,
             "ELOR": ELOR,
+            "RESH": RESH,
         }
 
     @staticmethod
@@ -42,7 +41,6 @@ class ScoreTable:
             EL=data.get("EL", 2),
             EV=data.get("EV", 4),
             RE=data.get("RE", 0),
-            WA=data.get("WA", 0),
             RESH=data.get("RESH", 3),
             NOOR=data.get("NOOR", -10),
             ELOR=data.get("ELOR", 2),
