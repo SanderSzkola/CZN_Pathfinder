@@ -1,11 +1,11 @@
-# Default ignored files
 /shelf/
 /workspace.xml
 .idea/
 /build/
 /dist/
-/*.spec
-/*.exe
+*.spec
+*.exe
+/Exe_build_folder/
 
 # Test material
 /Test_scans/
