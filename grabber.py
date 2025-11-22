@@ -86,30 +86,30 @@ def screenshot(save_folder: Optional[str] = None, index: int = -1) -> Image.Imag
 def do_drag_move(node_from, node_to):
     current_x, current_y = pyautogui.position()
     if abs(current_x - node_from.x) > 50:
-        pyautogui.moveTo(node_from.x, node_from.y, duration=0.5)
+        pyautogui.moveTo(node_from.x, node_from.y, duration=0.4)
     else:
         pyautogui.moveTo(node_from.x, current_y, duration=0.1)
     time.sleep(0.03)
     pyautogui.mouseDown()
     pyautogui.moveTo(node_to.x, node_to.y, duration=0.5)
-    time.sleep(0.1)
+    time.sleep(0.05)
     pyautogui.mouseUp()
 
 
 def move_mouse(node_to):
-    pyautogui.moveTo(node_to.x, node_to.y, duration=0.5)
+    pyautogui.moveTo(node_to.x, node_to.y, duration=0.4)
     time.sleep(0.1)
 
 
 def mock_switch_window():
-    time.sleep(0.2)
+    time.sleep(0.01)
 
 
 def mock_screenshot(save_folder: Optional[str] = None) -> Image.Image:
     img = Image.open(save_folder)
-    time.sleep(0.3)
+    time.sleep(0.01)
     return img
 
 
 def mock_move_screen(node_from, node_to):
-    time.sleep(0.5)
+    time.sleep(0.01)

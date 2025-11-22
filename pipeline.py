@@ -17,19 +17,22 @@ from path_converter import get_path
 Full process:
     Grabber switches window
     Grabber takes screenshot
-    Pipeline gives screenshot to detect_nodes [2nd core], then waits
+    Pipeline gives screenshot to detect_nodes [2nd thread], then waits
     Detect_nodes finishes, return nodes
-    Pipeline passes nodes to grabber and detect_connections [3rd core]
+    Pipeline passes nodes to grabber and detect_connections [3rd thread]
     Repeat until end detected:
         Grabber moves cursor to last node position, drags minimap to first node position, takes screenshot
-        Pipeline passes screenshot to detect_nodes [2nd core]
+        Pipeline passes screenshot to detect_nodes [2nd thread]
         Grabber moves cursor to previous last node position, hoping it is close to next last node position
-        Pipeline waits for 2nd core to finish
-        Pipeline passes nodes to grabber and detect_connections [3rd core]
-    Pipeline waits until 3rd core finishes
+        Pipeline waits for 2nd thread to finish
+        Pipeline passes nodes to grabber and detect_connections [3rd thread]
+    Pipeline waits until 3rd thread finishes
     Pipeline sends finished map to Pathfinder, then to Drawer
     Grabber switches window
     Pipeline returns full map, best path and image
+    
+    All of those threads may still be running on one core, so this was less useful that I thought it would be,
+     but it at least allows for mouse movement while processing detect_nodes 
 """
 
 def check_end(nodes, last_nodes):  # TODO: think about better method, this could fail in some strange maps

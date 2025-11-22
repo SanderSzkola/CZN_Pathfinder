@@ -43,11 +43,20 @@ class TemplateLibrary:
         if has_alpha:
             b, g, r, a = cv2.split(img)
             rgb = cv2.merge([b, g, r])
-            gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY).astype(np.float32)
+            gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
             mask = (a > 0).astype(np.uint8) * 255
+
+            ys, xs = np.where(mask > 0)
+            y0, y1 = ys.min(), ys.max()
+            x0, x1 = xs.min(), xs.max()
+
+            gray = gray[y0:y1 + 1, x0:x1 + 1]
+            rgb = rgb[y0:y1 + 1, x0:x1 + 1]
+            mask = mask[y0:y1 + 1, x0:x1 + 1]
+
         else:
             rgb = img[:, :, :3]
-            gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY).astype(np.float32)
+            gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
             mask = np.ones_like(gray, dtype=np.uint8) * 255
 
         return gray, mask, rgb
@@ -56,7 +65,6 @@ class TemplateLibrary:
 def color_verify(map_img, tmpl_rgb, mask, x, y):
     h, w, _ = tmpl_rgb.shape
     patch = map_img[y:y + h, x:x + w]
-
     if patch.shape[:2] != (h, w):
         return False
 
@@ -76,11 +84,11 @@ def _load_map_image(map_fragment):
         rgb = np.array(map_fragment)
         return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
-    raise TypeError("map_fragment must be a file path or PIL.Image instance")
+    raise TypeError("map_fragment must be a path or PIL.Image")
 
 
 def _trim_map(map_img, top=120, right=120):
-    gray = cv2.cvtColor(map_img, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    gray = cv2.cvtColor(map_img, cv2.COLOR_BGR2GRAY)
     gray_trim = gray[top:, :-right]
     rgb_trim = map_img[top:, :-right]
     return gray_trim, rgb_trim
@@ -89,7 +97,6 @@ def _trim_map(map_img, top=120, right=120):
 def _non_max_suppression(points, shape, w, h):
     taken = []
     occupied = np.zeros(shape, dtype=np.uint8)
-
     for (x, y) in points:
         if occupied[y, x] == 1:
             continue
@@ -99,52 +106,40 @@ def _non_max_suppression(points, shape, w, h):
         x0 = max(0, x - w // 2)
         x1 = x + w // 2
         occupied[y0:y1, x0:x1] = 1
-
     return taken
 
 
-def _detect_templates(map_gray, map_rgb_trimmed, templates, threshold):
+def _detect_templates(map_gray, map_rgb, templates, threshold):
     candidates = []
 
-    for label, (tmpl_orig, mask_orig, tmpl_rgb_orig) in templates.items():
-        best_points = []
-        scale = 1.0
-        scale_min = 0.5
-        scale_step = 0.95
+    for label, (tmpl_gray, mask, tmpl_rgb) in templates.items():
+        h, w = tmpl_gray.shape
 
-        # multi-scale search
-        while scale >= scale_min and not best_points:
-            tmpl = cv2.resize(tmpl_orig, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
-            mask = cv2.resize(mask_orig, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
-            tmpl_rgb = cv2.resize(tmpl_rgb_orig, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        # masked template matching (uint8)
+        res = cv2.matchTemplate(
+            map_gray,
+            tmpl_gray,
+            cv2.TM_CCORR_NORMED,
+            mask=mask
+        )
 
-            tmpl_w = tmpl * (mask.astype(np.float32) / 255.0)
-            res = cv2.matchTemplate(map_gray, tmpl_w, cv2.TM_CCORR_NORMED, mask=mask)
-
-            h, w = tmpl.shape
-            ys, xs = np.where(res >= threshold)
-
-            if ys.size > 0:
-                pts = list(zip(xs, ys))
-                pts.sort(key=lambda p: res[p[1], p[0]], reverse=True)
-                best_points = pts
-            else:
-                scale *= scale_step
-
-        if not best_points:
+        ys, xs = np.where(res >= threshold)
+        if ys.size == 0:
             continue
 
-        taken = _non_max_suppression(best_points, res.shape, w, h)
+        pts = list(zip(xs, ys))
+        pts.sort(key=lambda p: res[p[1], p[0]], reverse=True)
+
+        taken = _non_max_suppression(pts, res.shape, w, h)
         abbrev = label[:2].upper()
 
         for (x, y) in taken:
-            score = res[y, x]
-            cx = x + w // 2
-            cy = y + h // 2
-
-            if not color_verify(map_rgb_trimmed, tmpl_rgb, mask, x, y):
+            if not color_verify(map_rgb, tmpl_rgb, mask, x, y):
                 continue
 
+            score = float(res[y, x])
+            cx = x + w // 2
+            cy = y + h // 2
             candidates.append((cx, cy, abbrev, score))
 
     return candidates
@@ -154,13 +149,11 @@ def _assign_modifiers(nodes, modifier_hits):
     for mx, my, mod, _ in modifier_hits:
         best = None
         best_dist = float("inf")
-
         for node in nodes:
             d = (mx - node.x) ** 2 + (my - node.y) ** 2
             if d < best_dist:
                 best = node
                 best_dist = d
-
         if best is not None:
             best.modifier = mod
 
@@ -201,7 +194,6 @@ def detect_nodes(map_fragment, templates: TemplateLibrary, screenshot_index=0,
     # deduplicate nodes
     for cx, cy, t, score in node_candidates:
         keep = True
-
         for n in nodes:
             if (cx - n.x) ** 2 + (cy - n.y) ** 2 < 2500:
                 keep = False
@@ -245,6 +237,7 @@ if __name__ == "__main__":
     nodes = detect_nodes(path, templates, create_preview=True)
     for n in nodes:
         print(n)
+    print(f"Total nodes: {len(nodes)}")
 
     # FOLDER
     # for f in os.listdir(folder):

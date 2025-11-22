@@ -16,6 +16,7 @@ class PipelineGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("CZN Pathfinder")
+        self.root.iconbitmap("Images/Icon.ico")
 
         # State
         self.selected_folder = None
@@ -23,7 +24,7 @@ class PipelineGUI:
         self.last_image = None
         self.last_path = None
         self.log_buffer = []
-        self.log_file_path = get_path("pipeline_gui.log")
+        self.log_file_path = get_path("log_file.log")
         self.score_table = ScoreTable()
         self._pathfinder_task_id = None
 

@@ -9,6 +9,6 @@
 
 # Test material
 /Test_scans/
-/pipeline_gui.log
+/log_file.log
 /ScoreTable.json
 /Example_scan_result/merged*
