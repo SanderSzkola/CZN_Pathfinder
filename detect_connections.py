@@ -320,7 +320,7 @@ if __name__ == "__main__":
     map_folder = get_path("Example_scan_result")
     maps = ["map_frag_0.png", ]
     # maps = os.listdir(map_folder)
-    templates = TemplateLibrary("Encounter_minimal")
+    templates = TemplateLibrary()
     for i, map_name in enumerate(maps):
         name, ext = map_name.split('.')
         if name.endswith("preview") or name.startswith("merged") or not ext.endswith("png"):

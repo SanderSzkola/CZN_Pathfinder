@@ -14,7 +14,7 @@ Handles loading template images and providing them for node/modifier detection.
 
 
 class TemplateLibrary:
-    def __init__(self, encounter_dir="Encounter_minimal", modifier_dir="Modifier"):
+    def __init__(self, encounter_dir="Encounter_minimal_1920", modifier_dir="Modifier_1920"):
         self.node_templates = self._load_templates(get_path(["Images", encounter_dir]))
         self.modifier_templates = self._load_templates(get_path(["Images", modifier_dir]))
 
@@ -115,7 +115,6 @@ def _detect_templates(map_gray, map_rgb, templates, threshold):
     for label, (tmpl_gray, mask, tmpl_rgb) in templates.items():
         h, w = tmpl_gray.shape
 
-        # masked template matching (uint8)
         res = cv2.matchTemplate(
             map_gray,
             tmpl_gray,
@@ -158,7 +157,7 @@ def _assign_modifiers(nodes, modifier_hits):
             best.modifier = mod
 
 
-def _preview(map_img, nodes, map_fragment, top_offset):
+def _preview(map_img, nodes, map_fragment):
     preview = map_img.copy()
     for node in nodes:
         cv2.putText(
@@ -167,8 +166,8 @@ def _preview(map_img, nodes, map_fragment, top_offset):
             (node.x, node.y),
             cv2.FONT_HERSHEY_SIMPLEX,
             1.5,
-            (255, 0, 0),
-            2,
+            (128, 255, 0),
+            3,
             cv2.LINE_AA,
         )
 
@@ -214,7 +213,7 @@ def detect_nodes(map_fragment, templates: TemplateLibrary, screenshot_index=0,
         node.y += top_offset
 
     if create_preview:
-        _preview(map_img, nodes, map_fragment, top_offset)
+        _preview(map_img, nodes, map_fragment)
 
     nodes.sort(key=lambda n: n.x)
 
@@ -226,6 +225,29 @@ def detect_nodes(map_fragment, templates: TemplateLibrary, screenshot_index=0,
         nodes = nodes[:-1]
 
     return nodes
+
+
+def pick_template_set(first_img, template_sets):
+    """
+    template_sets: list of (resolution, encounter_dir, modifier_dir)
+    returns: best TemplateLibrary, nodes to maybe reuse, resolution
+    """
+    best = None
+    best_count = -1
+    nodes = None
+    best_resolution = ""
+
+    for resolution, enc_dir, mod_dir in template_sets:
+        templates = TemplateLibrary(encounter_dir=enc_dir, modifier_dir=mod_dir)
+        temp_nodes = detect_nodes(first_img, templates, screenshot_index=0)
+        count = len(temp_nodes)
+        if count > best_count:
+            best_count = count
+            best = templates
+            nodes = temp_nodes
+            best_resolution = resolution
+
+    return best, nodes, best_resolution
 
 
 if __name__ == "__main__":

@@ -120,7 +120,7 @@ def draw_map(
     """
 
     encounter_icon_dir = get_path(["Images", "Encounter"])
-    modifier_icon_dir = get_path(["Images", "Modifier"])
+    modifier_icon_dir = get_path(["Images", "Modifier_1920"])
     if isinstance(map_data, str):
         nodes, edges, _ = load_map(map_data)
     else:

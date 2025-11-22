@@ -5,9 +5,10 @@ import time
 from queue import Queue
 
 from detect_connections import detect_connections
-from detect_nodes import detect_nodes, TemplateLibrary
+from detect_nodes import detect_nodes, TemplateLibrary, pick_template_set
 from drawer import draw_map
-from grabber import switch_window, screenshot, do_drag_move, move_mouse, mock_switch_window, mock_move_screen, mock_screenshot
+from grabber import switch_window, screenshot, do_drag_move, move_mouse, mock_switch_window, mock_move_screen, \
+    mock_screenshot
 from pathfinder import run_pathfinder
 from process_map import Finalizer
 from score_table import ScoreTable
@@ -34,6 +35,12 @@ Full process:
     All of those threads may still be running on one core, so this was less useful that I thought it would be,
      but it at least allows for mouse movement while processing detect_nodes 
 """
+
+TEMPLATE_SETS = [
+    ("1600x900", "Encounter_minimal_1600", "Modifier_1600"),
+    ("1920x1080", "Encounter_minimal_1920", "Modifier_1920"),
+]
+
 
 def check_end(nodes, last_nodes):  # TODO: think about better method, this could fail in some strange maps
     if (last_nodes is None or len(last_nodes) <= 2
@@ -67,7 +74,7 @@ def worker_connections(queue: Queue, finalizer: Finalizer, templates, print_grid
         queue.task_done()
 
 
-class DetectResult: # why are you a class? check later
+class DetectResult:  # why are you a class? check later
     def __init__(self):
         self.lock = threading.Lock()
         self.ready_step = -1
@@ -89,9 +96,21 @@ def worker_nodes(detect_q: Queue, result: DetectResult, templates):
         detect_q.task_done()
 
 
-def run_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lambda msg: None, score_table: ScoreTable = None):
-    templates = TemplateLibrary()
+def run_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lambda msg: None,
+                 score_table: ScoreTable = None):
     finalizer = Finalizer()
+    last_nodes = None
+    step = 0
+
+    log("Starting scanning process")
+    switch_window(step)
+
+    # TODO: rewrite this so those nodes can be used
+    img = screenshot(save_folder, step)
+    templates, initial_nodes, resolution = pick_template_set(img, TEMPLATE_SETS)
+    if len(initial_nodes) == 0:
+        raise IOError(f"Step {step}: Nothing detected, is map visible?")
+    log(f"Matched template: {resolution}, with {len(initial_nodes)} matches")
 
     # connections worker
     work_q = Queue()
@@ -114,11 +133,6 @@ def run_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lambda ms
 
     if save_folder is not None:
         os.makedirs(save_folder, exist_ok=True)
-
-    last_nodes = None
-    step = 0
-    log("Starting scanning process")
-    switch_window(step)
 
     while step < max_steps:
         log(f"Step {step}, expected 5~10")
@@ -170,27 +184,49 @@ def run_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lambda ms
     return map_obj, path, image
 
 
-def run_pipeline_offline(max_steps=30, save_folder=None, print_grid=False, log=lambda msg: None, score_table: ScoreTable = None):
-    templates = TemplateLibrary()
+def run_pipeline_offline(max_steps=30, save_folder=None, print_grid=False, log=lambda msg: None,
+                         score_table: ScoreTable = None):
+    if save_folder is None:
+        raise ValueError("run_pipeline_offline requires save_folder with images")
+
+    # Collect screenshots
+    all_files = sorted(os.listdir(save_folder))
+    screenshots = [
+        s for s in all_files
+        if not s.startswith("merged") and not s.split(".")[0].endswith("preview")]
+    if not screenshots:
+        raise IOError("No valid images found for offline pipeline")
+
+    step = 0
+    last_nodes = None
+
+    log("Starting scanning process [folder based - no game / mouse interaction]")
+    mock_switch_window()
+    first_img = mock_screenshot(os.path.join(save_folder, screenshots[0]))
+    templates, initial_nodes, resolution = pick_template_set(first_img, TEMPLATE_SETS)
+    if len(initial_nodes) == 0:
+        raise IOError(f"Step {step}: Nothing detected, is map visible?")
+    log(f"Matched template: {resolution}, with {len(initial_nodes)} matches")
+
     finalizer = Finalizer()
     work_q = Queue()
-    worker = threading.Thread(target=worker_connections, args=(work_q, finalizer, templates, print_grid),
-                              daemon=True)
-    worker.start()
-    mock_switch_window()
-    last_nodes = None
-    step = 0
-    # offline screenshots
-    screenshots = os.listdir(save_folder)
-    log("Starting scanning process [folder based - no game / mouse interaction]")
+    conn_worker = threading.Thread(
+        target=worker_connections,
+        args=(work_q, finalizer, templates, print_grid),
+        daemon=True)
+    conn_worker.start()
+
     for s in screenshots:
-        if s.startswith('merged'):
-            continue
-        log(f"Processing {s}")
-        img = mock_screenshot(save_folder + "/" + s)
+        if step >= max_steps:
+            break
+
+        log(f"Step {step}, processing {s}")
+
+        img = mock_screenshot(os.path.join(save_folder, s))
         nodes = detect_nodes(img, templates, step)
+
         if len(nodes) == 0:
-            raise IOError(f"step_{step}: Nothing detected, is map visible?")
+            raise IOError(f"Step {step}: Nothing detected, is map visible?")
 
         work_q.put((img, nodes))
         if check_end(nodes, last_nodes):
@@ -202,7 +238,8 @@ def run_pipeline_offline(max_steps=30, save_folder=None, print_grid=False, log=l
 
     work_q.join()
     work_q.put(None)
-    worker.join(timeout=1.0)
+    conn_worker.join(timeout=1.0)
+
     if step == 0:
         raise IOError("There were no valid map images in this folder..? Scan returned nothing.")
 
@@ -219,4 +256,5 @@ def run_pipeline_offline(max_steps=30, save_folder=None, print_grid=False, log=l
 
 
 if __name__ == "__main__":
-    run_pipeline_offline(max_steps=20, save_folder=get_path("Example_scan_result"), print_grid=False, log=lambda msg: print(msg))
+    run_pipeline_offline(max_steps=20, save_folder=get_path("Example_scan_result"), print_grid=False,
+                         log=lambda msg: print(msg))
