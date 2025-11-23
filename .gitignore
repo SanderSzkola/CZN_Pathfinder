@@ -9,6 +9,7 @@
 
 # Test material
 /Test_scans/
+/Last_scan_result/
 /log_file.log
 /ScoreTable.json
 /Example_scan_result/merged*

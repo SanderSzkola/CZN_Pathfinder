@@ -5,7 +5,7 @@ import time
 from queue import Queue
 
 from detect_connections import detect_connections
-from detect_nodes import detect_nodes, TemplateLibrary, pick_template_set
+from detect_nodes import detect_nodes, pick_template_set
 from drawer import draw_map
 from grabber import switch_window, screenshot, do_drag_move, move_mouse, mock_switch_window, mock_move_screen, \
     mock_screenshot
@@ -62,7 +62,7 @@ def check_end(nodes, last_nodes):  # TODO: think about better method, this could
     return this_frag_only or two_frags_combined_guess
 
 
-def worker_connections(queue: Queue, finalizer: Finalizer, templates, print_grid: False):
+def worker_connections(queue: Queue, finalizer: Finalizer, templates, print_grid: bool = False):
     while True:
         item = queue.get()
         if item is None:
@@ -96,11 +96,21 @@ def worker_nodes(detect_q: Queue, result: DetectResult, templates):
         detect_q.task_done()
 
 
-def run_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lambda msg: None,
-                 score_table: ScoreTable = None):
+def run_auto_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lambda msg: None,
+                      score_table: ScoreTable = None):
     finalizer = Finalizer()
     last_nodes = None
     step = 0
+
+    # always log last result, to make it easier for randoms to send useful bug report
+    if save_folder is None:
+        save_folder = get_path("Last_scan_result")
+        os.makedirs(save_folder, exist_ok=True)
+        leftovers = os.listdir(save_folder)
+        if len(leftovers) > 0:
+            log(f"Deleting {len(leftovers)} old screenshots form Last_scan_result folder")
+            for f in leftovers:
+                os.remove(os.path.join(save_folder, f))
 
     log("Starting scanning process")
     switch_window(step)
@@ -184,10 +194,10 @@ def run_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lambda ms
     return map_obj, path, image
 
 
-def run_pipeline_offline(max_steps=30, save_folder=None, print_grid=False, log=lambda msg: None,
+def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lambda msg: None,
                          score_table: ScoreTable = None):
     if save_folder is None:
-        raise ValueError("run_pipeline_offline requires save_folder with images")
+        raise ValueError("run_offline_pipeline requires save_folder with images")
 
     # Collect screenshots
     all_files = sorted(os.listdir(save_folder))
@@ -256,5 +266,5 @@ def run_pipeline_offline(max_steps=30, save_folder=None, print_grid=False, log=l
 
 
 if __name__ == "__main__":
-    run_pipeline_offline(max_steps=20, save_folder=get_path("Example_scan_result"), print_grid=False,
+    run_offline_pipeline(max_steps=20, save_folder=get_path("Example_scan_result"), print_grid=False,
                          log=lambda msg: print(msg))

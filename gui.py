@@ -5,7 +5,7 @@ from tkinter import filedialog
 import numpy as np
 from PIL import Image, ImageTk
 
-from pipeline import run_pipeline, run_pipeline_offline
+from pipeline import run_auto_pipeline, run_offline_pipeline
 from pathfinder import run_pathfinder
 from drawer import draw_map
 from score_table import ScoreTable
@@ -247,7 +247,7 @@ class PipelineGUI:
     def _run_auto_pipeline(self):
         try:
             self.log("Auto scanner started")
-            m, path, img = run_pipeline(
+            m, path, img = run_auto_pipeline(
                 max_steps=30,
                 save_folder=self.selected_folder,
                 print_grid=False,
@@ -269,7 +269,7 @@ class PipelineGUI:
 
     def _run_offline_pipeline(self):
         try:
-            m, path, img = run_pipeline_offline(
+            m, path, img = run_offline_pipeline(
                 max_steps=30,
                 save_folder=self.selected_folder,
                 print_grid=False,
