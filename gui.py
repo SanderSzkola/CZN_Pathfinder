@@ -121,13 +121,12 @@ class PipelineGUI:
         col_right.pack(side="left", fill="y")
 
         items = list(self.score_table.table.items())
-        mid = (len(items) + 1) // 2
 
-        for key, val in items[:mid]:
-            self._create_score_row(col_left, key, val)
-
-        for key, val in items[mid:]:
-            self._create_score_row(col_right, key, val)
+        for i, (key, val) in enumerate(items):
+            if i % 2 == 0:
+                self._create_score_row(col_left, key, val)
+            else:
+                self._create_score_row(col_right, key, val)
 
     def _create_score_row(self, parent, key, value):
         row = tk.Frame(parent)
@@ -291,9 +290,9 @@ class PipelineGUI:
 
         def task():
             try:
-                path, score = run_pathfinder(self.last_map, self.score_table)
+                path, score, encounter_counts = run_pathfinder(self.last_map, self.score_table)
                 self.last_path = path
-                img = draw_map(self.last_map, path)
+                img = draw_map(self.last_map, path, encounter_counts=encounter_counts)
                 self.display_image(img)
             except Exception as e:
                 self.log(f"Re-run error: {e}")

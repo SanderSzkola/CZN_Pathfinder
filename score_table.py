@@ -7,21 +7,21 @@ class ScoreTable:
     def __init__(
             self,
             NO: int = -10,
-            EL: int = 2,
-            RE: int = 0,
-            EV: int = 4,
             NOOR: int = -10,
+            EL: int = 2,
             ELOR: int = 2,
+            RE: int = 0,
             RESH: int = 3,
+            EV: int = 4,
     ):
         self.table: Dict[str, int] = {
             "NO": NO,
-            "EL": EL,
-            "RE": RE,
-            "EV": EV,
             "NOOR": NOOR,
+            "EL": EL,
             "ELOR": ELOR,
+            "RE": RE,
             "RESH": RESH,
+            "EV": EV,
         }
 
     @staticmethod

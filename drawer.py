@@ -1,17 +1,19 @@
 import json
 import os
 from typing import List, Optional, Union
-from path_converter import get_path
 
 import cv2
 import numpy as np
 
+from path_converter import get_path
+
+
 GRID = 70
 ICON_SCALE = 0.35
+MODIFIER_Y_OFFSET = -4
 
 
 def load_map(path: str):
-    """Load nodes and edges from a JSON file."""
     with open(path, "r") as f:
         data = json.load(f)
     nodes = {n["id"]: n for n in data["nodes"]}
@@ -20,10 +22,10 @@ def load_map(path: str):
 
 
 def load_icon(folder: str, key: Optional[str]):
-    """Load PNG icon from folder based on a prefix match."""
     if not key:
         return None
     key = key.upper()
+
     for file in os.listdir(folder):
         if not file.lower().endswith(".png"):
             continue
@@ -33,105 +35,94 @@ def load_icon(folder: str, key: Optional[str]):
     return None
 
 
-def paste_icon_exact(dst: np.ndarray, icon: np.ndarray, px: int, py: int):
-    """Paste icon (with alpha) onto RGBA destination image."""
-    H, W = icon.shape[:2]
-    if px >= dst.shape[1] or py >= dst.shape[0] or px + W <= 0 or py + H <= 0:
+def paste_icon(dst: np.ndarray, icon: np.ndarray, px: int, py: int):
+    h, w = icon.shape[:2]
+
+    if px >= dst.shape[1] or py >= dst.shape[0] or px + w <= 0 or py + h <= 0:
         return
 
-    x1c = max(0, px)
-    y1c = max(0, py)
-    x2c = min(dst.shape[1], px + W)
-    y2c = min(dst.shape[0], py + H)
+    x1 = max(0, px)
+    y1 = max(0, py)
+    x2 = min(dst.shape[1], px + w)
+    y2 = min(dst.shape[0], py + h)
 
-    icon_crop = icon[y1c - py:y2c - py, x1c - px:x2c - px]
-    roi = dst[y1c:y2c, x1c:x2c]
+    icon_crop = icon[y1 - py:y2 - py, x1 - px:x2 - px]
+    roi = dst[y1:y2, x1:x2]
 
     if icon_crop.shape[2] == 4:
         b, g, r, a = cv2.split(icon_crop)
-        icon_rgb = cv2.merge([b, g, r]).astype(float)
-        alpha = a.astype(float) / 255.0
-        alpha = np.repeat(alpha[:, :, np.newaxis], 3, axis=2)
-        roi[:, :, :3] = roi[:, :, :3] * (1 - alpha) + icon_rgb * alpha
+        rgb = cv2.merge([b, g, r]).astype(float)
+        alpha = (a.astype(float) / 255.0)[:, :, None]
+        alpha3 = np.repeat(alpha, 3, axis=2)
+
+        roi[:, :, :3] = roi[:, :, :3] * (1 - alpha3) + rgb * alpha3
         roi[:, :, 3] = np.clip(roi[:, :, 3] + a, 0, 255)
     else:
         roi[:, :, :3] = icon_crop
         roi[:, :, 3] = 255
 
 
-def make_tiled_background(img_path: str, height, width) -> np.ndarray:
-    """
-    Create a symmetric 4-quadrant tile background from the input image,
-    then fill the requested (H, W) size, centered.
-    Returns an RGBA uint8 image.
-    """
-    base = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
+def make_tiled_background(path: str, height: int, width: int) -> np.ndarray:
+    base = cv2.imread(path, cv2.IMREAD_UNCHANGED)
     if base is None:
-        raise ValueError(f"Cannot load background image: {img_path}")
+        raise ValueError(f"Cannot load background image: {path}")
 
-    # Ensure RGBA
     if base.shape[2] == 3:
         b, g, r = cv2.split(base)
         a = np.full((base.shape[0], base.shape[1]), 255, dtype=np.uint8)
         base = cv2.merge([b, g, r, a])
 
-    # Step 1: vertical mirror → join
     v_mirror = cv2.flip(base, 0)
-    top_bottom = np.concatenate((base, v_mirror), axis=0)
+    tb = np.concatenate((base, v_mirror), axis=0)
 
-    # Step 2: horizontal mirror of the above → join
-    h_mirror = cv2.flip(top_bottom, 1)
-    quad = np.concatenate((top_bottom, h_mirror), axis=1)
+    h_mirror = cv2.flip(tb, 1)
+    quad = np.concatenate((tb, h_mirror), axis=1)
 
-    # Now tile to fill target area centered
     qh, qw = quad.shape[:2]
     out = np.zeros((height, width, 4), dtype=np.uint8)
 
-    cy = height // 2
-    cx = width // 2
-
-    # Determine the tile region to copy so that center of tile aligns with center of output
-    y0 = cy - qh // 2
-    x0 = cx - qw // 2
-
     for yy in range(0, height, qh):
         for xx in range(0, width, qw):
-            y1 = yy + qh
-            x1 = xx + qw
-
             ys = max(yy, 0)
             xs = max(xx, 0)
-            ye = min(y1, height)
-            xe = min(x1, width)
+            ye = min(yy + qh, height)
+            xe = min(xx + qw, width)
 
             out[ys:ye, xs:xe] = quad[ys - yy:ye - yy, xs - xx:xe - xx]
 
     return out
 
 
-def draw_map(
-        map_data: Union[str, dict],
-        best_path: Optional[List[str]] = None,
-        output_path: str = None,
-) -> np.ndarray:
-    """
-    Render a map visualization with optional best path overlay.
-    Accepts either a dict (pipeline) or a file path (offline).
-    """
+def _scale_icon(icon: np.ndarray):
+    ih, iw = icon.shape[:2]
+    w = max(1, int(iw * ICON_SCALE))
+    h = max(1, int(ih * ICON_SCALE))
+    return cv2.resize(icon, (w, h), interpolation=cv2.INTER_AREA), w, h
 
-    encounter_icon_dir = get_path(["Images", "Encounter"])
-    modifier_icon_dir = get_path(["Images", "Modifier_1920"])
+
+def _collect_path_edges(path: List[str]):
+    forward = {(path[i], path[i + 1]) for i in range(len(path) - 1)}
+    backward = {(b, a) for (a, b) in forward}
+    return forward | backward
+
+
+def draw_map(
+    map_data: Union[str, dict],
+    best_path: Optional[List[str]] = None,
+    output_path: str = None,
+    encounter_counts: Optional[dict] = None,
+) -> np.ndarray:
+
+    encounter_dir = get_path(["Images", "Encounter"])
+    modifier_dir = get_path(["Images", "Modifier_1920"])
+
     if isinstance(map_data, str):
         nodes, edges, _ = load_map(map_data)
     else:
         nodes = {n["id"]: n for n in map_data["nodes"]}
         edges = map_data["edges"]
 
-    if best_path:
-        path_edges = set((best_path[i], best_path[i + 1]) for i in range(len(best_path) - 1))
-        path_edges |= set((b, a) for (a, b) in path_edges)
-    else:
-        path_edges = set()
+    path_edges = _collect_path_edges(best_path) if best_path else set()
 
     cols = [n["col"] for n in nodes.values()]
     rows = [n["row"] for n in nodes.values()]
@@ -142,78 +133,115 @@ def draw_map(
     row_shift = -min_row + 1
 
     width = (max_col - min_col + 2) * GRID
-    height = (max_row - min_row + 2) * GRID
+    height = (max_row - min_row + 3) * GRID
     canvas = np.zeros((height, width, 4), dtype=np.uint8)
 
-    node_render_info = {}
+    node_info = {}
 
-    # Draw base nodes
+    # draw nodes
     for n in nodes.values():
-        c = n["col"] + col_shift
-        r = n["row"] + row_shift
-        x = c * GRID
-        y = r * GRID
+        cx = (n["col"] + col_shift) * GRID
+        cy = (n["row"] + row_shift) * GRID
 
-        icon = load_icon(encounter_icon_dir, n.get("type"))
+        icon = load_icon(encounter_dir, n.get("type"))
         if icon is not None:
-            h, w = icon.shape[:2]
-            Wn = max(1, int(w * ICON_SCALE))
-            Hn = max(1, int(h * ICON_SCALE))
-            icon_scaled = cv2.resize(icon, (Wn, Hn), interpolation=cv2.INTER_AREA)
-            px = x - Wn // 2
-            py = y - Hn // 2
-            paste_icon_exact(canvas, icon_scaled, px, py)
+            icon_scaled, w, h = _scale_icon(icon)
+            px = cx - w // 2
+            py = cy - h // 2
+            paste_icon(canvas, icon_scaled, px, py)
         else:
-            Wn = Hn = GRID // 2
+            w = h = GRID // 2
 
-        node_render_info[n["id"]] = (x, y, Wn, Hn)
+        node_info[n["id"]] = (cx, cy, w, h)
 
-    # Draw edges (black first, green for path after)
-    second_pass = []
-    for id1, id2 in edges:
-        if id1 not in node_render_info or id2 not in node_render_info:
+    # draw edges
+    highlight_edges = []
+    for a, b in edges:
+        if a not in node_info or b not in node_info:
             continue
 
-        x1, y1, W1, H1 = node_render_info[id1]
-        x2, y2, W2, H2 = node_render_info[id2]
+        x1, y1, w1, h1 = node_info[a]
+        x2, y2, w2, h2 = node_info[b]
 
-        start = (int(x1 + W1 / 2), int(y1))
-        end = (int(x2 - W2 / 2), int(y2))
+        start = (int(x1 + w1 / 2), int(y1))
+        end = (int(x2 - w2 / 2), int(y2))
 
-        if (id1, id2) in path_edges:
-            second_pass.append((start, end, (0, 255, 0, 255), 4))
+        if (a, b) in path_edges:
+            highlight_edges.append((start, end))
         else:
             cv2.line(canvas, start, end, (0, 0, 0, 255), 3)
 
-    for start, end, color, thickness in second_pass:
-        cv2.line(canvas, start, end, color, thickness)
+    for start, end in highlight_edges:
+        cv2.line(canvas, start, end, (0, 255, 0, 255), 4)
 
-    # Draw modifiers
+    # modifiers
     for n in nodes.values():
-        mod = n.get("modifier")
-        if not mod:
+        mod_key = n.get("modifier")
+        if not mod_key:
             continue
 
-        x, y, Wn, Hn = node_render_info[n["id"]]
-        mod_icon = load_icon(modifier_icon_dir, mod)
-        if mod_icon is None:
+        cx, cy, w, h = node_info[n["id"]]
+        icon = load_icon(modifier_dir, mod_key)
+        if icon is None:
             continue
 
-        Hm, Wm = mod_icon.shape[:2]
-        Wm = max(1, int(Wm * ICON_SCALE))
-        Hm = max(1, int(Hm * ICON_SCALE))
-        mod_icon = cv2.resize(mod_icon, (Wm, Hm), interpolation=cv2.INTER_AREA)
+        icon_scaled, mw, mh = _scale_icon(icon)
+        px = int(cx + w // 2 - mw)
+        py = int(cy - mh + MODIFIER_Y_OFFSET)
+        paste_icon(canvas, icon_scaled, px, py)
 
-        px = int(x + Wn // 2 - Wm)
-        py = int(y - Hm - 5)
-        paste_icon_exact(canvas, mod_icon, px, py)
-    background_path = get_path(["Images", "background_img.png"])
-    background = make_tiled_background(background_path, height, width)
+    # encounter counts
+    if encounter_counts:
+        row_extra = (max_row - min_row + 2)
+        y_grid = row_extra * GRID
 
-    fg = canvas
-    bg = background
+        items = list(encounter_counts.items())
+        col_positions = [i * 2 + 1 for i in range(len(items))]
 
-    # Alpha composite fg over bg
+        for (key, count), col in zip(items, col_positions):
+            x_grid = col * GRID
+            enc_key = key[:2]
+            mod_key = key[2:] or None
+
+            enc_icon = load_icon(encounter_dir, enc_key)
+            if enc_icon is not None:
+                enc_scaled, ew, eh = _scale_icon(enc_icon)
+            else:
+                ew = eh = 0
+                enc_scaled = None
+
+            px = x_grid - ew // 2
+            py = y_grid - eh // 2
+
+            if enc_scaled is not None:
+                paste_icon(canvas, enc_scaled, px, py)
+            else:
+                cv2.rectangle(canvas,
+                              (x_grid - 10, y_grid - 10),
+                              (x_grid + 10, y_grid + 10),
+                              (0, 0, 0, 255), 2)
+
+            if mod_key:
+                mod_icon = load_icon(modifier_dir, mod_key)
+                if mod_icon is not None:
+                    mod_scaled, mw, mh = _scale_icon(mod_icon)
+                    mod_px = x_grid + (ew // 2) - mw
+                    mod_py = y_grid - mh + MODIFIER_Y_OFFSET
+                    paste_icon(canvas, mod_scaled, mod_px, mod_py)
+
+            tx = x_grid + ew // 2 + 8
+            ty = y_grid + eh // 4
+            cv2.putText(canvas, str(count), (tx, ty),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                        (0, 0, 0, 255), 2, cv2.LINE_AA)
+
+    # compose with background
+    pad = GRID // 2
+    fg = canvas[pad:-pad]
+
+    bg_path = get_path(["Images", "background_img.png"])
+    bg = make_tiled_background(bg_path, height - GRID, width)
+
     alpha = fg[:, :, 3].astype(float) / 255.0
     alpha3 = np.repeat(alpha[:, :, None], 3, axis=2)
 
@@ -221,18 +249,16 @@ def draw_map(
     out[:, :, :3] = bg[:, :, :3] * (1 - alpha3) + fg[:, :, :3] * alpha3
     out[:, :, 3] = 255
 
-    canvas = out
-
-    if output_path is not None:
-        cv2.imwrite(output_path, canvas)
+    if output_path:
+        cv2.imwrite(output_path, out)
         print(f"Saved combined preview: {output_path}")
 
-    return canvas
+    return out
 
 
-# ----- STANDALONE MODE -----
 if __name__ == "__main__":
-    with open(get_path(["Example_scan_result", "merged_map.json"]), "r") as f:
+    path = get_path(["Example_scan_result", "merged_map.json"])
+    with open(path, "r") as f:
         data = json.load(f)
-    best_path = data.get("best_path", None)
+    best_path = data.get("best_path")
     draw_map(data, best_path, get_path(["Example_scan_result", "merged_map.png"]))

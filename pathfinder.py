@@ -87,10 +87,32 @@ def extract_edges_from_path(path: List[str]) -> List[Tuple[str, str]]:
     return [(path[i], path[i + 1]) for i in range(len(path) - 1)]
 
 
+def count_encounters(path: List[str], nodes: Dict[str, dict]) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+
+    for nid in path:
+        n = nodes[nid]
+        ntype = n.get("type")
+        modifier = n.get("modifier")
+
+        if modifier:
+            key = f"{ntype}{modifier}"
+        else:
+            key = ntype
+
+        counts[key] = counts.get(key, 0) + 1
+
+    ordered_counts = {}
+    for key in ScoreTable().table.keys():
+        ordered_counts[key] = counts.get(key, 0)
+    return ordered_counts
+
+
+
 def run_pathfinder(
         map_data: dict | str,
         score_table: Optional[ScoreTable] = None,
-) -> Tuple[List[str], int]:
+) -> Tuple[List[str], int, Dict[str, int]]:
     """
     Compute the best path for given map data or from file.
     When save_to_file=True, writes 'best_path' into the map file.
@@ -113,6 +135,8 @@ def run_pathfinder(
     if best_path is None:
         raise RuntimeError("No valid path found.")
 
+    encounter_counts = count_encounters(best_path, nodes)
+
     if save_json:
         with open(map_data, "r") as f:
             existing = json.load(f)
@@ -120,11 +144,11 @@ def run_pathfinder(
         with open(map_data, "w") as f:
             json.dump(existing, f, indent=2)
 
-    return best_path, best_value
+    return best_path, best_value, encounter_counts
 
 
 if __name__ == "__main__":
-    best_path, total_score = run_pathfinder(get_path(["Example_scan_result", "merged_map.json"]))
+    best_path, total_score, encounters = run_pathfinder(get_path(["Example_scan_result", "merged_map.json"]))
     print("Best path nodes:", best_path)
     print("Best path edges:", extract_edges_from_path(best_path))
     print("Total score:", total_score)
