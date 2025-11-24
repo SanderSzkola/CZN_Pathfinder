@@ -49,8 +49,7 @@ def switch_window_win32gui(step):
         label = SCRIPT_WINDOW
 
     if hwnd is None:
-        print("win32gui: Window not found:", label)
-        return
+        raise Exception(f"grabber / win32gui: Window not found: {label}")
 
     win32gui.ShowWindow(hwnd, 5)
     win32gui.SetForegroundWindow(hwnd)

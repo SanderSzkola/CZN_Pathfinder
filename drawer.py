@@ -242,6 +242,15 @@ def draw_map(
     bg_path = get_path(["Images", "background_img.png"])
     bg = make_tiled_background(bg_path, height - GRID, width)
 
+    bar_h = GRID # grey bar on bottom
+    bar_y0 = bg.shape[0] - bar_h
+    gray = np.array([64, 64, 64], dtype=np.float32)
+    alpha_bar = 0.67
+    bg[bar_y0:, :, :3] = (
+            bg[bar_y0:, :, :3].astype(np.float32) * (1 - alpha_bar)
+            + gray * alpha_bar
+    ).astype(np.uint8)
+
     alpha = fg[:, :, 3].astype(float) / 255.0
     alpha3 = np.repeat(alpha[:, :, None], 3, axis=2)
 

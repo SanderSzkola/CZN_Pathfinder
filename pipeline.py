@@ -81,6 +81,15 @@ class DetectResult:  # why are you a class? check later
         self.nodes = None
 
 
+class ExceptionThread(threading.Thread):
+    def run(self):
+        self.exception = None
+        try:
+            super().run()
+        except Exception as e:
+            self.exception = e
+
+
 def worker_nodes(detect_q: Queue, result: DetectResult, templates):
     while True:
         item = detect_q.get()
@@ -124,7 +133,7 @@ def run_auto_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lamb
 
     # connections worker
     work_q = Queue()
-    conn_worker = threading.Thread(
+    conn_worker = ExceptionThread(
         target=worker_connections,
         args=(work_q, finalizer, templates, print_grid),
         daemon=True
@@ -134,7 +143,7 @@ def run_auto_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lamb
     # node detection worker
     detect_q = Queue(maxsize=1)
     detect_result = DetectResult()
-    node_worker = threading.Thread(
+    node_worker = ExceptionThread(
         target=worker_nodes,
         args=(detect_q, detect_result, templates),
         daemon=True
@@ -177,9 +186,13 @@ def run_auto_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lamb
     work_q.join()
     work_q.put(None)
     conn_worker.join(timeout=1.0)
+    if conn_worker.exception:
+        raise conn_worker.exception
 
     detect_q.put(None)
     node_worker.join(timeout=1.0)
+    if node_worker.exception:
+        raise node_worker.exception
 
     log("Scanning done")
 
@@ -220,7 +233,7 @@ def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=l
 
     finalizer = Finalizer()
     work_q = Queue()
-    conn_worker = threading.Thread(
+    conn_worker = ExceptionThread(
         target=worker_connections,
         args=(work_q, finalizer, templates, print_grid),
         daemon=True)
@@ -249,6 +262,8 @@ def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=l
     work_q.join()
     work_q.put(None)
     conn_worker.join(timeout=1.0)
+    if conn_worker.exception:
+        raise conn_worker.exception
 
     if step == 0:
         raise IOError("There were no valid map images in this folder..? Scan returned nothing.")
