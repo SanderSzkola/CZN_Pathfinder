@@ -2,12 +2,14 @@ import os
 import threading
 import tkinter as tk
 from tkinter import filedialog
+
+import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
 from pipeline import run_auto_pipeline, run_offline_pipeline
 from pathfinder import run_pathfinder
-from drawer import draw_map
+from drawer import draw_map, load_icon
 from score_table import ScoreTable
 from path_converter import get_path
 
@@ -26,6 +28,7 @@ class PipelineGUI:
         self.log_file_path = get_path("log_file.log")
         self.score_table = ScoreTable()
         self._delayed_pathfinder_id = None
+        self._icons = {}
 
         self._build_ui()
         self._load_initial_background()
@@ -117,8 +120,8 @@ class PipelineGUI:
 
         col_left = tk.Frame(columns_frame)
         col_right = tk.Frame(columns_frame)
-        col_left.pack(side="left", fill="y")
-        col_right.pack(side="left", fill="y")
+        col_left.pack(side="left", fill="y", padx=5)
+        col_right.pack(side="right", fill="y", padx=5)
 
         items = list(self.score_table.table.items())
 
@@ -129,10 +132,23 @@ class PipelineGUI:
                 self._create_score_row(col_right, key, val)
 
     def _create_score_row(self, parent, key, value):
+        enc_folder = get_path(["Images", "Encounter_minimal_1600"])
+        mod_folder = get_path(["Images", "Modifier_1600"])
         row = tk.Frame(parent)
         row.pack(fill="x")
+        if len(key) == 2:
+            img = load_icon(enc_folder, key)
+        else:
+            img = load_icon(mod_folder, key[2:])
+        if img.shape[2] == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
+        else:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
 
-        tk.Label(row, text=key, width=5, anchor="w").pack(side="left", padx=1)
+        pil = Image.fromarray(img)
+        icon = ImageTk.PhotoImage(pil)
+        self._icons[key] = icon
+        tk.Label(row, text=key, image=icon, anchor="w").pack(side="left", padx=1)
 
         var = tk.IntVar(value=value)
         self.score_vars[key] = var
@@ -142,10 +158,10 @@ class PipelineGUI:
             from_=-10,
             to=10,
             orient="horizontal",
-            length=140,
+            length=160,
             variable=var,
             command=lambda _, k=key: self.update_score_value(k),
-            borderwidth=0,
+            borderwidth=1,
             highlightthickness=0,
             sliderlength=10
         ).pack(side="left", padx=1)
