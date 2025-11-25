@@ -105,7 +105,7 @@ def worker_nodes(detect_q: Queue, result: DetectResult, templates):
         detect_q.task_done()
 
 
-def run_auto_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lambda msg: None,
+def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
                       score_table: ScoreTable = None):
     finalizer = Finalizer()
     last_nodes = None
@@ -130,6 +130,8 @@ def run_auto_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lamb
     if len(initial_nodes) == 0:
         raise IOError(f"Step {step}: Nothing detected, is map visible?")
     log(f"Matched template: {resolution}, with {len(initial_nodes)} matches")
+    if len(initial_nodes) <= 4:
+        raise IOError(f"Node count too low, is map fully visible?")
 
     # connections worker
     work_q = Queue()
@@ -281,5 +283,5 @@ def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=l
 
 
 if __name__ == "__main__":
-    run_offline_pipeline(max_steps=20, save_folder=get_path("Example_scan_result"), print_grid=False,
+    run_offline_pipeline(max_steps=30, save_folder=get_path("Example_scan_result"), print_grid=False,
                          log=lambda msg: print(msg))

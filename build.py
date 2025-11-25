@@ -14,8 +14,10 @@ ZIP_NAME = "CZN_Pathfinder_exe_build.zip"
 expected_items = [
     "Example_scan_result",
     "Images/Encounter",
-    "Images/Encounter_minimal",
-    "Images/Modifier",
+    "Images/Encounter_minimal_1920",
+    "Images/Modifier_1920",
+    "Images/Encounter_minimal_1600",
+    "Images/Modifier_1600",
     "Images/background_img.png",
     "Images/filler_map.png",
     "LICENSE",
@@ -194,6 +196,10 @@ def clean_previous_builds():
     for f in files:
         if f.endswith('.spec'):
             to_be_removed.append(f)
+
+    for f in os.listdir("Example_scan_result"):
+        if not f.startswith("map"):
+            to_be_removed.append(os.path.join("Example_scan_result", f))
     for f in to_be_removed:
         os.remove(f)
 

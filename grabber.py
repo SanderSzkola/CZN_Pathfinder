@@ -49,7 +49,8 @@ def switch_window_win32gui(step):
         label = SCRIPT_WINDOW
 
     if hwnd is None:
-        raise Exception(f"grabber / win32gui: Window not found: {label}")
+        game_text = ". Is CZN running?" if step == 0 else None
+        raise Exception(f"grabber / win32gui: Window not found: {label}" + game_text)
 
     win32gui.ShowWindow(hwnd, 5)
     win32gui.SetForegroundWindow(hwnd)

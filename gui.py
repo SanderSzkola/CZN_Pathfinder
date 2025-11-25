@@ -263,7 +263,6 @@ class PipelineGUI:
         try:
             self.log("Auto scanner started")
             m, path, img = run_auto_pipeline(
-                max_steps=30,
                 save_folder=self.selected_folder,
                 print_grid=False,
                 log=self.log,
@@ -285,7 +284,6 @@ class PipelineGUI:
     def _run_offline_pipeline(self):
         try:
             m, path, img = run_offline_pipeline(
-                max_steps=30,
                 save_folder=self.selected_folder,
                 print_grid=False,
                 log=self.log,

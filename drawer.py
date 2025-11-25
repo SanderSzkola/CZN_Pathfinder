@@ -260,7 +260,6 @@ def draw_map(
 
     if output_path:
         cv2.imwrite(output_path, out)
-        print(f"Saved combined preview: {output_path}")
 
     return out
 
@@ -271,3 +270,4 @@ if __name__ == "__main__":
         data = json.load(f)
     best_path = data.get("best_path")
     draw_map(data, best_path, get_path(["Example_scan_result", "merged_map.png"]))
+    print("Done")
