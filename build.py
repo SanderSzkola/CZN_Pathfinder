@@ -24,6 +24,7 @@ expected_items = [
     "ManualScreenshotVisualGuide.png",
     "instructions.txt",
     "Images/Demo.gif",
+    "Images/Icon.ico",
 
 ]
 
@@ -35,7 +36,6 @@ release_ignore = [
     "*.xcf",
     "requirements.txt",
     "README.md",
-    "Images/Icon.ico",
     "Images/background_img_blank.png",
     "Images/gui_image.png",
 

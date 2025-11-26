@@ -304,9 +304,12 @@ class PipelineGUI:
 
         def task():
             try:
-                path, score, encounter_counts = run_pathfinder(self.last_map, self.score_table)
+                path, encounter_ranges, encounter_counts = run_pathfinder(self.last_map, self.score_table)
                 self.last_path = path
-                img = draw_map(self.last_map, path, encounter_counts=encounter_counts)
+                img = draw_map(self.last_map,
+                               path,
+                               encounter_ranges=encounter_ranges,
+                               encounter_counts=encounter_counts)
                 self.display_image(img)
             except Exception as e:
                 self.log(f"Re-run error: {e}")

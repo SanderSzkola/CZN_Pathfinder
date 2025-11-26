@@ -74,7 +74,7 @@ def worker_connections(queue: Queue, finalizer: Finalizer, templates, print_grid
         queue.task_done()
 
 
-class DetectResult:  # why are you a class? check later
+class DetectResult:
     def __init__(self):
         self.lock = threading.Lock()
         self.ready_step = -1
@@ -200,9 +200,13 @@ def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lamb
 
     json_path = os.path.join(save_folder, "merged_map.json") if save_folder else None
     map_obj = finalizer.finalize(json_path)
-    path, score, encounter_counts = run_pathfinder(map_obj, score_table)
+    path, encounter_ranges, encounter_counts = run_pathfinder(map_obj, score_table)
     image_path = os.path.join(save_folder, "merged_map.png") if save_folder else None
-    image = draw_map(map_obj, path, output_path=image_path, encounter_counts=encounter_counts)
+    image = draw_map(map_obj,
+                     path,
+                     output_path=image_path,
+                     encounter_ranges=encounter_ranges,
+                     encounter_counts=encounter_counts)
 
     switch_window(step)
 
@@ -273,9 +277,13 @@ def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=l
     log("Scanning done")
     json_path = os.path.join(save_folder, "merged_map.json") if save_folder else None
     map_obj = finalizer.finalize(json_path)
-    path, score, encounter_counts = run_pathfinder(map_obj, score_table)
+    path, encounter_ranges, encounter_counts = run_pathfinder(map_obj, score_table)
     image_path = os.path.join(save_folder, "merged_map.png") if save_folder else None
-    image = draw_map(map_obj, path, output_path=image_path, encounter_counts=encounter_counts)
+    image = draw_map(map_obj,
+                     path,
+                     output_path=image_path,
+                     encounter_ranges=encounter_ranges,
+                     encounter_counts=encounter_counts)
 
     mock_switch_window()
 

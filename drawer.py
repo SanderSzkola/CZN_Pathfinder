@@ -7,7 +7,6 @@ import numpy as np
 
 from path_converter import get_path
 
-
 GRID = 70
 ICON_SCALE = 0.35
 MODIFIER_Y_OFFSET = -4
@@ -62,7 +61,7 @@ def paste_icon(dst: np.ndarray, icon: np.ndarray, px: int, py: int):
         roi[:, :, 3] = 255
 
 
-def make_tiled_background(path: str, height: int, width: int) -> np.ndarray:
+def make_tiled_background(path: str, height: int, width: int):
     base = cv2.imread(path, cv2.IMREAD_UNCHANGED)
     if base is None:
         raise ValueError(f"Cannot load background image: {path}")
@@ -107,12 +106,12 @@ def _collect_path_edges(path: List[str]):
 
 
 def draw_map(
-    map_data: Union[str, dict],
-    best_path: Optional[List[str]] = None,
-    output_path: str = None,
-    encounter_counts: Optional[dict] = None,
-) -> np.ndarray:
-
+        map_data: Union[str, dict],
+        best_path: Optional[List[str]] = None,
+        output_path: str = None,
+        encounter_ranges: Optional[dict] = None,
+        encounter_counts: Optional[dict] = None,
+):
     encounter_dir = get_path(["Images", "Encounter"])
     modifier_dir = get_path(["Images", "Modifier_1920"])
 
@@ -172,7 +171,7 @@ def draw_map(
             cv2.line(canvas, start, end, (0, 0, 0, 255), 3)
 
     for start, end in highlight_edges:
-        cv2.line(canvas, start, end, (0, 255, 0, 255), 4)
+        cv2.line(canvas, start, end, (50, 200, 0, 255), 4)
 
     # modifiers
     for n in nodes.values():
@@ -229,11 +228,22 @@ def draw_map(
                     mod_py = y_grid - mh + MODIFIER_Y_OFFSET
                     paste_icon(canvas, mod_scaled, mod_px, mod_py)
 
-            tx = x_grid + ew // 2 + 8
-            ty = y_grid + eh // 4
-            cv2.putText(canvas, str(count), (tx, ty),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                        (0, 0, 0, 255), 2, cv2.LINE_AA)
+            # write text
+            tx = x_grid + ew // 2 + 4
+            ty = y_grid + eh // 4 + 2
+            font = cv2.FONT_HERSHEY_PLAIN
+            scale = 1.5
+            thick = 2
+            count_str = str(count)
+            min_v, max_v = encounter_ranges[key]
+            range_str = f"[{min_v},{max_v}]"
+
+            cv2.putText(canvas, count_str, (tx, ty),
+                        font, scale, (50, 200, 0, 255), thick, cv2.LINE_AA)
+            w_count = cv2.getTextSize(count_str, font, scale, thick)[0][0]
+            x2 = tx + w_count + 4
+            cv2.putText(canvas, range_str, (x2, ty),
+                        font, scale, (0, 0, 0, 255), thick, cv2.LINE_AA)
 
     # compose with background
     pad = GRID // 2
@@ -242,7 +252,7 @@ def draw_map(
     bg_path = get_path(["Images", "background_img.png"])
     bg = make_tiled_background(bg_path, height - GRID, width)
 
-    bar_h = GRID # grey bar on bottom
+    bar_h = GRID  # grey bar on bottom
     bar_y0 = bg.shape[0] - bar_h
     gray = np.array([64, 64, 64], dtype=np.float32)
     alpha_bar = 0.67

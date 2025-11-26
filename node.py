@@ -22,7 +22,7 @@ class Node:
 
     def label(self):
         if self.modifier:
-            return f"{self.type}+{self.modifier}"
+            return f"{self.type}{self.modifier}"
         return self.type
 
     def as_dict(self):
