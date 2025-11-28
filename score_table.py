@@ -6,13 +6,13 @@ from path_converter import get_path
 class ScoreTable:
     def __init__(
             self,
-            NO: int = -10,
-            NOOR: int = -10,
+            NO: int = -7,
+            NOOR: int = -7,
             EL: int = 2,
             ELOR: int = 2,
             RE: int = 0,
-            RESH: int = 3,
-            EV: int = 4,
+            RESH: int = 4,
+            EV: int = 3,
     ):
         self.table: Dict[str, int] = {
             "NO": NO,
@@ -37,11 +37,11 @@ class ScoreTable:
             data = json.load(f)
 
         return ScoreTable(
-            NO=data.get("NO", -10),
+            NO=data.get("NO", -7),
             EL=data.get("EL", 2),
-            EV=data.get("EV", 4),
+            EV=data.get("EV", 3),
             RE=data.get("RE", 0),
-            RESH=data.get("RESH", 3),
-            NOOR=data.get("NOOR", -10),
+            RESH=data.get("RESH", 4),
+            NOOR=data.get("NOOR", -7),
             ELOR=data.get("ELOR", 2),
         )
