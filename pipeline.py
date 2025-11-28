@@ -8,7 +8,7 @@ from detect_connections import detect_connections
 from detect_nodes import detect_nodes, pick_template_set
 from drawer import draw_map
 from grabber import switch_window, screenshot, do_drag_move, move_mouse, mock_switch_window, mock_move_screen, \
-    mock_screenshot
+    mock_screenshot, DragListener, MockDragListener
 from pathfinder import run_pathfinder
 from process_map import Finalizer
 from score_table import ScoreTable
@@ -105,6 +105,23 @@ def worker_nodes(detect_q: Queue, result: DetectResult, templates):
         detect_q.task_done()
 
 
+def prepare_clean_folder(base_name: str, log):
+    folder = get_path(base_name)
+    os.makedirs(folder, exist_ok=True)
+
+    leftovers = os.listdir(folder)
+    if leftovers:
+        log(f"Deleting {len(leftovers)} old screenshots from {base_name} folder")
+        for f in leftovers:
+            if f.endswith("png") or f.endswith("json"):
+                try:
+                    os.remove(os.path.join(folder, f))
+                except OSError:
+                    log(f"Failed to delete {f}")
+
+    return folder
+
+
 def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
                       score_table: ScoreTable = None):
     finalizer = Finalizer()
@@ -113,13 +130,7 @@ def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lamb
 
     # always log last result, to make it easier for randoms to send useful bug report
     if save_folder is None:
-        save_folder = get_path("Last_scan_result")
-        os.makedirs(save_folder, exist_ok=True)
-        leftovers = os.listdir(save_folder)
-        if len(leftovers) > 0:
-            log(f"Deleting {len(leftovers)} old screenshots form Last_scan_result folder")
-            for f in leftovers:
-                os.remove(os.path.join(save_folder, f))
+        save_folder = prepare_clean_folder("Last_scan_result", log)
 
     log("Starting scanning process")
     switch_window(step)
@@ -286,6 +297,103 @@ def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=l
                      encounter_counts=encounter_counts)
 
     mock_switch_window()
+
+    return map_obj, path, image
+
+
+def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
+                           score_table: ScoreTable = None):
+    if save_folder is None:
+        save_folder = prepare_clean_folder("Last_scan_result", log)
+    else:
+        os.makedirs(save_folder, exist_ok=True)
+    log("Starting scanning process [half-auto]")
+
+    screenshot_q = Queue()
+    detect_q = Queue(maxsize=1)
+    work_q = Queue()
+    finalizer = Finalizer()
+    detect_result = DetectResult()
+    listener = DragListener( #  TEST: change to mock
+        screenshot_q=screenshot_q,
+        save_folder=save_folder,
+        log=log
+    )
+    listener.start()
+    log("Waiting for first screenshot...")
+    step, img = screenshot_q.get()
+
+    templates, nodes, resolution = pick_template_set(img, TEMPLATE_SETS)
+    if len(nodes) == 0:
+        listener.stop()
+        raise IOError(f"Step {step}: Nothing detected, is map visible?")
+    log(f"Matched template: {resolution}, with {len(nodes)} matches")
+    if len(nodes) <= 4:
+        listener.stop()
+        raise IOError("Node count too low, is map fully visible?")
+
+    node_worker = ExceptionThread(
+        target=worker_nodes,
+        args=(detect_q, detect_result, templates),
+        daemon=True)
+    node_worker.start()
+
+    conn_worker = ExceptionThread(
+        target=worker_connections,
+        args=(work_q, finalizer, templates, print_grid),
+        daemon=True)
+    conn_worker.start()
+
+    detect_q.put((step, img))
+    last_nodes = None
+    while step < max_steps:
+        while True:
+            with detect_result.lock:
+                if detect_result.ready_step == step:
+                    nodes = detect_result.nodes
+                    break
+            time.sleep(0.01)
+
+        if len(nodes) == 0:
+            listener.stop()
+            raise IOError(f"Step {step}: Nothing detected, is map visible?")
+
+        work_q.put((img, nodes))
+        if check_end(nodes, last_nodes):
+            break
+
+        last_nodes = nodes
+        data = screenshot_q.get()
+        if data is None:
+            break
+        step, img = data
+        log(f"Step {step}, expected 5~10")
+        detect_q.put((step, img))
+
+    listener.stop()
+
+    detect_q.put(None)
+    node_worker.join(timeout=1.0)
+    if node_worker.exception:
+        raise node_worker.exception
+
+    work_q.join()
+    work_q.put(None)
+    conn_worker.join(timeout=1.0)
+    if conn_worker.exception:
+        raise conn_worker.exception
+
+    log("Scanning done")
+
+    json_path = os.path.join(save_folder, "merged_map.json")
+    map_obj = finalizer.finalize(json_path)
+    path, encounter_ranges, encounter_counts = run_pathfinder(map_obj, score_table)
+    image_path = os.path.join(save_folder, "merged_map.png")
+    image = draw_map(map_obj,
+                     path,
+                     output_path=image_path,
+                     encounter_ranges=encounter_ranges,
+                     encounter_counts=encounter_counts)
 
     return map_obj, path, image
 

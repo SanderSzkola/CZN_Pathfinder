@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from pipeline import run_auto_pipeline, run_offline_pipeline
+from pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline
 from pathfinder import run_pathfinder
 from drawer import draw_map, load_icon
 from score_table import ScoreTable
@@ -101,12 +101,19 @@ class PipelineGUI:
         tk.Button(row1, text="Import Score Table", width=18, command=self.import_score_table).pack(side="left", padx=2)
 
         row2 = tk.Frame(parent)
-        row2.pack(pady=10, fill="x")
+        row2.pack(pady=5, fill="x")
 
         tk.Button(row2, text="Clear Folder", width=18, command=self.clear_folder).pack(side="left", padx=2)
-        tk.Button(row2, text="Start Offline Scanner", width=18, command=self.start_offline_pipeline).pack(side="left",
-                                                                                                          padx=2)
+        tk.Button(row2, text="Start Halfauto Scanner", width=18,
+                  command=self.start_halfauto_pipeline).pack(side="left", padx=2)
+
         tk.Button(row2, text="Export Score Table", width=18, command=self.export_score_table).pack(side="left", padx=2)
+
+        row3 = tk.Frame(parent)
+        row3.pack(pady=5, fill="x")
+        tk.Label(row3, width=18).pack(side="left", padx=4)  # filler, should have padx 2 but somehow 4 is correct
+        tk.Button(row3, text="Start Offline Scanner", width=18, command=self.start_offline_pipeline).pack(side="left",
+                                                                                                          padx=2)
 
     def _build_score_table(self, parent):
         panel = tk.Frame(parent)
@@ -253,7 +260,7 @@ class PipelineGUI:
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
                 return
 
-        if not self.ask_continue_dialog():
+        if not self.ask_continue_dialog("auto"):
             self.log("Scanning task cancelled.")
             return
 
@@ -264,7 +271,32 @@ class PipelineGUI:
             self.log("Auto scanner started")
             m, path, img = run_auto_pipeline(
                 save_folder=self.selected_folder,
-                print_grid=False,
+                log=self.log,
+                score_table=self.score_table
+            )
+            self.last_map = m
+            self.last_path = path
+            self.display_image(img)
+        except Exception as e:
+            self.log(f"Pipeline error: {e}")
+
+    def start_halfauto_pipeline(self):
+        if self.selected_folder:
+            if os.listdir(self.selected_folder):
+                self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
+                return
+
+        if not self.ask_continue_dialog("halfauto"):
+            self.log("Scanning task cancelled.")
+            return
+
+        threading.Thread(target=self._run_halfauto_pipeline, daemon=True).start()
+
+    def _run_halfauto_pipeline(self):
+        try:
+            self.log("Halfauto scanner started")
+            m, path, img = run_halfauto_pipeline(
+                save_folder=self.selected_folder,
                 log=self.log,
                 score_table=self.score_table
             )
@@ -285,7 +317,6 @@ class PipelineGUI:
         try:
             m, path, img = run_offline_pipeline(
                 save_folder=self.selected_folder,
-                print_grid=False,
                 log=self.log,
                 score_table=self.score_table
             )
@@ -356,20 +387,30 @@ class PipelineGUI:
     # ======================================================================
     # Dialogs
     # ======================================================================
-    def ask_continue_dialog(self):
+    def ask_continue_dialog(self, variant):
         win = tk.Toplevel(self.root)
         win.title("Confirm Action")
         win.grab_set()
         win.transient(self.root)
 
-        text = (
-            "You are about to start the scanning process.\n"
-            "IT MOVES YOUR REAL MOUSE, this is intended behavior.\n"
-            "Make sure alt-tab leads to the game, the game has minimap opened and in default position (not moved left/right).\n"
-            "Do not touch mouse or keyboard until scanning is done.\n\n"
-            "If the scanner behaves incorrectly, quickly move mouse to top left screen corner to stop it.\n"
-            "If the script failed to switch window, alt-tab to game and back, then start again."
-        )
+        if variant == "auto":
+            text = (
+                "You are about to start the scanning process.\n"
+                "IT MOVES YOUR REAL MOUSE, this is intended behavior.\n"
+                "Make sure alt-tab leads to the game, the game has minimap opened and in default position (not moved left/right).\n"
+                "Do not touch mouse or keyboard until scanning is done.\n\n"
+                "If the scanner behaves incorrectly, quickly move mouse to top left screen corner to stop it.\n"
+                "If the script failed to switch window, alt-tab to game and back, then start again."
+            )
+        elif variant == "halfauto":
+            text = (
+                "You are about to start the scanning process.\n"
+                "After you confirm this window, every mouse drag move will produce a screenshot.\n"
+                "It will stop once script sees boss or detect no nodes on screen.\n\n"
+                "Make sure you are ready, then press enter / continue.\n"
+            )
+        else:
+            text = "Not implemented"
 
         tk.Label(win, text=text).pack(padx=20, pady=15)
 

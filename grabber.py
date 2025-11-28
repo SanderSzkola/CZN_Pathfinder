@@ -7,6 +7,10 @@ import pyautogui
 import win32gui
 # import pygetwindow as gw
 from PIL import Image
+from queue import Queue
+from pynput import mouse
+
+DEFAULT_DRAG_SQ_THRESHOLD = 100 ** 2
 
 """
 Manages all screen actions - switch window, take screenshot, move map
@@ -113,3 +117,83 @@ def mock_screenshot(save_folder: Optional[str] = None) -> Image.Image:
 
 def mock_move_screen(node_from, node_to):
     time.sleep(0.01)
+
+
+# half-auto nonsense, but maybe more-legal
+class DragListener:
+    def __init__(self,
+                 screenshot_q: Queue,
+                 save_folder: Optional[str],
+                 log=lambda msg: None):
+        self.screenshot_q = screenshot_q
+        self.save_folder = save_folder
+        self.drag_sq_threshold = DEFAULT_DRAG_SQ_THRESHOLD
+        self.log = log
+        self.down_pos = None
+        self.step = 0
+        self.listener = None
+
+    def start(self):
+        self.listener = mouse.Listener(on_click=self._on_click)
+        self.listener.start()
+
+    def stop(self):
+        if self.listener:
+            self.listener.stop()
+
+    def _on_click(self, x, y, button, pressed): #  maybe add right click cancel later
+        if pressed:
+            self.down_pos = (x, y)
+            return
+
+        if self.down_pos is None:
+            return
+
+        dx = x - self.down_pos[0]
+        dy = y - self.down_pos[1]
+        dist_sq = dx * dx + dy * dy
+        self.down_pos = None
+
+        if dist_sq < self.drag_sq_threshold:
+            self.log(f"Drag detected ({dist_sq:.1E} < {self.drag_sq_threshold:.1E}) and ignored")
+            return
+
+        step = self.step
+        self.step += 1
+
+        self.log(f"Drag detected ({dist_sq:.1E} > {self.drag_sq_threshold:.1E}), screenshot captured as step_{step}")
+        time.sleep(0.1)
+
+        img = screenshot(self.save_folder, index=step)
+        self.screenshot_q.put((step, img))
+
+
+class MockDragListener:
+    def __init__(self,
+                 screenshot_q: Queue,
+                 save_folder: Optional[str],
+                 log=lambda msg: None):
+        self.screenshot_q = screenshot_q
+        self.save_folder = "Example_scan_result"
+        self.drag_sq_threshold = DEFAULT_DRAG_SQ_THRESHOLD
+        self.log = log
+        self.down_pos = None
+        self.step = 0
+        self.listener = None
+
+    def start(self):
+        self.listener = mouse.Listener(on_click=self._on_click)
+        self.listener.start()
+        for f in os.listdir(self.save_folder):
+            if f.startswith("merged") or not f.endswith("png"):
+                continue
+            img = mock_screenshot(os.path.join(self.save_folder, f))
+            self.screenshot_q.put((self.step, img))
+            self.step += 1
+
+    def stop(self):
+        if self.listener:
+            self.listener.stop()
+
+    def _on_click(self, x, y, button, pressed):
+        return
