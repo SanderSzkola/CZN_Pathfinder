@@ -12,7 +12,7 @@
 
 ### Highlight best path
 
--   Adjustable weight, allows for various path settings, like 'Maximum elites', 'Minimum normals' or 'Prioritize events while avoiding normals but accept chaos gem fights'
+-   Adjustable weights, allows for various path settings, like 'Maximum elites', 'Minimum normals' or 'Prioritize events while avoiding normals but accept chaos gem fights'
 -   Updates in real time, as you change weights located on the right side
 -   Shows encounter counts: on chosen path, then possible minimum and maximum across all possible paths
 

@@ -23,7 +23,6 @@ expected_items = [
     "LICENSE",
     "ManualScreenshotVisualGuide.png",
     "instructions.txt",
-    "Images/Demo.gif",
     "Images/Icon.ico",
 
 ]
@@ -38,6 +37,7 @@ release_ignore = [
     "README.md",
     "Images/background_img_blank.png",
     "Images/gui_image.png",
+    "Images/Demo.gif",
 
 ]
 
