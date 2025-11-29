@@ -83,7 +83,7 @@ def screenshot(save_folder: Optional[str] = None, index: int = -1) -> Image.Imag
             ts = str(ts)[-5:]
             img.save(os.path.join(save_folder, f"map_frag_{ts}.png"))
         else:
-            img.save(os.path.join(save_folder, f"map_frag_{index}.png"))
+            img.save(os.path.join(save_folder, f"map_frag_{index:02d}.png"))
     return img
 
 

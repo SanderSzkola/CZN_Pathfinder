@@ -4,6 +4,7 @@ import threading
 import time
 from queue import Queue
 
+from node import Node
 from detect_connections import detect_connections
 from detect_nodes import detect_nodes, pick_template_set
 from drawer import draw_map
@@ -60,6 +61,22 @@ def check_end(nodes, last_nodes):  # TODO: think about better method, this could
         two_frags_combined_guess = True
 
     return this_frag_only or two_frags_combined_guess
+
+
+def check_duplicates(nodes, last_nodes):
+    if nodes is None or last_nodes is None:
+        return False
+    if len(nodes) != len(last_nodes):
+        return False
+    duplicates = 0
+    for n1 in nodes:
+        for n2 in last_nodes:
+            if Node.is_duplicate(n1, n2):
+                duplicates += 1
+                break
+    if duplicates == len(nodes):
+        return True
+    return False
 
 
 def worker_connections(queue: Queue, finalizer: Finalizer, templates, print_grid: bool = False):
@@ -166,8 +183,14 @@ def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lamb
     if save_folder is not None:
         os.makedirs(save_folder, exist_ok=True)
 
-    while step < max_steps:
-        log(f"Step {step}, expected 5~10")
+    while step <= max_steps:
+        if step <= 14:
+            log(f"Step {step}, expected 5~10")
+        elif step <= max_steps - 5:
+            log(f"Step {step}, expected 5~10, something may be broken")
+        else:
+            log(f"Step {step}, something is definitely wrong, consider making bug report")
+            raise IOError("Auto scanner failed")
         img = screenshot(save_folder, step)
         detect_q.put((step, img))
         if last_nodes is not None:
@@ -184,10 +207,14 @@ def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lamb
         if len(nodes) == 0:
             switch_window(1)
             raise IOError(f"step_{step}: Nothing detected, is map visible?")
+        # anti duplicate check
+        if check_duplicates(nodes, last_nodes):
+            log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
+            step += 1
+            continue
 
         # send nodes result to connection worker
         work_q.put((img, nodes))
-
         if check_end(nodes, last_nodes):
             break
 
@@ -267,6 +294,11 @@ def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=l
 
         if len(nodes) == 0:
             raise IOError(f"Step {step}: Nothing detected, is map visible?")
+        # anti duplicate check
+        if check_duplicates(nodes, last_nodes):
+            log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
+            step += 1
+            continue
 
         work_q.put((img, nodes))
         if check_end(nodes, last_nodes):
@@ -302,7 +334,7 @@ def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=l
 
 
 def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
-                           score_table: ScoreTable = None):
+                          score_table: ScoreTable = None):
     if save_folder is None:
         save_folder = prepare_clean_folder("Last_scan_result", log)
     else:
@@ -314,7 +346,7 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
     work_q = Queue()
     finalizer = Finalizer()
     detect_result = DetectResult()
-    listener = DragListener( #  TEST: change to mock
+    listener = DragListener(  # TEST: change to mock
         screenshot_q=screenshot_q,
         save_folder=save_folder,
         log=log
@@ -357,6 +389,11 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
         if len(nodes) == 0:
             listener.stop()
             raise IOError(f"Step {step}: Nothing detected, is map visible?")
+        # anti duplicate check
+        if check_duplicates(nodes, last_nodes):
+            log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
+            step += 1
+            continue
 
         work_q.put((img, nodes))
         if check_end(nodes, last_nodes):
