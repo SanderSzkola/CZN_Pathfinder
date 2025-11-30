@@ -42,25 +42,30 @@ TEMPLATE_SETS = [
     ("1920x1080", "Encounter_minimal_1920", "Modifier_1920"),
 ]
 
+'''
+Requires 2 sets of nodes, must be called before duplicate check.
+Reason: checking for boss directly is.. complicated, so this method checks instead if two subsequent screenshots ends
+with a column of shops.
+'''
 
-def check_end(nodes, last_nodes):  # TODO: think about better method, this could fail in some strange maps
+
+def check_end(nodes, last_nodes):
     if (last_nodes is None or len(last_nodes) <= 2
             or nodes is None or len(nodes) <= 2):
         return False
-    this_frag_only = False
-    two_frags_combined_guess = False
-    if (nodes[-1].modifier == "SH" and
-            nodes[-2].modifier == "SH" and
-            (len(nodes) == 2 or nodes[-3].modifier == "SH")
-    ):
-        this_frag_only = True
-    if (nodes[-1].modifier == "SH" and
-            nodes[-2].modifier == "SH" and
-            last_nodes[-1].modifier == "SH" and
-            last_nodes[-2].modifier == "SH"):
-        two_frags_combined_guess = True
-
-    return this_frag_only or two_frags_combined_guess
+    nodes_last_column = []
+    last_col_idx = nodes[-1].col
+    for n in nodes:
+        if n.col == last_col_idx:
+            nodes_last_column.append(n)
+    last_col_idx = last_nodes[-1].col
+    for n in last_nodes:
+        if n.col == last_col_idx:
+            nodes_last_column.append(n)
+    for n in nodes_last_column:
+        if n.modifier is None or n.modifier != "SH":
+            return False
+    return True
 
 
 def check_duplicates(nodes, last_nodes):
@@ -139,7 +144,7 @@ def prepare_clean_folder(base_name: str, log):
     return folder
 
 
-def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
+def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lambda msg: None,
                       score_table: ScoreTable = None):
     finalizer = Finalizer()
     last_nodes = None
@@ -184,9 +189,9 @@ def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lamb
         os.makedirs(save_folder, exist_ok=True)
 
     while step <= max_steps:
-        if step <= 14:
+        if step <= max_steps - 5:
             log(f"Step {step}, expected 5~10")
-        elif step <= max_steps - 5:
+        elif step <= max_steps:
             log(f"Step {step}, expected 5~10, something may be broken")
         else:
             log(f"Step {step}, something is definitely wrong, consider making bug report")
@@ -207,6 +212,8 @@ def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lamb
         if len(nodes) == 0:
             switch_window(1)
             raise IOError(f"step_{step}: Nothing detected, is map visible?")
+        if check_end(nodes, last_nodes):
+            break
         # anti duplicate check
         if check_duplicates(nodes, last_nodes):
             log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
@@ -215,8 +222,6 @@ def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lamb
 
         # send nodes result to connection worker
         work_q.put((img, nodes))
-        if check_end(nodes, last_nodes):
-            break
 
         do_drag_move(nodes[-1], nodes[0])
         last_nodes = nodes
@@ -251,7 +256,7 @@ def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lamb
     return map_obj, path, image
 
 
-def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lambda msg: None,
+def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
                          score_table: ScoreTable = None):
     if save_folder is None:
         raise ValueError("run_offline_pipeline requires save_folder with images")
@@ -294,6 +299,8 @@ def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=l
 
         if len(nodes) == 0:
             raise IOError(f"Step {step}: Nothing detected, is map visible?")
+        if check_end(nodes, last_nodes):
+            break
         # anti duplicate check
         if check_duplicates(nodes, last_nodes):
             log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
@@ -301,8 +308,7 @@ def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=l
             continue
 
         work_q.put((img, nodes))
-        if check_end(nodes, last_nodes):
-            break
+
         if len(nodes) >= 2:
             mock_move_screen(nodes[-1], nodes[0])
         last_nodes = nodes
@@ -353,8 +359,10 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
     )
     listener.start()
     log("Waiting for first screenshot...")
-    step, img = screenshot_q.get()
-
+    data = screenshot_q.get()
+    if data is None:
+        raise IOError("Scanner stopped by user")
+    step, img = data
     templates, nodes, resolution = pick_template_set(img, TEMPLATE_SETS)
     if len(nodes) == 0:
         listener.stop()
@@ -389,6 +397,8 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
         if len(nodes) == 0:
             listener.stop()
             raise IOError(f"Step {step}: Nothing detected, is map visible?")
+        if check_end(nodes, last_nodes):
+            break
         # anti duplicate check
         if check_duplicates(nodes, last_nodes):
             log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
@@ -396,8 +406,6 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
             continue
 
         work_q.put((img, nodes))
-        if check_end(nodes, last_nodes):
-            break
 
         last_nodes = nodes
         data = screenshot_q.get()
@@ -436,5 +444,5 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
 
 
 if __name__ == "__main__":
-    run_offline_pipeline(max_steps=30, save_folder=get_path("Example_scan_result"), print_grid=False,
+    run_offline_pipeline(save_folder=get_path("Example_scan_result"), print_grid=False,
                          log=lambda msg: print(msg))

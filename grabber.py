@@ -141,7 +141,13 @@ class DragListener:
         if self.listener:
             self.listener.stop()
 
-    def _on_click(self, x, y, button, pressed): #  maybe add right click cancel later
+    def _on_click(self, x, y, button, pressed):
+        if button == mouse.Button.right and not pressed:
+            self.log("Drag scanner stopped (right click).")
+            self.screenshot_q.put(None)
+            self.stop()
+            return
+
         if pressed:
             self.down_pos = (x, y)
             return
