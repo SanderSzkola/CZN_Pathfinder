@@ -55,8 +55,13 @@ def check_end(nodes, last_nodes):
         return False
     nodes_last_column = []
     last_col_idx = nodes[-1].col
+    no_index_x = 0
+    if last_col_idx is None:  # nodes may come before rowcol assignment
+        no_index_x = nodes[-1].x
     for n in nodes:
-        if n.col == last_col_idx:
+        if last_col_idx and n.col == last_col_idx:
+            nodes_last_column.append(n)
+        elif abs(no_index_x - n.x) < 10:
             nodes_last_column.append(n)
     last_col_idx = last_nodes[-1].col
     for n in last_nodes:
