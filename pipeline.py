@@ -6,7 +6,9 @@ from queue import Queue
 
 from node import Node
 from detect_connections import detect_connections
-from detect_nodes import detect_nodes, pick_template_set
+from detect_nodes import detect_nodes
+from template_library import TemplateLibrary
+from calibrator import calibrate
 from drawer import draw_map
 from grabber import switch_window, screenshot, do_drag_move, move_mouse, mock_switch_window, mock_move_screen, \
     mock_screenshot, DragListener, MockDragListener
@@ -37,19 +39,13 @@ Full process:
      but it at least allows for mouse movement while processing detect_nodes 
 """
 
-TEMPLATE_SETS = [
-    ("1600x900", "Encounter_minimal_1600", "Modifier_1600"),
-    ("1920x1080", "Encounter_minimal_1920", "Modifier_1920"),
-]
-
-'''
-Requires 2 sets of nodes, must be called before duplicate check.
-Reason: checking for boss directly is.. complicated, so this method checks instead if two subsequent screenshots ends
-with a column of shops.
-'''
-
 
 def check_end(nodes, last_nodes):
+    """
+    Requires 2 sets of nodes, must be called before duplicate check.
+    Reason: checking for boss directly is.. complicated, so this method checks instead if two subsequent screenshots ends
+    with a column of shops.
+    """
     if (last_nodes is None or len(last_nodes) <= 2
             or nodes is None or len(nodes) <= 2):
         return False
@@ -117,14 +113,14 @@ class ExceptionThread(threading.Thread):
             self.exception = e
 
 
-def worker_nodes(detect_q: Queue, result: DetectResult, templates):
+def worker_nodes(detect_q: Queue, result: DetectResult, templates, screenshot_scale):
     while True:
         item = detect_q.get()
         if item is None:
             break
 
         step, img = item
-        nodes = detect_nodes(img, templates, step)
+        nodes = detect_nodes(img, templates, step, screenshot_scale=screenshot_scale)
         with result.lock:
             result.ready_step = step
             result.nodes = nodes
@@ -152,6 +148,7 @@ def prepare_clean_folder(base_name: str, log):
 def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lambda msg: None,
                       score_table: ScoreTable = None):
     finalizer = Finalizer()
+    templates = TemplateLibrary()
     last_nodes = None
     step = 0
 
@@ -162,14 +159,8 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
     log("Starting scanning process")
     switch_window(step)
 
-    # TODO: rewrite this so those nodes can be used
     img = screenshot(save_folder, step)
-    templates, initial_nodes, resolution = pick_template_set(img, TEMPLATE_SETS)
-    if len(initial_nodes) == 0:
-        raise IOError(f"Step {step}: Nothing detected, is map visible?")
-    log(f"Matched template: {resolution}, with {len(initial_nodes)} matches")
-    if len(initial_nodes) <= 4:
-        raise IOError(f"Node count too low, is map fully visible?")
+    screenshot_scale = calibrate(templates, img, log)
 
     # connections worker
     work_q = Queue()
@@ -185,7 +176,7 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
     detect_result = DetectResult()
     node_worker = ExceptionThread(
         target=worker_nodes,
-        args=(detect_q, detect_result, templates),
+        args=(detect_q, detect_result, templates, screenshot_scale),
         daemon=True
     )
     node_worker.start()
@@ -203,7 +194,8 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
             raise IOError("Auto scanner failed")
         img = screenshot(save_folder, step)
         detect_q.put((step, img))
-        if last_nodes is not None:
+        # skip movement if end MAY BE here, but not confirmed yet
+        if last_nodes is not None and last_nodes[-1].modifier != "SH" and last_nodes[-2].modifier != "SH":
             move_mouse(last_nodes[-1])
         # wait for node detection to complete
         while True:
@@ -276,14 +268,12 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
 
     step = 0
     last_nodes = None
+    templates = TemplateLibrary()
 
     log("Starting scanning process [folder based - no game / mouse interaction]")
     mock_switch_window()
     first_img = mock_screenshot(os.path.join(save_folder, screenshots[0]))
-    templates, initial_nodes, resolution = pick_template_set(first_img, TEMPLATE_SETS)
-    if len(initial_nodes) == 0:
-        raise IOError(f"Step {step}: Nothing detected, is map visible?")
-    log(f"Matched template: {resolution}, with {len(initial_nodes)} matches")
+    screenshot_scale = calibrate(templates, first_img, log)
 
     finalizer = Finalizer()
     work_q = Queue()
@@ -300,7 +290,7 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
         log(f"Step {step}, processing {s}")
 
         img = mock_screenshot(os.path.join(save_folder, s))
-        nodes = detect_nodes(img, templates, step)
+        nodes = detect_nodes(img, templates, step, screenshot_scale=screenshot_scale)
 
         if len(nodes) == 0:
             raise IOError(f"Step {step}: Nothing detected, is map visible?")
@@ -352,6 +342,7 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
         os.makedirs(save_folder, exist_ok=True)
     log("Starting scanning process [half-auto]")
 
+    templates = TemplateLibrary()
     screenshot_q = Queue()
     detect_q = Queue(maxsize=1)
     work_q = Queue()
@@ -368,18 +359,11 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
     if data is None:
         raise IOError("Scanner stopped by user")
     step, img = data
-    templates, nodes, resolution = pick_template_set(img, TEMPLATE_SETS)
-    if len(nodes) == 0:
-        listener.stop()
-        raise IOError(f"Step {step}: Nothing detected, is map visible?")
-    log(f"Matched template: {resolution}, with {len(nodes)} matches")
-    if len(nodes) <= 4:
-        listener.stop()
-        raise IOError("Node count too low, is map fully visible?")
+    screenshot_scale = calibrate(templates, img, log)
 
     node_worker = ExceptionThread(
         target=worker_nodes,
-        args=(detect_q, detect_result, templates),
+        args=(detect_q, detect_result, templates, screenshot_scale),
         daemon=True)
     node_worker.start()
 

@@ -1,65 +1,18 @@
 import os
 from datetime import datetime
-
 import cv2
 import numpy as np
 from PIL.Image import Image
 
 from node import Node
 from path_converter import get_path
+from template_library import TemplateLibrary
 
 """
 Handles loading template images and providing them for node/modifier detection.
 """
-
-
-class TemplateLibrary:
-    def __init__(self, encounter_dir="Encounter_minimal_1920", modifier_dir="Modifier_1920"):
-        self.node_templates = self._load_templates(get_path(["Images", encounter_dir]))
-        self.modifier_templates = self._load_templates(get_path(["Images", modifier_dir]))
-
-    @staticmethod
-    def _load_templates(directory):
-        templates = {}
-        if not os.path.isdir(directory):
-            return templates
-
-        for file in os.listdir(directory):
-            if file.lower().endswith(".png"):
-                name = os.path.splitext(file)[0]
-                path = os.path.join(directory, file)
-                templates[name] = TemplateLibrary.load_template(path)
-
-        return templates
-
-    @staticmethod
-    def load_template(path):
-        img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-        if img is None:
-            raise FileNotFoundError(path)
-
-        has_alpha = img.shape[2] == 4
-
-        if has_alpha:
-            b, g, r, a = cv2.split(img)
-            rgb = cv2.merge([b, g, r])
-            gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
-            mask = (a > 0).astype(np.uint8) * 255
-
-            ys, xs = np.where(mask > 0)
-            y0, y1 = ys.min(), ys.max()
-            x0, x1 = xs.min(), xs.max()
-
-            gray = gray[y0:y1 + 1, x0:x1 + 1]
-            rgb = rgb[y0:y1 + 1, x0:x1 + 1]
-            mask = mask[y0:y1 + 1, x0:x1 + 1]
-
-        else:
-            rgb = img[:, :, :3]
-            gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
-            mask = np.ones_like(gray, dtype=np.uint8) * 255
-
-        return gray, mask, rgb
+TRIM_TOP_PX = 120
+TRIM_RIGHT_PX = 120
 
 
 def color_verify(map_img, tmpl_rgb, mask, x, y):
@@ -80,14 +33,19 @@ def _load_map_image(map_fragment):
             raise ValueError(f"Failed to read image from path: {map_fragment}")
         return img
 
+    if isinstance(map_fragment, np.ndarray):
+        return map_fragment
+
     if isinstance(map_fragment, Image):
         rgb = np.array(map_fragment)
         return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
-    raise TypeError("map_fragment must be a path or PIL.Image")
+    raise TypeError(f"map_fragment must be a path, numpy or PIL.Image, not {type(map_fragment)}")
 
 
-def _trim_map(map_img, top=120, right=120):
+def _trim_map(map_img, scale):
+    top = int(TRIM_TOP_PX * scale)
+    right = int(TRIM_RIGHT_PX * scale)
     gray = cv2.cvtColor(map_img, cv2.COLOR_BGR2GRAY)
     gray_trim = gray[top:, :-right]
     rgb_trim = map_img[top:, :-right]
@@ -179,22 +137,37 @@ def _preview(map_img, nodes, map_fragment):
         cv2.imwrite(get_path(f"nodes_preview_{now}.png"), preview)
 
 
-def detect_nodes(map_fragment, templates: TemplateLibrary, screenshot_index=0,
-                 create_preview=False, threshold=0.98):
-    map_img = _load_map_image(map_fragment)
-    map_gray, map_rgb_trimmed = _trim_map(map_img)
+def detect_nodes(screenshot_str_or_img,
+                 templates: TemplateLibrary,
+                 screenshot_index=0,
+                 create_preview=False,
+                 threshold=0.98,
+                 screenshot_scale=1.0):
+    screenshot = _load_map_image(screenshot_str_or_img)
+    if screenshot_scale != 1.0:
+        h, w = screenshot.shape[:2]
+        scaled_screenshot = cv2.resize(
+            screenshot,
+            (int(w * screenshot_scale), int(h * screenshot_scale)),
+            interpolation=cv2.INTER_AREA,
+        )
+    else:
+        scaled_screenshot = screenshot
 
-    node_candidates = _detect_templates(map_gray, map_rgb_trimmed, templates.node_templates, threshold)
+    map_gray_trimmed, map_rgb_trimmed = _trim_map(scaled_screenshot, screenshot_scale)
+
+    node_candidates = _detect_templates(map_gray_trimmed, map_rgb_trimmed, templates.node_templates_scaled, threshold)
     node_candidates.sort(key=lambda c: c[3], reverse=True)
 
     nodes = []
     counter = 0
 
     # deduplicate nodes
+    deduplicate_area = int((50 * screenshot_scale)) ** 2
     for cx, cy, t, score in node_candidates:
         keep = True
         for n in nodes:
-            if (cx - n.x) ** 2 + (cy - n.y) ** 2 < 2500:
+            if (cx - n.x) ** 2 + (cy - n.y) ** 2 < deduplicate_area:
                 keep = False
                 break
 
@@ -204,59 +177,36 @@ def detect_nodes(map_fragment, templates: TemplateLibrary, screenshot_index=0,
             nodes.append(Node(cx, cy, t, node_id=node_id))
 
     # detect modifiers
-    modifier_hits = _detect_templates(map_gray, map_rgb_trimmed, templates.modifier_templates, threshold)
+    modifier_hits = _detect_templates(map_gray_trimmed, map_rgb_trimmed, templates.modifier_templates_scaled, threshold)
     _assign_modifiers(nodes, modifier_hits)
 
-    # restore original screen Y coordinate
-    top_offset = 120
+    # restore original screen coordinates
+    # needed for top and left trim, bottom and right have no influence
+    top_offset = int(TRIM_TOP_PX * screenshot_scale)
     for node in nodes:
+        node.x = int(node.x / screenshot_scale)
+        node.y = int(node.y / screenshot_scale)
         node.y += top_offset
 
     if create_preview:
-        _preview(map_img, nodes, map_fragment)
+        _preview(screenshot, nodes, screenshot_str_or_img)
 
     nodes.sort(key=lambda n: n.x)
-
-    # remove waypoint false positive
-    shops = sum(1 for n in nodes[-4:] if n.type == "RE" and n.modifier == "SH")
-    waypoints = sum(1 for n in nodes[-4:] if n.type == "WA")
-
-    if waypoints == 1 and shops >= 2:
-        nodes = nodes[:-1]
 
     return nodes
 
 
-def pick_template_set(first_img, template_sets):
-    """
-    template_sets: list of (resolution, encounter_dir, modifier_dir)
-    returns: best TemplateLibrary, nodes to maybe reuse, resolution
-    """
-    best = None
-    best_count = -1
-    nodes = None
-    best_resolution = ""
-
-    for resolution, enc_dir, mod_dir in template_sets:
-        templates = TemplateLibrary(encounter_dir=enc_dir, modifier_dir=mod_dir)
-        temp_nodes = detect_nodes(first_img, templates, screenshot_index=0)
-        count = len(temp_nodes)
-        if count > best_count:
-            best_count = count
-            best = templates
-            nodes = temp_nodes
-            best_resolution = resolution
-
-    return best, nodes, best_resolution
-
-
 if __name__ == "__main__":
     templates = TemplateLibrary()
-    folder = get_path("Example_scan_result")
+    # folder = get_path("Example_scan_result")
+    folder = get_path(["Test_scans", "Map_small_res_1"])
 
     # SINGLE
     path = os.path.join(folder, "map_frag_0.png")
-    nodes = detect_nodes(path, templates, create_preview=True)
+    from calibrator import calibrate  # here bc ide yells about circular dependency
+
+    screenshot_scale = calibrate(templates, path, log=lambda msg: print(msg))
+    nodes = detect_nodes(path, templates, create_preview=True, screenshot_scale=screenshot_scale)
     for n in nodes:
         print(n)
     print(f"Total nodes: {len(nodes)}")
@@ -266,25 +216,6 @@ if __name__ == "__main__":
     #     if f.split('.')[0].endswith("preview") or f.startswith("merged"):
     #         continue
     #     if f.split('.')[1] != "png":
-    #         continue
-    #     path = os.path.join(folder, f)
-    #     detections = len(detect_nodes(path, templates, create_preview=True))
-    #     print(f"{f} done, {detections} obj detected")
-
-    # TESTS
-    # templates = TemplateLibrary(encounter_dir="Encounter")
-    # print("Normal icon:")
-    # for f in os.listdir(folder):
-    #     if f.split('.')[0].endswith("preview") or f.startswith("merged"):
-    #         continue
-    #     path = os.path.join(folder, f)
-    #     detections = len(detect_nodes(path, templates, create_preview=False))
-    #     print(f"{f} done, {detections} obj detected")
-    #
-    # templates = TemplateLibrary(encounter_dir="Encounter_minimal")
-    # print("Center part only")
-    # for f in os.listdir(folder):
-    #     if f.split('.')[0].endswith("preview") or f.startswith("merged"):
     #         continue
     #     path = os.path.join(folder, f)
     #     detections = len(detect_nodes(path, templates, create_preview=True))
