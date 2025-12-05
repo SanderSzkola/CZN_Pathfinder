@@ -8,7 +8,7 @@ from node import Node
 from detect_connections import detect_connections
 from detect_nodes import detect_nodes
 from template_library import TemplateLibrary
-from calibrator import calibrate
+from calibrator import validate_calibration, perform_calibration
 from drawer import draw_map
 from grabber import switch_window, screenshot, do_drag_move, move_mouse, mock_switch_window, mock_move_screen, \
     mock_screenshot, DragListener, MockDragListener
@@ -113,14 +113,14 @@ class ExceptionThread(threading.Thread):
             self.exception = e
 
 
-def worker_nodes(detect_q: Queue, result: DetectResult, templates, screenshot_scale):
+def worker_nodes(detect_q: Queue, result: DetectResult, templates, screenshot_scale, threshold):
     while True:
         item = detect_q.get()
         if item is None:
             break
 
         step, img = item
-        nodes = detect_nodes(img, templates, step, screenshot_scale=screenshot_scale)
+        nodes = detect_nodes(img, templates, step, screenshot_scale=screenshot_scale, threshold=threshold)
         with result.lock:
             result.ready_step = step
             result.nodes = nodes
@@ -160,7 +160,7 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
     switch_window(step)
 
     img = screenshot(save_folder, step)
-    screenshot_scale = calibrate(templates, img, log)
+    screenshot_scale, threshold, calibration_status = validate_calibration(templates, img, log)
 
     # connections worker
     work_q = Queue()
@@ -176,7 +176,7 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
     detect_result = DetectResult()
     node_worker = ExceptionThread(
         target=worker_nodes,
-        args=(detect_q, detect_result, templates, screenshot_scale),
+        args=(detect_q, detect_result, templates, screenshot_scale, threshold),
         daemon=True
     )
     node_worker.start()
@@ -250,7 +250,7 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
 
     switch_window(step)
 
-    return map_obj, path, image
+    return map_obj, path, image, calibration_status
 
 
 def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
@@ -273,7 +273,7 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
     log("Starting scanning process [folder based - no game / mouse interaction]")
     mock_switch_window()
     first_img = mock_screenshot(os.path.join(save_folder, screenshots[0]))
-    screenshot_scale = calibrate(templates, first_img, log)
+    screenshot_scale, threshold, calibration_status = validate_calibration(templates, first_img, log)
 
     finalizer = Finalizer()
     work_q = Queue()
@@ -290,7 +290,7 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
         log(f"Step {step}, processing {s}")
 
         img = mock_screenshot(os.path.join(save_folder, s))
-        nodes = detect_nodes(img, templates, step, screenshot_scale=screenshot_scale)
+        nodes = detect_nodes(img, templates, step, screenshot_scale=screenshot_scale, threshold=threshold)
 
         if len(nodes) == 0:
             raise IOError(f"Step {step}: Nothing detected, is map visible?")
@@ -331,7 +331,7 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
 
     mock_switch_window()
 
-    return map_obj, path, image
+    return map_obj, path, image, calibration_status
 
 
 def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
@@ -359,11 +359,11 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
     if data is None:
         raise IOError("Scanner stopped by user")
     step, img = data
-    screenshot_scale = calibrate(templates, img, log)
+    screenshot_scale, threshold, calibration_status = validate_calibration(templates, img, log)
 
     node_worker = ExceptionThread(
         target=worker_nodes,
-        args=(detect_q, detect_result, templates, screenshot_scale),
+        args=(detect_q, detect_result, templates, screenshot_scale, threshold),
         daemon=True)
     node_worker.start()
 
@@ -429,7 +429,15 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
                      encounter_ranges=encounter_ranges,
                      encounter_counts=encounter_counts)
 
-    return map_obj, path, image
+    return map_obj, path, image, calibration_status
+
+
+def run_calibrator(log=lambda msg: None):
+    templates = TemplateLibrary()
+    switch_window(0)
+    scr = screenshot()
+    switch_window(1)
+    perform_calibration(templates, scr, log)
 
 
 if __name__ == "__main__":

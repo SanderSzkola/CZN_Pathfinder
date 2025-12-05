@@ -9,7 +9,7 @@ from path_converter import get_path
 from template_library import TemplateLibrary
 
 """
-Handles loading template images and providing them for node/modifier detection.
+Detects nodes on provided screenshot based on templates from TemplateLibrary
 """
 TRIM_TOP_PX = 120
 TRIM_RIGHT_PX = 120
@@ -23,7 +23,7 @@ def color_verify(map_img, tmpl_rgb, mask, x, y):
 
     diff = cv2.absdiff(patch, tmpl_rgb)
     diff = diff[mask == 255]
-    return float(np.mean(diff)) < 50
+    return float(np.mean(diff)) < 45
 
 
 def _load_map_image(map_fragment):
@@ -177,6 +177,7 @@ def detect_nodes(screenshot_str_or_img,
             nodes.append(Node(cx, cy, t, node_id=node_id))
 
     # detect modifiers
+    threshold -= 0.01  # mod detection fails way too often; TODO: maybe replace mod images?
     modifier_hits = _detect_templates(map_gray_trimmed, map_rgb_trimmed, templates.modifier_templates_scaled, threshold)
     _assign_modifiers(nodes, modifier_hits)
 
@@ -203,10 +204,10 @@ if __name__ == "__main__":
 
     # SINGLE
     path = os.path.join(folder, "map_frag_0.png")
-    from calibrator import calibrate  # here bc ide yells about circular dependency
-
-    screenshot_scale = calibrate(templates, path, log=lambda msg: print(msg))
-    nodes = detect_nodes(path, templates, create_preview=True, screenshot_scale=screenshot_scale)
+    from calibrator import validate_calibration, perform_calibration  # here bc ide yells about circular dependency
+    # perform_calibration(templates, path)  # DO NOT CALIBRATE ON FIRST SCREENSHOT, need more nodes, pick 3rd or something
+    screenshot_scale, threshold, calibration_status = validate_calibration(templates, path, log=lambda msg: print(msg))
+    nodes = detect_nodes(path, templates, create_preview=True, screenshot_scale=screenshot_scale, threshold=threshold)
     for n in nodes:
         print(n)
     print(f"Total nodes: {len(nodes)}")

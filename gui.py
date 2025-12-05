@@ -7,8 +7,8 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline
-from pathfinder import run_pathfinder
+from pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, run_calibrator, run_pathfinder
+from calibrator import check_calibration_file_exists
 from drawer import draw_map, load_icon
 from score_table import ScoreTable
 from path_converter import get_path
@@ -29,10 +29,13 @@ class PipelineGUI:
         self.score_table = ScoreTable()
         self._delayed_pathfinder_id = None
         self._icons = {}
+        self.calibration_status = True
+        self.stop_blinking = False
 
         self._build_ui()
         self._load_initial_background()
         self.root.after(50, self._periodic_update)
+        self._blink_loop()
 
     # ======================================================================
     # UI Construction
@@ -95,7 +98,9 @@ class PipelineGUI:
         row1 = tk.Frame(parent)
         row1.pack(pady=5, fill="x")
 
-        tk.Button(row1, text="Choose Folder", width=18, command=self.choose_folder).pack(side="left", padx=2)
+        # keep reference so it can blink and annoy user if calibration is wrong
+        self.recalibrate_button = tk.Button(row1, text="Recalibrate", width=18, command=self.start_calibrator)
+        self.recalibrate_button.pack(side="left", padx=2)
         tk.Button(row1, text="Start Automatic Scanner", width=18, command=self.start_automatic_pipeline).pack(
             side="left", padx=2)
         tk.Button(row1, text="Import Score Table", width=18, command=self.import_score_table).pack(side="left", padx=2)
@@ -103,7 +108,7 @@ class PipelineGUI:
         row2 = tk.Frame(parent)
         row2.pack(pady=5, fill="x")
 
-        tk.Button(row2, text="Clear Folder", width=18, command=self.clear_folder).pack(side="left", padx=2)
+        tk.Button(row2, text="Choose Folder", width=18, command=self.choose_folder).pack(side="left", padx=2)
         tk.Button(row2, text="Start Halfauto Scanner", width=18,
                   command=self.start_halfauto_pipeline).pack(side="left", padx=2)
 
@@ -111,7 +116,7 @@ class PipelineGUI:
 
         row3 = tk.Frame(parent)
         row3.pack(pady=5, fill="x")
-        tk.Label(row3, width=18).pack(side="left", padx=4)  # filler, should have padx 2 but somehow 4 is correct
+        tk.Button(row3, text="Clear Folder", width=18, command=self.clear_folder).pack(side="left", padx=2)
         tk.Button(row3, text="Start Offline Scanner", width=18, command=self.start_offline_pipeline).pack(side="left",
                                                                                                           padx=2)
 
@@ -260,6 +265,10 @@ class PipelineGUI:
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
                 return
 
+        self.calibration_status = check_calibration_file_exists(self.log)
+        if not self.calibration_status:
+            return
+
         if not self.ask_continue_dialog("auto"):
             self.log("Scanning task cancelled.")
             return
@@ -269,7 +278,7 @@ class PipelineGUI:
     def _run_auto_pipeline(self):
         try:
             self.log("Auto scanner started")
-            m, path, img = run_auto_pipeline(
+            m, path, img, calibration_status = run_auto_pipeline(
                 save_folder=self.selected_folder,
                 log=self.log,
                 score_table=self.score_table
@@ -277,6 +286,7 @@ class PipelineGUI:
             self.last_map = m
             self.last_path = path
             self.display_image(img)
+            self.calibration_status = calibration_status
         except Exception as e:
             self.log(f"Pipeline error: {e}")
 
@@ -285,6 +295,10 @@ class PipelineGUI:
             if os.listdir(self.selected_folder):
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
                 return
+
+        self.calibration_status = check_calibration_file_exists(self.log)
+        if not self.calibration_status:
+            return
 
         if not self.ask_continue_dialog("halfauto"):
             self.log("Scanning task cancelled.")
@@ -295,7 +309,7 @@ class PipelineGUI:
     def _run_halfauto_pipeline(self):
         try:
             self.log("Halfauto scanner started")
-            m, path, img = run_halfauto_pipeline(
+            m, path, img, calibration_status = run_halfauto_pipeline(
                 save_folder=self.selected_folder,
                 log=self.log,
                 score_table=self.score_table
@@ -303,6 +317,7 @@ class PipelineGUI:
             self.last_map = m
             self.last_path = path
             self.display_image(img)
+            self.calibration_status = calibration_status
         except Exception as e:
             self.log(f"Pipeline error: {e}")
 
@@ -311,11 +326,15 @@ class PipelineGUI:
             self.log("Select folder with screenshots first.")
             return
 
+        self.calibration_status = check_calibration_file_exists(self.log)
+        if not self.calibration_status:
+            return
+
         threading.Thread(target=self._run_offline_pipeline, daemon=True).start()
 
     def _run_offline_pipeline(self):
         try:
-            m, path, img = run_offline_pipeline(
+            m, path, img, calibration_status = run_offline_pipeline(
                 save_folder=self.selected_folder,
                 log=self.log,
                 score_table=self.score_table
@@ -323,6 +342,7 @@ class PipelineGUI:
             self.last_map = m
             self.last_path = path
             self.display_image(img)
+            self.calibration_status = calibration_status
         except Exception as e:
             self.log(f"Pipeline error: {e}")
 
@@ -344,6 +364,27 @@ class PipelineGUI:
                 self.display_image(img)
             except Exception as e:
                 self.log(f"Re-run error: {e}")
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def start_calibrator(self):
+        if not self.ask_continue_dialog("calibrator"):
+            self.log("Calibrator task cancelled.")
+            return
+        self.log("Calibrator started")
+        self.calibration_status = True
+        self.recalibrate_button.config(bg="orange")
+
+        def task():
+            try:
+                self.stop_blinking = True
+                run_calibrator(self.log)
+            except Exception as e:
+                self.log(f"Calibrator error: {e}")
+                self.calibration_status = False
+            finally:
+                self.stop_blinking = False
+                self.root.after(0, lambda: self._blink_loop())
 
         threading.Thread(target=task, daemon=True).start()
 
@@ -409,6 +450,14 @@ class PipelineGUI:
                 "It will stop once script sees boss or detect no nodes on screen.\n\n"
                 "Make sure you are ready, then press enter / continue.\n"
             )
+        elif variant == "calibrator":
+            text = (
+                "You are about to start the calibrating process.\n"
+                "It will take a screenshot then check various resolutions. It may take a while.\n"
+                "Make sure alt-tab leads to the game, the game has minimap opened and in a position that shows different\n"
+                "types of nodes and modifiers, the more the better. Starting position is BAD, move it right a bit.\n\n"
+                "If the script failed to switch window, alt-tab to game and back, then start again."
+            )
         else:
             text = "Not implemented"
 
@@ -449,6 +498,25 @@ class PipelineGUI:
     # ======================================================================
     def _periodic_update(self):
         self.root.after(50, self._periodic_update)
+
+
+    def _blink_loop(self):
+        if self.stop_blinking:
+            self.stop_blinking = False
+            return
+        interval = 400
+        if not self.calibration_status:
+            if self._blink_state:
+                self.recalibrate_button.config(bg="red")
+                interval *=3
+            else:
+                self.recalibrate_button.config(bg="SystemButtonFace")
+            self._blink_state = not self._blink_state
+        else:
+            self.recalibrate_button.config(bg="SystemButtonFace")
+            self._blink_state = False
+
+        self.root.after(interval, self._blink_loop)
 
 
 # ======================================================================
