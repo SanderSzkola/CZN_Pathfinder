@@ -15,14 +15,14 @@ TRIM_TOP_PX = 120
 TRIM_RIGHT_PX = 120
 
 
-def color_verify(map_img, tmpl_rgb, mask, x, y):
+def color_verify(map_img, tmpl_rgb, mask_idx, x, y):
     h, w, _ = tmpl_rgb.shape
     patch = map_img[y:y + h, x:x + w]
     if patch.shape[:2] != (h, w):
         return False
 
     diff = cv2.absdiff(patch, tmpl_rgb)
-    diff = diff[mask == 255]
+    diff = diff[mask_idx]
     return float(np.mean(diff)) < 45
 
 
@@ -70,7 +70,7 @@ def _non_max_suppression(points, shape, w, h):
 def _detect_templates(map_gray, map_rgb, templates, threshold):
     candidates = []
 
-    for label, (tmpl_gray, mask, tmpl_rgb) in templates.items():
+    for label, (tmpl_gray, mask, tmpl_rgb, mask_idx) in templates.items():
         h, w = tmpl_gray.shape
 
         res = cv2.matchTemplate(
@@ -91,7 +91,7 @@ def _detect_templates(map_gray, map_rgb, templates, threshold):
         abbrev = label[:2].upper()
 
         for (x, y) in taken:
-            if not color_verify(map_rgb, tmpl_rgb, mask, x, y):
+            if not color_verify(map_rgb, tmpl_rgb, mask_idx, x, y):
                 continue
 
             score = float(res[y, x])
@@ -102,7 +102,7 @@ def _detect_templates(map_gray, map_rgb, templates, threshold):
     return candidates
 
 
-def _assign_modifiers(nodes, modifier_hits):
+def _assign_modifiers(nodes, modifier_hits, screenshot_scale):
     for mx, my, mod, _ in modifier_hits:
         best = None
         best_dist = float("inf")
@@ -112,7 +112,12 @@ def _assign_modifiers(nodes, modifier_hits):
                 best = node
                 best_dist = d
         if best is not None:
-            best.modifier = mod
+            if best_dist < (130 * screenshot_scale) ** 2:
+                best.modifier = mod
+                #print(f"Mod {mod} assigned to {best.type} with distance {best_dist}")
+            else:
+                #print(f"Mod {mod} with distance {best_dist} DISCARDED")
+                pass
 
 
 def _preview(map_img, nodes, map_fragment):
@@ -177,9 +182,9 @@ def detect_nodes(screenshot_str_or_img,
             nodes.append(Node(cx, cy, t, node_id=node_id))
 
     # detect modifiers
-    threshold -= 0.01  # mod detection fails way too often; TODO: maybe replace mod images?
+    threshold -= 0.005  # mod detection fails way too often; TODO: maybe replace mod images?
     modifier_hits = _detect_templates(map_gray_trimmed, map_rgb_trimmed, templates.modifier_templates_scaled, threshold)
-    _assign_modifiers(nodes, modifier_hits)
+    _assign_modifiers(nodes, modifier_hits, screenshot_scale)
 
     # restore original screen coordinates
     # needed for top and left trim, bottom and right have no influence
@@ -198,13 +203,13 @@ def detect_nodes(screenshot_str_or_img,
 
 
 if __name__ == "__main__":
+    from calibrator import validate_calibration, perform_calibration  # here bc ide yells about circular dependency
     templates = TemplateLibrary()
-    # folder = get_path("Example_scan_result")
-    folder = get_path(["Test_scans", "Map_small_res_1"])
+    folder = get_path(["Test_scans","Map_live_test_dumpsite_3"])
+    # folder = get_path(["Test_scans", "Map_small_res_1"])
 
     # SINGLE
     path = os.path.join(folder, "map_frag_0.png")
-    from calibrator import validate_calibration, perform_calibration  # here bc ide yells about circular dependency
     # perform_calibration(templates, path)  # DO NOT CALIBRATE ON FIRST SCREENSHOT, need more nodes, pick 3rd or something
     screenshot_scale, threshold, calibration_status = validate_calibration(templates, path, log=lambda msg: print(msg))
     nodes = detect_nodes(path, templates, create_preview=True, screenshot_scale=screenshot_scale, threshold=threshold)
@@ -213,11 +218,13 @@ if __name__ == "__main__":
     print(f"Total nodes: {len(nodes)}")
 
     # FOLDER
+    # path = os.path.join(folder, "map_frag_4.png")
+    # screenshot_scale, threshold, calibration_status = validate_calibration(templates, path, log=lambda msg: print(msg))
     # for f in os.listdir(folder):
     #     if f.split('.')[0].endswith("preview") or f.startswith("merged"):
     #         continue
     #     if f.split('.')[1] != "png":
     #         continue
     #     path = os.path.join(folder, f)
-    #     detections = len(detect_nodes(path, templates, create_preview=True))
-    #     print(f"{f} done, {detections} obj detected")
+    #     nodes = detect_nodes(path, templates, create_preview=True, screenshot_scale=screenshot_scale, threshold=threshold)
+    #     print(f"{f} done, {len(nodes)} obj detected")

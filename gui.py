@@ -34,7 +34,6 @@ class PipelineGUI:
 
         self._build_ui()
         self._load_initial_background()
-        self.root.after(50, self._periodic_update)
         self._blink_loop()
 
     # ======================================================================
@@ -164,19 +163,34 @@ class PipelineGUI:
 
         var = tk.IntVar(value=value)
         self.score_vars[key] = var
+        if key != "EVTU": # dimensional tunnel gets more points
+            tk.Scale(
+                row,
+                from_=-10,
+                to=10,
+                orient="horizontal",
+                length=160,
+                variable=var,
+                command=lambda _, k=key: self.update_score_value(k),
+                borderwidth=1,
+                highlightthickness=0,
+                sliderlength=10
+            ).pack(side="left", padx=1)
+        else:
+            tk.Scale(
+                row,
+                from_=-50,
+                to=50,
+                orient="horizontal",
+                length=160,
+                variable=var,
+                command=lambda _, k=key: self.update_score_value(k),
+                borderwidth=1,
+                highlightthickness=0,
+                sliderlength=10,
+                resolution=5
+            ).pack(side="left", padx=1)
 
-        tk.Scale(
-            row,
-            from_=-10,
-            to=10,
-            orient="horizontal",
-            length=160,
-            variable=var,
-            command=lambda _, k=key: self.update_score_value(k),
-            borderwidth=1,
-            highlightthickness=0,
-            sliderlength=10
-        ).pack(side="left", padx=1)
 
     # ======================================================================
     # Logging
@@ -496,19 +510,15 @@ class PipelineGUI:
     # ======================================================================
     # Periodic UI Update
     # ======================================================================
-    def _periodic_update(self):
-        self.root.after(50, self._periodic_update)
-
-
     def _blink_loop(self):
         if self.stop_blinking:
             self.stop_blinking = False
             return
-        interval = 400
+        interval = 350
         if not self.calibration_status:
             if self._blink_state:
                 self.recalibrate_button.config(bg="red")
-                interval *=3
+                interval *=4
             else:
                 self.recalibrate_button.config(bg="SystemButtonFace")
             self._blink_state = not self._blink_state

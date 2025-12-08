@@ -46,8 +46,8 @@ def validate_calibration(templates, screenshot, log=lambda msg: None):
 
         log(f"Calibrator: {len(nodes)} matches, including {non_normal_nodes} other than NO, "
             f"cache loaded with template scale {test_scale} and screenshot scale {screenshot_scale}, "
-            f"threshold {threshold} "
-            f"(~{int(w * test_scale / screenshot_scale)}x{int(h * test_scale / screenshot_scale)})")
+            f"threshold {threshold:5.3f} "
+            f"(~{int(w * test_scale / screenshot_scale):4d}x{int(h * test_scale / screenshot_scale):4d})")
         if len(nodes) > 4 and non_normal_nodes > 0:
             return screenshot_scale, threshold, True
 
@@ -110,8 +110,8 @@ def perform_calibration(templates, screenshot, log=lambda msg: None):
                 best_threshold = threshold
 
             log(f"scale: {test_scale:4.2f}, matches: {count_nodes:2d} nodes and {count_modifiers:2d} modifiers, "
-                f"threshold {threshold:4.2f} "
-                f"(~{int(w * test_scale / screenshot_scale)}x{int(h * test_scale / screenshot_scale)}){'^^' if better else ''}")
+                f"threshold {threshold:5.3f} "
+                f"(~{int(w * test_scale / screenshot_scale):4d}x{int(h * test_scale / screenshot_scale):4d}){'^^' if better else ''}")
 
     if best_count_nodes == 0:
         raise IOError("Calibrator failed. Is minimap visible? Is game in windowed mode?")
@@ -127,7 +127,7 @@ def perform_calibration(templates, screenshot, log=lambda msg: None):
 
     log(f"Done, took {(time.time() - start_time):3.1f}s")
     log(f"Calibrator: {best_count_nodes} matches, for template scale {best_scale:4.2f} and screenshot scale "
-        f"{screenshot_scale:3.1f}, threshold {best_threshold:4.2f}"
+        f"{screenshot_scale:3.1f}, threshold {best_threshold:5.3f}"
         f" (~{int(w * best_scale / screenshot_scale)}x{int(h * best_scale / screenshot_scale)})")
 
     return screenshot_scale, best_threshold, True
