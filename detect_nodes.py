@@ -3,6 +3,7 @@ from datetime import datetime
 import cv2
 import numpy as np
 from PIL.Image import Image
+from scipy.ndimage import maximum_filter
 
 from node import Node
 from path_converter import get_path
@@ -80,12 +81,21 @@ def _detect_templates(map_gray, map_rgb, templates, threshold):
             mask=mask
         )
 
-        ys, xs = np.where(res >= threshold)
+        # local max filter; neighborhood size ~ template size / 2
+        neigh = max(1, max(h // 2, w // 2))
+        local_max = (res == maximum_filter(res, size=neigh))
+
+        cand_mask = (res >= threshold) & local_max
+        ys, xs = np.where(cand_mask)
         if ys.size == 0:
             continue
 
+        scores = res[ys, xs]
+        order = np.argsort(scores)[::-1]
+        xs = xs[order]
+        ys = ys[order]
+
         pts = list(zip(xs, ys))
-        pts.sort(key=lambda p: res[p[1], p[0]], reverse=True)
 
         taken = _non_max_suppression(pts, res.shape, w, h)
         abbrev = label[:2].upper()
