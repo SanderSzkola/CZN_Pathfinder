@@ -469,7 +469,7 @@ class PipelineGUI:
                 "You are about to start the calibrating process.\n"
                 "It will take a screenshot then check various resolutions. It may take a while.\n"
                 "Make sure alt-tab leads to the game, the game has minimap opened and in a position that shows different\n"
-                "types of nodes and modifiers, the more the better. Starting position is BAD, move it right a bit.\n\n"
+                "types of nodes and modifiers, the more the better. Starting position is BAD, move it to the right a bit.\n\n"
                 "If the script failed to switch window, alt-tab to game and back, then start again."
             )
         else:
