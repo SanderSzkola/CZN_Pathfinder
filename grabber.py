@@ -119,6 +119,11 @@ def mock_move_screen(node_from, node_to):
     time.sleep(0.01)
 
 
+def get_screen_res():
+    w, h = pyautogui.size()
+    return w, h
+
+
 # half-auto nonsense, but maybe more-legal
 class DragListener:
     def __init__(self,

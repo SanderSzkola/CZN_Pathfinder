@@ -8,6 +8,7 @@ import numpy as np
 from PIL import Image, ImageTk
 
 from pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, run_calibrator, run_pathfinder
+from grabber import get_screen_res
 from calibrator import check_calibration_file_exists
 from drawer import draw_map, load_icon
 from score_table import ScoreTable
@@ -15,11 +16,24 @@ from path_converter import get_path
 
 
 class PipelineGUI:
-    def __init__(self, root):
+    def __init__(self, root, low_res=False):
         self.root = root
+        self.low_res = low_res
+        if self.low_res:
+            self.window_w = 1280
+            self.window_h = 420
+            self.left_panel_w = 880
+            self.left_panel_h = 420
+            self.image_h = int(self.left_panel_h * self.left_panel_w / 1190)
+        else:
+            self.window_w = 1600
+            self.window_h = 420
+            self.left_panel_w = 1190
+            self.left_panel_h = 420
+
         self.root.title("CZN Pathfinder")
         self.root.iconbitmap("Images/Icon.ico")
-        self.root.geometry("1600x420")
+        self.root.geometry(f"{self.window_w}x{self.window_h}")
 
         self.selected_folder = None
         self.last_map = None
@@ -47,7 +61,12 @@ class PipelineGUI:
         self._build_right_panel(main_frame)
 
     def _build_left_image_panel(self, parent):
-        panel = tk.Frame(parent, width=1190, height=420, bg="gray")
+        panel = tk.Frame(
+            parent,
+            width=self.left_panel_w,
+            height=self.left_panel_h,
+            bg="gray"
+        )
         panel.pack(side="left", fill="both")
         panel.pack_propagate(False)
 
@@ -223,6 +242,10 @@ class PipelineGUI:
     def display_image(self, obj):
         try:
             im = self._to_image(obj)
+            if self.low_res:
+                im = im.resize((self.left_panel_w, self.image_h),
+                               Image.Resampling.BILINEAR)
+
             self.last_image = ImageTk.PhotoImage(im)
             self.image_label.config(image=self.last_image)
         except Exception as e:
@@ -255,6 +278,9 @@ class PipelineGUI:
 
     def _load_initial_background(self):
         img = Image.open(get_path(["Images", "filler_map.png"]))
+        if self.low_res:
+            img = img.resize((self.left_panel_w, self.left_panel_h),
+                             Image.Resampling.BILINEAR)
         self.display_image(img)
 
     # ======================================================================
@@ -535,5 +561,6 @@ class PipelineGUI:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    PipelineGUI(root)
+    low_res = get_screen_res()[0] < 1600
+    PipelineGUI(root, low_res=low_res)
     root.mainloop()
