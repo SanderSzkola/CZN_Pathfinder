@@ -53,7 +53,7 @@ def switch_window_win32gui(step):
         label = SCRIPT_WINDOW
 
     if hwnd is None:
-        game_text = ". Is CZN running?" if step == 0 else None
+        game_text = ". Is CZN running?" if step == 0 else ''
         raise Exception(f"grabber / win32gui: Window not found: {label}" + game_text)
 
     win32gui.ShowWindow(hwnd, 5)
@@ -74,8 +74,21 @@ def switch_window_win32gui(step):
 #     time.sleep(0.2)
 
 
-def screenshot(save_folder: Optional[str] = None, index: int = -1) -> Image.Image:
-    img = pyautogui.screenshot()
+def screenshot(save_folder: Optional[str] = None, index: int = -1, whole_screen_mode=False):
+    if whole_screen_mode:
+        img = pyautogui.screenshot()
+        game_window_corner_offset = (0, 0)
+    else:
+        hwnd = _find_hwnd(GAME_WINDOW)
+        if not hwnd:
+            raise Exception("Window not found")
+        left_top = win32gui.ClientToScreen(hwnd, (0, 0))
+        r = win32gui.GetClientRect(hwnd)
+        left, top = left_top
+        w, h = r[2], r[3]
+        img = pyautogui.screenshot(region=(left, top, w, h))
+        game_window_corner_offset = (left, top)
+
     if save_folder is not None:
         if index == -1:
             # for quick lookup only, can flip from 99 to 00 if timing is unfortunate, use index
@@ -84,24 +97,26 @@ def screenshot(save_folder: Optional[str] = None, index: int = -1) -> Image.Imag
             img.save(os.path.join(save_folder, f"map_frag_{ts}.png"))
         else:
             img.save(os.path.join(save_folder, f"map_frag_{index:02d}.png"))
-    return img
+    return img, game_window_corner_offset
 
 
-def do_drag_move(node_from, node_to):
+def do_drag_move(node_from, node_to, game_window_corner_offset):
     current_x, current_y = pyautogui.position()
+    ox, oy = game_window_corner_offset
     if abs(current_x - node_from.x) > 50:
-        pyautogui.moveTo(node_from.x, node_from.y, duration=0.4)
+        pyautogui.moveTo(node_from.x + ox, node_from.y + oy, duration=0.4)
     else:
-        pyautogui.moveTo(node_from.x, current_y, duration=0.1)
+        pyautogui.moveTo(node_from.x + ox, current_y + oy, duration=0.1)
     time.sleep(0.03)
     pyautogui.mouseDown()
-    pyautogui.moveTo(node_to.x, node_to.y, duration=0.5)
+    pyautogui.moveTo(node_to.x + ox, node_to.y + oy, duration=0.5)
     time.sleep(0.05)
     pyautogui.mouseUp()
 
 
-def move_mouse(node_to):
-    pyautogui.moveTo(node_to.x, node_to.y, duration=0.4)
+def move_mouse(node_to, game_window_corner_offset):
+    ox, oy = game_window_corner_offset
+    pyautogui.moveTo(node_to.x + ox, node_to.y + oy, duration=0.4)
     time.sleep(0.1)
 
 
@@ -175,7 +190,7 @@ class DragListener:
         self.log(f"Drag detected ({dist_sq:.1E} > {self.drag_sq_threshold:.1E}), screenshot captured as step_{step}")
         time.sleep(0.1)
 
-        img = screenshot(self.save_folder, index=step)
+        img, _ = screenshot(self.save_folder, index=step)
         self.screenshot_q.put((step, img))
 
 

@@ -8,7 +8,7 @@ from node import Node
 from detect_connections import detect_connections
 from detect_nodes import detect_nodes
 from template_library import TemplateLibrary
-from calibrator import validate_calibration, perform_calibration
+from calibrator import validate_calibration, perform_calibration_exact
 from drawer import draw_map
 from grabber import switch_window, screenshot, do_drag_move, move_mouse, mock_switch_window, mock_move_screen, \
     mock_screenshot, DragListener, MockDragListener
@@ -44,7 +44,7 @@ def check_end(nodes, last_nodes):
     """
     Requires 2 sets of nodes, must be called before duplicate check.
     Reason: checking for boss directly is.. complicated, so this method checks instead if two subsequent screenshots ends
-    with a column of shops.
+    with a column of rests.
     """
     if (last_nodes is None or len(last_nodes) <= 2
             or nodes is None or len(nodes) <= 2):
@@ -52,19 +52,25 @@ def check_end(nodes, last_nodes):
     nodes_last_column = []
     last_col_idx = nodes[-1].col
     no_index_x = 0
+    len_dif = 0
     if last_col_idx is None:  # nodes may come before rowcol assignment
         no_index_x = nodes[-1].x
     for n in nodes:
         if last_col_idx and n.col == last_col_idx:
             nodes_last_column.append(n)
+            len_dif += 1
         elif abs(no_index_x - n.x) < 10:
             nodes_last_column.append(n)
+            len_dif += 1
     last_col_idx = last_nodes[-1].col
     for n in last_nodes:
         if n.col == last_col_idx:
             nodes_last_column.append(n)
+            len_dif -= 1
+    if len_dif != 0:  # different len of last column -> not the same picture
+        return False
     for n in nodes_last_column:
-        if n.modifier is None or n.modifier != "SH":
+        if n.type != "RE":
             return False
     return True
 
@@ -159,7 +165,8 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
     log("Starting scanning process")
     switch_window(step)
 
-    img = screenshot(save_folder, step)
+    # screenshot now restricted to game area, returns game screen + top left corner pos
+    img, game_window_corner_offset = screenshot(save_folder, step)
     screenshot_scale, threshold, calibration_status = validate_calibration(templates, img, log)
 
     # connections worker
@@ -192,11 +199,12 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
         else:
             log(f"Step {step}, something is definitely wrong, consider making bug report")
             raise IOError("Auto scanner failed")
-        img = screenshot(save_folder, step)
+        duplicates = 0
+        img, game_window_corner_offset = screenshot(save_folder, step)
         detect_q.put((step, img))
         # skip movement if end MAY BE here, but not confirmed yet
         if last_nodes is not None and last_nodes[-1].modifier != "SH" and last_nodes[-2].modifier != "SH":
-            move_mouse(last_nodes[-1])
+            move_mouse(last_nodes[-1], game_window_corner_offset)
         # wait for node detection to complete
         while True:
             with detect_result.lock:
@@ -215,12 +223,15 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
         if check_duplicates(nodes, last_nodes):
             log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
             step += 1
+            if duplicates >= 3:
+                raise IOError(f"3rd duplicate, something is very broken, stopping...")
+            duplicates += 1
             continue
 
         # send nodes result to connection worker
         work_q.put((img, nodes))
 
-        do_drag_move(nodes[-1], nodes[0])
+        do_drag_move(nodes[-1], nodes[0], game_window_corner_offset)
         last_nodes = nodes
         step += 1
 
@@ -435,9 +446,9 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
 def run_calibrator(log=lambda msg: None):
     templates = TemplateLibrary()
     switch_window(0)
-    scr = screenshot()
+    scr, _ = screenshot()
     switch_window(1)
-    perform_calibration(templates, scr, log)
+    perform_calibration_exact(templates, scr, log)
 
 
 if __name__ == "__main__":
