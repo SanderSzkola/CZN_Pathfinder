@@ -124,26 +124,62 @@ def _assign_modifiers(nodes, modifier_hits, screenshot_scale):
         if best is not None:
             if best_dist < (130 * screenshot_scale) ** 2:
                 best.modifier = mod
-                #print(f"Mod {mod} assigned to {best.type} with distance {best_dist}")
+                # print(f"Mod {mod} assigned to {best.type} with distance {best_dist}")
             else:
-                #print(f"Mod {mod} with distance {best_dist} DISCARDED")
+                # print(f"Mod {mod} with distance {best_dist} DISCARDED")
                 pass
 
 
 def _preview(map_img, nodes, map_fragment):
     preview = map_img.copy()
     for node in nodes:
+        x_offset = 40
+        y_offset = 15
         cv2.putText(
             preview,
             node.label(),
-            (node.x, node.y),
+            (node.x - x_offset, node.y + y_offset),
             cv2.FONT_HERSHEY_SIMPLEX,
             1.5,
-            (128, 255, 0),
-            3,
+            (0, 0, 0),
+            7,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            preview,
+            node.label(),
+            (node.x - x_offset, node.y + y_offset),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1.5,
+            (80, 240, 0),
+            4,
             cv2.LINE_AA,
         )
 
+    # crossed non-scan area
+    h, w = preview.shape[:2]
+    overlay = np.zeros((h, w, 4), dtype=np.uint8)
+    step = 40
+    color = (0, 192, 256, 80)
+
+    for x in range(-h, w + h, step):
+        pt1 = (x, 0)
+        pt2 = (x + h, h)
+        cv2.line(overlay, pt1, pt2, color, 9, cv2.LINE_AA)
+
+    # mask out only the trimmed top and right area
+    mask = np.zeros((h, w), dtype=np.uint8)
+    mask[0:TRIM_TOP_PX, :] = 255
+    mask[TRIM_TOP_PX:h, w - TRIM_RIGHT_PX:w] = 255
+
+    overlay[:, :, 3] = overlay[:, :, 3] * (mask // 255)
+    bg = cv2.cvtColor(preview, cv2.COLOR_BGR2BGRA)
+    out = bg.copy()
+    alpha = overlay[:, :, 3:4] / 255.0
+    out[:, :, :3] = (1.0 - alpha) * bg[:, :, :3] + alpha * overlay[:, :, :3]
+    preview = cv2.cvtColor(out, cv2.COLOR_BGRA2BGR)
+
+    # save
     if isinstance(map_fragment, str):
         base = get_path(map_fragment.split(".")[:-1])
         cv2.imwrite(f"{base}_nodes_preview.png", preview)
@@ -214,12 +250,13 @@ def detect_nodes(screenshot_str_or_img,
 
 if __name__ == "__main__":
     from calibrator import validate_calibration, perform_calibration  # here bc ide yells about circular dependency
+
     templates = TemplateLibrary()
-    folder = get_path(["Test_scans","Map_live_test_dumpsite_3"])
+    folder = get_path("Last_scan_result")
     # folder = get_path(["Test_scans", "Map_small_res_1"])
 
     # SINGLE
-    path = os.path.join(folder, "map_frag_0.png")
+    path = os.path.join(folder, "map_frag_03.png")
     # perform_calibration(templates, path)  # DO NOT CALIBRATE ON FIRST SCREENSHOT, need more nodes, pick 3rd or something
     screenshot_scale, threshold, calibration_status = validate_calibration(templates, path, log=lambda msg: print(msg))
     nodes = detect_nodes(path, templates, create_preview=True, screenshot_scale=screenshot_scale, threshold=threshold)
