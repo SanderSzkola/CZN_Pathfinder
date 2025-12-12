@@ -2,6 +2,7 @@ import os
 import threading
 import tkinter as tk
 from tkinter import filedialog
+import ttkbootstrap as tb
 
 import cv2
 import numpy as np
@@ -54,27 +55,26 @@ class PipelineGUI:
     # UI Construction
     # ======================================================================
     def _build_ui(self):
-        main_frame = tk.Frame(self.root)
+        main_frame = tb.Frame(self.root)
         main_frame.pack(fill="both", expand=True)
 
         self._build_left_image_panel(main_frame)
         self._build_right_panel(main_frame)
 
     def _build_left_image_panel(self, parent):
-        panel = tk.Frame(
+        panel = tb.Frame(
             parent,
             width=self.left_panel_w,
             height=self.left_panel_h,
-            bg="gray"
         )
         panel.pack(side="left", fill="both")
         panel.pack_propagate(False)
 
-        self.image_label = tk.Label(panel, bg="black")
+        self.image_label = tb.Label(panel)
         self.image_label.pack(fill="both", expand=True)
 
     def _build_right_panel(self, parent):
-        panel = tk.Frame(parent, width=410, height=420)
+        panel = tb.Frame(parent, width=410, height=420)
         panel.pack(side="left", fill="both")
         panel.pack_propagate(False)
 
@@ -84,13 +84,13 @@ class PipelineGUI:
         self._build_score_table(panel)
 
     def _build_log_display(self, parent):
-        frame = tk.Frame(parent)
+        frame = tb.Frame(parent)
         frame.pack(fill="x")
 
-        scrollbar = tk.Scrollbar(frame, orient="vertical")
+        scrollbar = tb.Scrollbar(frame, orient="vertical")
         scrollbar.pack(side="right", fill="y")
 
-        self.log_display = tk.Text(
+        self.log_display = tb.Text(
             frame,
             width=40,
             height=6,
@@ -109,47 +109,51 @@ class PipelineGUI:
         self.log_display.bind("<Leave>", lambda _: self.log_display.unbind_all("<MouseWheel>"))
 
     def _build_folder_section(self, parent):
-        self.folder_label = tk.Label(parent, text="Folder: None", anchor="w")
+        self.folder_label = tb.Label(parent, text="Folder: None", anchor="w")
         self.folder_label.pack(pady=5)
 
     def _build_button_rows(self, parent):
-        row1 = tk.Frame(parent)
+        row1 = tb.Frame(parent)
         row1.pack(pady=5, fill="x")
 
         # keep reference so it can blink and annoy user if calibration is wrong
-        self.recalibrate_button = tk.Button(row1, text="Recalibrate", width=18, command=self.start_calibrator)
-        self.recalibrate_button.pack(side="left", padx=2)
-        tk.Button(row1, text="Start Automatic Scanner", width=18, command=self.start_automatic_pipeline).pack(
-            side="left", padx=2)
-        tk.Button(row1, text="Import Score Table", width=18, command=self.import_score_table).pack(side="left", padx=2)
+        self.recalibrate_button = tb.Button(row1, text="Recalibrate", width=19, command=self.start_calibrator, padding=4)
+        self.recalibrate_button.pack(side="left", padx=3)
+        (tb.Button(row1, text="Automatic Scanner", width=19, command=self.start_automatic_pipeline, padding=4)
+         .pack(side="left", padx=3))
+        (tb.Button(row1, text="Import Score Table", width=19, command=self.import_score_table, padding=4)
+         .pack(side="left", padx=3))
 
-        row2 = tk.Frame(parent)
+        row2 = tb.Frame(parent)
         row2.pack(pady=5, fill="x")
 
-        tk.Button(row2, text="Choose Folder", width=18, command=self.choose_folder).pack(side="left", padx=2)
-        tk.Button(row2, text="Start Halfauto Scanner", width=18,
-                  command=self.start_halfauto_pipeline).pack(side="left", padx=2)
+        (tb.Button(row2, text="Choose Folder", width=19, command=self.choose_folder, padding=4)
+         .pack(side="left", padx=3))
+        (tb.Button(row2, text="Halfauto Scanner", width=19, command=self.start_halfauto_pipeline, padding=4)
+         .pack(side="left", padx=3))
 
-        tk.Button(row2, text="Export Score Table", width=18, command=self.export_score_table).pack(side="left", padx=2)
+        (tb.Button(row2, text="Export Score Table", width=19, command=self.export_score_table, padding=4)
+         .pack(side="left", padx=3))
 
-        row3 = tk.Frame(parent)
+        row3 = tb.Frame(parent)
         row3.pack(pady=5, fill="x")
-        tk.Button(row3, text="Clear Folder", width=18, command=self.clear_folder).pack(side="left", padx=2)
-        tk.Button(row3, text="Start Offline Scanner", width=18, command=self.start_offline_pipeline).pack(side="left",
-                                                                                                          padx=2)
+        (tb.Button(row3, text="Clear Folder", width=19, command=self.clear_folder, padding=4)
+         .pack(side="left", padx=3))
+        (tb.Button(row3, text="Offline Scanner", width=19, command=self.start_offline_pipeline, padding=4)
+         .pack(side="left", padx=3))
 
     def _build_score_table(self, parent):
-        panel = tk.Frame(parent)
+        panel = tb.Frame(parent)
         panel.pack(fill="both")
 
-        tk.Label(panel, text="Score Table", anchor="w").pack()
+        tb.Label(panel, text="Score Table", anchor="w").pack()
 
         self.score_vars = {}
-        columns_frame = tk.Frame(panel)
+        columns_frame = tb.Frame(panel)
         columns_frame.pack(fill="x")
 
-        col_left = tk.Frame(columns_frame)
-        col_right = tk.Frame(columns_frame)
+        col_left = tb.Frame(columns_frame)
+        col_right = tb.Frame(columns_frame)
         col_left.pack(side="left", fill="y", padx=5)
         col_right.pack(side="right", fill="y", padx=5)
 
@@ -162,9 +166,14 @@ class PipelineGUI:
                 self._create_score_row(col_right, key, val)
 
     def _create_score_row(self, parent, key, value):
+        def _on_scale_change(val, k=key, label_widget=None):
+            if label_widget is not None:
+                label_widget.config(text=str(int(float(val))))
+            self.update_score_value(k)
+
         enc_folder = get_path(["Images", "Encounter_minimal_1600"])
         mod_folder = get_path(["Images", "Modifier_1600"])
-        row = tk.Frame(parent)
+        row = tb.Frame(parent)
         row.pack(fill="x")
         if len(key) == 2:
             img = load_icon(enc_folder, key)
@@ -178,38 +187,26 @@ class PipelineGUI:
         pil = Image.fromarray(img)
         icon = ImageTk.PhotoImage(pil)
         self._icons[key] = icon
-        tk.Label(row, text=key, image=icon, anchor="w").pack(side="left", padx=1)
+        tb.Label(row, text=key, image=icon, anchor="w").pack(side="left", padx=1)
 
-        var = tk.IntVar(value=value)
+        value_label = tb.Label(row, text=str(value))  # value over slider
+        value_label.pack(side="top", anchor="n", padx=1)
+        var = tb.IntVar(value=value)
         self.score_vars[key] = var
-        if key != "EVTU": # dimensional tunnel gets more points
-            tk.Scale(
-                row,
-                from_=-10,
-                to=10,
-                orient="horizontal",
-                length=160,
-                variable=var,
-                command=lambda _, k=key: self.update_score_value(k),
-                borderwidth=1,
-                highlightthickness=0,
-                sliderlength=10
-            ).pack(side="left", padx=1)
-        else:
-            tk.Scale(
-                row,
-                from_=-50,
-                to=50,
-                orient="horizontal",
-                length=160,
-                variable=var,
-                command=lambda _, k=key: self.update_score_value(k),
-                borderwidth=1,
-                highlightthickness=0,
-                sliderlength=10,
-                resolution=5
-            ).pack(side="left", padx=1)
-
+        bigger_scale = key == "EVTU"  # dimensional tunnel gets more points
+        tk.Scale(
+            row,
+            from_=-10 if not bigger_scale else -50,
+            to=10 if not bigger_scale else 50,
+            orient="horizontal",
+            length=150,
+            variable=var,
+            command=lambda v, lb=value_label, k=key: _on_scale_change(v, k, lb),
+            borderwidth=1,
+            highlightthickness=0,
+            sliderlength=10,
+            resolution=1 if not bigger_scale else 5,
+        ).pack(side="left", padx=1)
 
     # ======================================================================
     # Logging
@@ -413,7 +410,7 @@ class PipelineGUI:
             return
         self.log("Calibrator started")
         self.calibration_status = True
-        self.recalibrate_button.config(bg="orange")
+        self.recalibrate_button.config(bootstyle="warning")
 
         def task():
             try:
@@ -469,7 +466,7 @@ class PipelineGUI:
     # Dialogs
     # ======================================================================
     def ask_continue_dialog(self, variant):
-        win = tk.Toplevel(self.root)
+        win = tb.Toplevel(self.root)
         win.title("Confirm Action")
         win.grab_set()
         win.transient(self.root)
@@ -501,7 +498,7 @@ class PipelineGUI:
         else:
             text = "Not implemented"
 
-        tk.Label(win, text=text).pack(padx=20, pady=15)
+        tb.Label(win, text=text).pack(padx=20, pady=15)
 
         result = {"value": False}
 
@@ -512,12 +509,12 @@ class PipelineGUI:
         def cancel():
             win.destroy()
 
-        btn_frame = tk.Frame(win)
+        btn_frame = tb.Frame(win)
         btn_frame.pack(pady=10)
 
-        btn_ok = tk.Button(btn_frame, text="Continue", width=12, command=confirm)
+        btn_ok = tb.Button(btn_frame, text="Continue", width=12, command=confirm)
         btn_ok.pack(side="left", padx=5)
-        tk.Button(btn_frame, text="Cancel", width=12, command=cancel).pack(side="right", padx=5)
+        tb.Button(btn_frame, text="Cancel", width=12, command=cancel).pack(side="right", padx=5)
 
         btn_ok.focus_set()
         win.bind("<Return>", confirm)
@@ -543,13 +540,13 @@ class PipelineGUI:
         interval = 350
         if not self.calibration_status:
             if self._blink_state:
-                self.recalibrate_button.config(bg="red")
-                interval *=4
+                self.recalibrate_button.config(bootstyle="danger")
+                interval *= 4
             else:
-                self.recalibrate_button.config(bg="SystemButtonFace")
+                self.recalibrate_button.config(bootstyle="primary")
             self._blink_state = not self._blink_state
         else:
-            self.recalibrate_button.config(bg="SystemButtonFace")
+            self.recalibrate_button.config(bootstyle="primary")
             self._blink_state = False
 
         self.root.after(interval, self._blink_loop)
@@ -560,7 +557,9 @@ class PipelineGUI:
 # ======================================================================
 
 if __name__ == "__main__":
-    root = tk.Tk()
+    enable_dark_mode = True  # simulated setting
+    theme = "darkly" if enable_dark_mode else "flatly"
+    root = tb.Window(themename=theme)
     low_res = get_screen_res()[0] < 1600
     PipelineGUI(root, low_res=low_res)
     root.mainloop()
