@@ -8,12 +8,13 @@ import cv2
 import numpy as np
 from PIL import Image, ImageTk
 
-from pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, run_calibrator, run_pathfinder
+from pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, get_game_screenshot, run_pathfinder
 from grabber import get_screen_res
 from calibrator import check_calibration_file_exists
 from drawer import draw_map, load_icon
 from score_table import ScoreTable
 from path_converter import get_path
+from gui_calibrator import CalibrationPanel
 
 
 class PipelineGUI:
@@ -408,22 +409,41 @@ class PipelineGUI:
         if not self.ask_continue_dialog("calibrator"):
             self.log("Calibrator task cancelled.")
             return
-        self.log("Calibrator started")
-        self.calibration_status = True
-        self.recalibrate_button.config(bootstyle="warning")
+        scr = get_game_screenshot()
+        self.open_calibration_panel(scr)
+        # self.log("Calibrator started")
+        # self.calibration_status = True
+        # self.recalibrate_button.config(bootstyle="warning")
+        #
+        # def task():
+        #     try:
+        #         self.stop_blinking = True
+        #         run_calibrator(self.log)
+        #     except Exception as e:
+        #         self.log(f"Calibrator error: {e}")
+        #         self.calibration_status = False
+        #     finally:
+        #         self.stop_blinking = False
+        #         self.root.after(0, lambda: self._blink_loop())
+        #
+        # threading.Thread(target=task, daemon=True).start()
 
-        def task():
-            try:
-                self.stop_blinking = True
-                run_calibrator(self.log)
-            except Exception as e:
-                self.log(f"Calibrator error: {e}")
-                self.calibration_status = False
-            finally:
-                self.stop_blinking = False
-                self.root.after(0, lambda: self._blink_loop())
 
-        threading.Thread(target=task, daemon=True).start()
+    def open_calibration_panel(self, scr):
+        def on_apply(resolution, scale, threshold):
+            self.log(
+                f"Calibration params updated: "
+                f"res={resolution}, scale={scale}, thr={threshold}"
+            )
+            # persist to calibrator config here
+
+        CalibrationPanel(
+            parent=self.root,
+            low_res=self.low_res,
+            on_apply=on_apply,
+            log=self.log,
+            scr=scr,
+        )
 
     # ======================================================================
     # Score Table Operations

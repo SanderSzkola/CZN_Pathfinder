@@ -443,12 +443,11 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
     return map_obj, path, image, calibration_status
 
 
-def run_calibrator(log=lambda msg: None):
-    templates = TemplateLibrary()
+def get_game_screenshot():
     switch_window(0)
     scr, _ = screenshot()
     switch_window(1)
-    perform_calibration_exact(templates, scr, log)
+    return scr
 
 
 if __name__ == "__main__":

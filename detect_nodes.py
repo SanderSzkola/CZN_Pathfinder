@@ -130,7 +130,7 @@ def _assign_modifiers(nodes, modifier_hits, screenshot_scale):
                 pass
 
 
-def _preview(map_img, nodes, map_fragment):
+def _preview(map_img, nodes, map_fragment, save_file):
     preview = map_img.copy()
     for node in nodes:
         x_offset = 40
@@ -179,21 +179,23 @@ def _preview(map_img, nodes, map_fragment):
     out[:, :, :3] = (1.0 - alpha) * bg[:, :, :3] + alpha * overlay[:, :, :3]
     preview = cv2.cvtColor(out, cv2.COLOR_BGRA2BGR)
 
-    # save
-    if isinstance(map_fragment, str):
-        base = get_path(map_fragment.split(".")[:-1])
-        cv2.imwrite(f"{base}_nodes_preview.png", preview)
-    else:
-        now = datetime.now().strftime("%H%M%S")
-        cv2.imwrite(get_path(f"nodes_preview_{now}.png"), preview)
+    if save_file:
+        if isinstance(map_fragment, str):
+            base = get_path(map_fragment.split(".")[:-1])
+            cv2.imwrite(f"{base}_nodes_preview.png", preview)
+        else:
+            now = datetime.now().strftime("%H%M%S")
+            cv2.imwrite(get_path(f"nodes_preview_{now}.png"), preview)
+    return preview
 
 
-def detect_nodes(screenshot_str_or_img,
-                 templates: TemplateLibrary,
-                 screenshot_index=0,
-                 create_preview=False,
-                 threshold=0.98,
-                 screenshot_scale=1.0):
+def _detect_nodes(screenshot_str_or_img,
+                  templates: TemplateLibrary,
+                  screenshot_index=0,
+                  create_preview=False,
+                  save=False,
+                  threshold=0.98,
+                  screenshot_scale=1.0):
     screenshot = _load_map_image(screenshot_str_or_img)
     if screenshot_scale != 1.0:
         h, w = screenshot.shape[:2]
@@ -241,15 +243,42 @@ def detect_nodes(screenshot_str_or_img,
         node.y += top_offset
 
     if create_preview:
-        _preview(screenshot, nodes, screenshot_str_or_img)
+        preview = _preview(screenshot, nodes, screenshot_str_or_img, save)
+    else:
+        preview = None
 
     nodes.sort(key=lambda n: n.x)
 
+    return nodes, preview
+
+
+def detect_nodes(screenshot_str_or_img,
+                 templates: TemplateLibrary,
+                 screenshot_index=0,
+                 create_preview=False,
+                 threshold=0.98,
+                 screenshot_scale=1.0):
+
+    nodes, _ = _detect_nodes(screenshot_str_or_img, templates, screenshot_index, create_preview, create_preview,
+                             threshold, screenshot_scale)
     return nodes
 
 
+def detect_nodes_with_preview(screenshot_str_or_img,
+                              templates: TemplateLibrary,
+                              screenshot_index=0,
+                              create_preview=True,
+                              threshold=0.98,
+                              screenshot_scale=1.0):
+
+    nodes, preview = _detect_nodes(screenshot_str_or_img, templates, screenshot_index, create_preview, False,
+                                   threshold, screenshot_scale)
+    return nodes, preview
+
+
 if __name__ == "__main__":
-    from calibrator import validate_calibration, perform_calibration  # here bc ide yells about circular dependency
+    from calibrator import validate_calibration, \
+        perform_calibration_exact  # here bc ide yells about circular dependency
 
     templates = TemplateLibrary()
     folder = get_path("Last_scan_result")
@@ -257,7 +286,7 @@ if __name__ == "__main__":
 
     # SINGLE
     path = os.path.join(folder, "map_frag_03.png")
-    # perform_calibration(templates, path)  # DO NOT CALIBRATE ON FIRST SCREENSHOT, need more nodes, pick 3rd or something
+    # perform_calibration_exact(templates, path)
     screenshot_scale, threshold, calibration_status = validate_calibration(templates, path, log=lambda msg: print(msg))
     nodes = detect_nodes(path, templates, create_preview=True, screenshot_scale=screenshot_scale, threshold=threshold)
     for n in nodes:

@@ -4,6 +4,7 @@ import numpy as np
 
 from path_converter import get_path
 
+TEMPLATE_RES = (1920, 1080)
 
 class TemplateLibrary:
     def __init__(self, encounter_dir="Encounter_minimal_1920", modifier_dir="Modifier_1920", scale=1.0):
