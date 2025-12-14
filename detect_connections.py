@@ -12,7 +12,7 @@ PX_TOLERANCE = 16
 CORRIDOR_HALF = 16
 CORRIDOR_OFFSET = 10
 THRESHOLD = 128
-CONNECTION_WHITE_RATIO = 0.05
+CONNECTION_WHITE_RATIO = 0.045
 ORIENTATION_ANGLE_DEG = 20
 
 
@@ -321,6 +321,8 @@ if __name__ == "__main__":
     maps = ["map_frag_0.png", ]
     # maps = os.listdir(map_folder)
     templates = TemplateLibrary()
+    from settings import Settings
+    templates.scale_templates(Settings.template_scale)
     for i, map_name in enumerate(maps):
         name, ext = map_name.split('.')
         if name.endswith("preview") or name.startswith("merged") or not ext.endswith("png"):
