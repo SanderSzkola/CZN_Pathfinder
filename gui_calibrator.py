@@ -12,16 +12,16 @@ class CalibrationPanel(tb.Toplevel):
             self,
             parent,
             low_res: bool,
-            on_apply,
             scr,
             log=None
     ):
         super().__init__(parent)
-
+        if scr is None:
+            self.destroy()
+            return
         self.parent = parent
         # self.low_res = low_res
         low_res = True  # do not need much space now, leave possibility later
-        self.on_apply = on_apply
         self.log = log
 
         if low_res:
@@ -126,7 +126,7 @@ class CalibrationPanel(tb.Toplevel):
 
         tb.Label(
             grid,
-            text="Rescale multiplier for templates. Halved if over 1.\nIf your res is 1440p, halved its 720p,\n720 / 1080 ~ 0.667",
+            text="Rescale multiplier for templates. Halved if over 1.\nExample: If your res is 1440p, halved its 720p,\n720 / 1080 ~ 0.667",
             wraplength=260,
             justify="left",
         ).grid(

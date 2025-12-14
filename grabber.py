@@ -10,6 +10,8 @@ from PIL import Image
 from queue import Queue
 from pynput import mouse
 
+from settings import Settings
+
 DEFAULT_DRAG_SQ_THRESHOLD = 100 ** 2
 
 """
@@ -18,7 +20,7 @@ Requires admin to run, as game is in admin itself,
 and lower process cant send signals to elevated process or something.
 """
 
-GAME_WINDOW = "Chaos Zero Nightmare"
+GAME_WINDOW = Settings.target_app_name
 # GAME_WINDOW = "Spotify"
 SCRIPT_WINDOW = "CZN Pathfinder"
 

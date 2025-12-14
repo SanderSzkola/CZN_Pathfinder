@@ -6,6 +6,7 @@
 *.spec
 *.exe
 /Exe_build_folder/
+/settings.json
 
 # Test material
 /Test_scans/

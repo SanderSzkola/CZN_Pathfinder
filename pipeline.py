@@ -8,7 +8,6 @@ from node import Node
 from detect_connections import detect_connections
 from detect_nodes import detect_nodes
 from template_library import TemplateLibrary
-from calibrator import validate_calibration, perform_calibration_exact
 from drawer import draw_map
 from grabber import switch_window, screenshot, do_drag_move, move_mouse, mock_switch_window, mock_move_screen, \
     mock_screenshot, DragListener, MockDragListener
@@ -16,9 +15,10 @@ from pathfinder import run_pathfinder
 from process_map import Finalizer
 from score_table import ScoreTable
 from path_converter import get_path
+from settings import Settings
 
 """
-Full process:
+Full process (may be outdated a bit):
     Grabber switches window
     Grabber takes screenshot
     Pipeline gives screenshot to detect_nodes [2nd thread], then waits
@@ -155,6 +155,7 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
                       score_table: ScoreTable = None):
     finalizer = Finalizer()
     templates = TemplateLibrary()
+    templates.scale_templates(Settings.template_scale)
     last_nodes = None
     step = 0
 
@@ -166,8 +167,7 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
     switch_window(step)
 
     # screenshot now restricted to game area, returns game screen + top left corner pos
-    img, game_window_corner_offset = screenshot(save_folder, step)
-    screenshot_scale, threshold, calibration_status = validate_calibration(templates, img, log)
+    _, game_window_corner_offset = screenshot(save_folder, step)
 
     # connections worker
     work_q = Queue()
@@ -183,7 +183,7 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
     detect_result = DetectResult()
     node_worker = ExceptionThread(
         target=worker_nodes,
-        args=(detect_q, detect_result, templates, screenshot_scale, threshold),
+        args=(detect_q, detect_result, templates, Settings.screenshot_scale, Settings.threshold),
         daemon=True
     )
     node_worker.start()
@@ -192,13 +192,6 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
         os.makedirs(save_folder, exist_ok=True)
 
     while step <= max_steps:
-        if step <= max_steps - 5:
-            log(f"Step {step}, expected 5~10")
-        elif step <= max_steps:
-            log(f"Step {step}, expected 5~10, something may be broken")
-        else:
-            log(f"Step {step}, something is definitely wrong, consider making bug report")
-            raise IOError("Auto scanner failed")
         duplicates = 0
         img, game_window_corner_offset = screenshot(save_folder, step)
         detect_q.put((step, img))
@@ -217,6 +210,16 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
         if len(nodes) == 0:
             switch_window(1)
             raise IOError(f"step_{step}: Nothing detected, is map visible?")
+        if len(nodes) <= 4:
+            switch_window(1)
+            raise IOError(
+                f"step_{step}: {len(nodes)} nodes detected, too low. Is your map fully visible? Did you perform calibration?")
+
+        if step <= max_steps:
+            log(f"Step {step}, expected 5~10; {len(nodes)} nodes detected")
+        else:
+            log(f"Step {step}, something is definitely wrong, consider making bug report")
+            raise IOError("Auto scanner failed")
         if check_end(nodes, last_nodes):
             break
         # anti duplicate check
@@ -261,7 +264,7 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
 
     switch_window(step)
 
-    return map_obj, path, image, calibration_status
+    return map_obj, path, image
 
 
 def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
@@ -280,11 +283,10 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
     step = 0
     last_nodes = None
     templates = TemplateLibrary()
+    templates.scale_templates(Settings.template_scale)
 
     log("Starting scanning process [folder based - no game / mouse interaction]")
     mock_switch_window()
-    first_img = mock_screenshot(os.path.join(save_folder, screenshots[0]))
-    screenshot_scale, threshold, calibration_status = validate_calibration(templates, first_img, log)
 
     finalizer = Finalizer()
     work_q = Queue()
@@ -301,7 +303,8 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
         log(f"Step {step}, processing {s}")
 
         img = mock_screenshot(os.path.join(save_folder, s))
-        nodes = detect_nodes(img, templates, step, screenshot_scale=screenshot_scale, threshold=threshold)
+        nodes = detect_nodes(img, templates, step, screenshot_scale=Settings.screenshot_scale,
+                             threshold=Settings.threshold)
 
         if len(nodes) == 0:
             raise IOError(f"Step {step}: Nothing detected, is map visible?")
@@ -342,7 +345,7 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
 
     mock_switch_window()
 
-    return map_obj, path, image, calibration_status
+    return map_obj, path, image
 
 
 def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
@@ -354,6 +357,7 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
     log("Starting scanning process [half-auto]")
 
     templates = TemplateLibrary()
+    templates.scale_templates(Settings.template_scale)
     screenshot_q = Queue()
     detect_q = Queue(maxsize=1)
     work_q = Queue()
@@ -370,11 +374,10 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
     if data is None:
         raise IOError("Scanner stopped by user")
     step, img = data
-    screenshot_scale, threshold, calibration_status = validate_calibration(templates, img, log)
 
     node_worker = ExceptionThread(
         target=worker_nodes,
-        args=(detect_q, detect_result, templates, screenshot_scale, threshold),
+        args=(detect_q, detect_result, templates, Settings.screenshot_scale, Settings.threshold),
         daemon=True)
     node_worker.start()
 
@@ -440,14 +443,25 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
                      encounter_ranges=encounter_ranges,
                      encounter_counts=encounter_counts)
 
-    return map_obj, path, image, calibration_status
+    return map_obj, path, image
 
 
-def get_game_screenshot():
-    switch_window(0)
-    scr, _ = screenshot()
-    switch_window(1)
-    return scr
+def get_game_screenshot(log):
+    try:
+        switch_window(0)
+        scr, _ = screenshot()
+        switch_window(1)
+        return scr
+    except Exception as e:
+        log(e)
+        if Settings.testmode:
+            try:
+                path = get_path(["Last_scan_result", "map_frag_03.png"])
+                scr = mock_screenshot(path)
+                return scr
+            except Exception:
+                log("Failed to load test image")
+    return None
 
 
 if __name__ == "__main__":

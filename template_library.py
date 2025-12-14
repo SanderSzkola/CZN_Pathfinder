@@ -6,6 +6,7 @@ from path_converter import get_path
 
 TEMPLATE_RES = (1920, 1080)
 
+
 class TemplateLibrary:
     def __init__(self, encounter_dir="Encounter_minimal_1920", modifier_dir="Modifier_1920", scale=1.0):
         # original set loaded once from disk, do not change
@@ -14,6 +15,7 @@ class TemplateLibrary:
         # scaled set
         self.node_templates_scaled = {}
         self.modifier_templates_scaled = {}
+        self.last_scale = -1.0
         self.scale_templates(scale)
 
     @staticmethod
@@ -59,12 +61,13 @@ class TemplateLibrary:
             mask = np.ones_like(gray, dtype=np.uint8) * 255
             mask_idx = np.where(mask == 255)
 
-        return (gray, # fast template search image baseline
-                mask, # alpha channel, transparent or opaque, used in modifiers
-                rgb, # color, slower, used only in color_verify()
-                mask_idx) # pixel coordinates where mask==255, for faster color_verify()
+        return (gray,  # fast template search image baseline
+                mask,  # alpha channel, transparent or opaque, used in modifiers
+                rgb,  # color, slower, used only in color_verify()
+                mask_idx)  # pixel coordinates where mask==255, for faster color_verify()
 
     def scale_templates(self, scale: float):
+        self.last_scale = scale
         if scale == 1.0:
             self.node_templates_scaled = self.node_templates.copy()
             self.modifier_templates_scaled = self.modifier_templates.copy()
@@ -82,7 +85,7 @@ class TemplateLibrary:
 
             gray_s = cv2.resize(gray, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
             rgb_s = cv2.resize(rgb, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-            mask_s = cv2.resize(mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST) # alpha, either transparent or not, no linear scaling
+            mask_s = cv2.resize(mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST)  # alpha, either transparent or not, no linear scaling
             mask_s[mask_s > 0] = 255
 
             mask_idx_s = np.where(mask_s == 255)

@@ -10,11 +10,12 @@ from PIL import Image, ImageTk
 
 from pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, get_game_screenshot, run_pathfinder
 from grabber import get_screen_res
-from calibrator import check_calibration_file_exists
+from calibrator import check_calibration_done
 from drawer import draw_map, load_icon
 from score_table import ScoreTable
 from path_converter import get_path
 from gui_calibrator import CalibrationPanel
+from settings import Settings
 
 
 class PipelineGUI:
@@ -45,12 +46,13 @@ class PipelineGUI:
         self.score_table = ScoreTable()
         self._delayed_pathfinder_id = None
         self._icons = {}
-        self.calibration_status = True
-        self.stop_blinking = False
+        self._blink_state = False
 
         self._build_ui()
         self._load_initial_background()
         self._blink_loop()
+        if Settings.auto_import_score and ScoreTable.check_file_exists():
+            self.import_score_table()
 
     # ======================================================================
     # UI Construction
@@ -118,7 +120,8 @@ class PipelineGUI:
         row1.pack(pady=5, fill="x")
 
         # keep reference so it can blink and annoy user if calibration is wrong
-        self.recalibrate_button = tb.Button(row1, text="Recalibrate", width=19, command=self.start_calibrator, padding=4)
+        self.recalibrate_button = tb.Button(row1, text="Recalibrate", width=19, command=self.start_calibrator,
+                                            padding=4)
         self.recalibrate_button.pack(side="left", padx=3)
         (tb.Button(row1, text="Automatic Scanner", width=19, command=self.start_automatic_pipeline, padding=4)
          .pack(side="left", padx=3))
@@ -303,8 +306,7 @@ class PipelineGUI:
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
                 return
 
-        self.calibration_status = check_calibration_file_exists(self.log)
-        if not self.calibration_status:
+        if not check_calibration_done(self.log):
             return
 
         if not self.ask_continue_dialog("auto"):
@@ -316,7 +318,7 @@ class PipelineGUI:
     def _run_auto_pipeline(self):
         try:
             self.log("Auto scanner started")
-            m, path, img, calibration_status = run_auto_pipeline(
+            m, path, img = run_auto_pipeline(
                 save_folder=self.selected_folder,
                 log=self.log,
                 score_table=self.score_table
@@ -324,7 +326,6 @@ class PipelineGUI:
             self.last_map = m
             self.last_path = path
             self.display_image(img)
-            self.calibration_status = calibration_status
         except Exception as e:
             self.log(f"Pipeline error: {e}")
 
@@ -334,8 +335,7 @@ class PipelineGUI:
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
                 return
 
-        self.calibration_status = check_calibration_file_exists(self.log)
-        if not self.calibration_status:
+        if not check_calibration_done(self.log):
             return
 
         if not self.ask_continue_dialog("halfauto"):
@@ -347,7 +347,7 @@ class PipelineGUI:
     def _run_halfauto_pipeline(self):
         try:
             self.log("Halfauto scanner started")
-            m, path, img, calibration_status = run_halfauto_pipeline(
+            m, path, img = run_halfauto_pipeline(
                 save_folder=self.selected_folder,
                 log=self.log,
                 score_table=self.score_table
@@ -355,7 +355,6 @@ class PipelineGUI:
             self.last_map = m
             self.last_path = path
             self.display_image(img)
-            self.calibration_status = calibration_status
         except Exception as e:
             self.log(f"Pipeline error: {e}")
 
@@ -364,15 +363,14 @@ class PipelineGUI:
             self.log("Select folder with screenshots first.")
             return
 
-        self.calibration_status = check_calibration_file_exists(self.log)
-        if not self.calibration_status:
+        if not check_calibration_done(self.log):
             return
 
         threading.Thread(target=self._run_offline_pipeline, daemon=True).start()
 
     def _run_offline_pipeline(self):
         try:
-            m, path, img, calibration_status = run_offline_pipeline(
+            m, path, img = run_offline_pipeline(
                 save_folder=self.selected_folder,
                 log=self.log,
                 score_table=self.score_table
@@ -380,7 +378,6 @@ class PipelineGUI:
             self.last_map = m
             self.last_path = path
             self.display_image(img)
-            self.calibration_status = calibration_status
         except Exception as e:
             self.log(f"Pipeline error: {e}")
 
@@ -409,38 +406,10 @@ class PipelineGUI:
         if not self.ask_continue_dialog("calibrator"):
             self.log("Calibrator task cancelled.")
             return
-        scr = get_game_screenshot()
-        self.open_calibration_panel(scr)
-        # self.log("Calibrator started")
-        # self.calibration_status = True
-        # self.recalibrate_button.config(bootstyle="warning")
-        #
-        # def task():
-        #     try:
-        #         self.stop_blinking = True
-        #         run_calibrator(self.log)
-        #     except Exception as e:
-        #         self.log(f"Calibrator error: {e}")
-        #         self.calibration_status = False
-        #     finally:
-        #         self.stop_blinking = False
-        #         self.root.after(0, lambda: self._blink_loop())
-        #
-        # threading.Thread(target=task, daemon=True).start()
-
-
-    def open_calibration_panel(self, scr):
-        def on_apply(resolution, scale, threshold):
-            self.log(
-                f"Calibration params updated: "
-                f"res={resolution}, scale={scale}, thr={threshold}"
-            )
-            # persist to calibrator config here
-
+        scr = get_game_screenshot(self.log)
         CalibrationPanel(
             parent=self.root,
             low_res=self.low_res,
-            on_apply=on_apply,
             log=self.log,
             scr=scr,
         )
@@ -504,13 +473,13 @@ class PipelineGUI:
             text = (
                 "You are about to start the scanning process.\n"
                 "After you confirm this window, every mouse drag move will produce a screenshot.\n"
-                "It will stop once script sees boss or detect no nodes on screen.\n\n"
+                "It will stop once the script sees boss or detect no nodes on screen. Or right click is detected.\n\n"
                 "Make sure you are ready, then press enter / continue.\n"
             )
         elif variant == "calibrator":
             text = (
                 "You are about to start the calibrating process.\n"
-                "It will take a screenshot then check various resolutions. It may take a while.\n"
+                "It will take a game screenshot then then open new gui window.\n"
                 "Make sure alt-tab leads to the game, the game has minimap opened and in a position that shows different\n"
                 "types of nodes and modifiers, the more the better. Starting position is BAD, move it to the right a bit.\n\n"
                 "If the script failed to switch window, alt-tab to game and back, then start again."
@@ -554,20 +523,15 @@ class PipelineGUI:
     # Periodic UI Update
     # ======================================================================
     def _blink_loop(self):
-        if self.stop_blinking:
-            self.stop_blinking = False
+        if Settings.calibrated():
             return
-        interval = 350
-        if not self.calibration_status:
-            if self._blink_state:
-                self.recalibrate_button.config(bootstyle="danger")
-                interval *= 4
-            else:
-                self.recalibrate_button.config(bootstyle="primary")
-            self._blink_state = not self._blink_state
+        interval = 700
+        if self._blink_state:
+            self.recalibrate_button.config(bootstyle="danger")
+            interval *= 2
         else:
             self.recalibrate_button.config(bootstyle="primary")
-            self._blink_state = False
+        self._blink_state = not self._blink_state
 
         self.root.after(interval, self._blink_loop)
 
@@ -577,8 +541,7 @@ class PipelineGUI:
 # ======================================================================
 
 if __name__ == "__main__":
-    enable_dark_mode = True  # simulated setting
-    theme = "darkly" if enable_dark_mode else "flatly"
+    theme = "darkly" if Settings.darkmode else "flatly"
     root = tb.Window(themename=theme)
     low_res = get_screen_res()[0] < 1600
     PipelineGUI(root, low_res=low_res)

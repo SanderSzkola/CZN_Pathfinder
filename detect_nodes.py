@@ -3,11 +3,11 @@ from datetime import datetime
 import cv2
 import numpy as np
 from PIL.Image import Image
-from scipy.ndimage import maximum_filter
 
 from node import Node
 from path_converter import get_path
 from template_library import TemplateLibrary
+from settings import Settings
 
 """
 Detects nodes on provided screenshot based on templates from TemplateLibrary
@@ -83,7 +83,8 @@ def _detect_templates(map_gray, map_rgb, templates, threshold):
 
         # local max filter; neighborhood size ~ template size / 2
         neigh = max(1, max(h // 2, w // 2))
-        local_max = (res == maximum_filter(res, size=neigh))
+        dilated = cv2.dilate(res, np.ones((neigh, neigh), dtype=np.float32))
+        local_max = (res == dilated)
 
         cand_mask = (res >= threshold) & local_max
         ys, xs = np.where(cand_mask)
@@ -197,6 +198,10 @@ def _detect_nodes(screenshot_str_or_img,
                   threshold=0.98,
                   screenshot_scale=1.0):
     screenshot = _load_map_image(screenshot_str_or_img)
+    if Settings.testmode:
+        print(
+            f"Detect nodes step {screenshot_index}; screenshot_scale = {screenshot_scale}, thresh = {threshold}, "
+            f"templates_scale = {templates.last_scale}")
     if screenshot_scale != 1.0:
         h, w = screenshot.shape[:2]
         scaled_screenshot = cv2.resize(
@@ -258,7 +263,6 @@ def detect_nodes(screenshot_str_or_img,
                  create_preview=False,
                  threshold=0.98,
                  screenshot_scale=1.0):
-
     nodes, _ = _detect_nodes(screenshot_str_or_img, templates, screenshot_index, create_preview, create_preview,
                              threshold, screenshot_scale)
     return nodes
@@ -270,7 +274,6 @@ def detect_nodes_with_preview(screenshot_str_or_img,
                               create_preview=True,
                               threshold=0.98,
                               screenshot_scale=1.0):
-
     nodes, preview = _detect_nodes(screenshot_str_or_img, templates, screenshot_index, create_preview, False,
                                    threshold, screenshot_scale)
     return nodes, preview
