@@ -1,6 +1,9 @@
 import json
+import os.path
 from typing import Dict
 from path_converter import get_path
+
+DEFAULT_PATH = "ScoreTable.json"
 
 
 class ScoreTable:
@@ -13,6 +16,7 @@ class ScoreTable:
             RE: int = 0,
             RESH: int = 4,
             EV: int = 3,
+            EVTU: int = 30,
     ):
         self.table: Dict[str, int] = {
             "NO": NO,
@@ -22,20 +26,20 @@ class ScoreTable:
             "RE": RE,
             "RESH": RESH,
             "EV": EV,
+            "EVTU": EVTU,
         }
 
     @staticmethod
-    def export(scoretable: "ScoreTable", filename: str = "ScoreTable.json") -> None:
+    def export(scoretable: "ScoreTable", filename: str = DEFAULT_PATH) -> None:
         filename = get_path(filename)
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(scoretable.table, f, indent=2)
 
     @staticmethod
-    def import_(filename: str = "ScoreTable.json") -> "ScoreTable":
+    def import_(filename: str = DEFAULT_PATH) -> "ScoreTable":
         filename = get_path(filename)
         with open(filename, "r", encoding="utf-8") as f:
             data = json.load(f)
-
         return ScoreTable(
             NO=data.get("NO", -7),
             EL=data.get("EL", 2),
@@ -44,4 +48,10 @@ class ScoreTable:
             RESH=data.get("RESH", 4),
             NOOR=data.get("NOOR", -7),
             ELOR=data.get("ELOR", 2),
+            EVTU=data.get("EVTU", 30)
         )
+
+    @staticmethod
+    def check_file_exists(filename: str = DEFAULT_PATH) -> bool:
+        filename = get_path(filename)
+        return os.path.exists(filename)

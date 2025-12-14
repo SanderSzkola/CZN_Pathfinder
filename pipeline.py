@@ -4,8 +4,10 @@ import threading
 import time
 from queue import Queue
 
+from node import Node
 from detect_connections import detect_connections
-from detect_nodes import detect_nodes, pick_template_set
+from detect_nodes import detect_nodes
+from template_library import TemplateLibrary
 from drawer import draw_map
 from grabber import switch_window, screenshot, do_drag_move, move_mouse, mock_switch_window, mock_move_screen, \
     mock_screenshot, DragListener, MockDragListener
@@ -13,9 +15,10 @@ from pathfinder import run_pathfinder
 from process_map import Finalizer
 from score_table import ScoreTable
 from path_converter import get_path
+from settings import Settings
 
 """
-Full process:
+Full process (may be outdated a bit):
     Grabber switches window
     Grabber takes screenshot
     Pipeline gives screenshot to detect_nodes [2nd thread], then waits
@@ -36,30 +39,56 @@ Full process:
      but it at least allows for mouse movement while processing detect_nodes 
 """
 
-TEMPLATE_SETS = [
-    ("1600x900", "Encounter_minimal_1600", "Modifier_1600"),
-    ("1920x1080", "Encounter_minimal_1920", "Modifier_1920"),
-]
 
-
-def check_end(nodes, last_nodes):  # TODO: think about better method, this could fail in some strange maps
+def check_end(nodes, last_nodes):
+    """
+    Requires 2 sets of nodes, must be called before duplicate check.
+    Reason: checking for boss directly is.. complicated, so this method checks instead if two subsequent screenshots ends
+    with a column of rests.
+    """
     if (last_nodes is None or len(last_nodes) <= 2
             or nodes is None or len(nodes) <= 2):
         return False
-    this_frag_only = False
-    two_frags_combined_guess = False
-    if (nodes[-1].modifier == "SH" and
-            nodes[-2].modifier == "SH" and
-            (len(nodes) == 2 or nodes[-3].modifier == "SH")
-    ):
-        this_frag_only = True
-    if (nodes[-1].modifier == "SH" and
-            nodes[-2].modifier == "SH" and
-            last_nodes[-1].modifier == "SH" and
-            last_nodes[-2].modifier == "SH"):
-        two_frags_combined_guess = True
+    nodes_last_column = []
+    last_col_idx = nodes[-1].col
+    no_index_x = 0
+    len_dif = 0
+    if last_col_idx is None:  # nodes may come before rowcol assignment
+        no_index_x = nodes[-1].x
+    for n in nodes:
+        if last_col_idx and n.col == last_col_idx:
+            nodes_last_column.append(n)
+            len_dif += 1
+        elif abs(no_index_x - n.x) < 10:
+            nodes_last_column.append(n)
+            len_dif += 1
+    last_col_idx = last_nodes[-1].col
+    for n in last_nodes:
+        if n.col == last_col_idx:
+            nodes_last_column.append(n)
+            len_dif -= 1
+    if len_dif != 0:  # different len of last column -> not the same picture
+        return False
+    for n in nodes_last_column:
+        if n.type != "RE":
+            return False
+    return True
 
-    return this_frag_only or two_frags_combined_guess
+
+def check_duplicates(nodes, last_nodes):
+    if nodes is None or last_nodes is None:
+        return False
+    if len(nodes) != len(last_nodes):
+        return False
+    duplicates = 0
+    for n1 in nodes:
+        for n2 in last_nodes:
+            if Node.is_duplicate(n1, n2):
+                duplicates += 1
+                break
+    if duplicates == len(nodes):
+        return True
+    return False
 
 
 def worker_connections(queue: Queue, finalizer: Finalizer, templates, print_grid: bool = False):
@@ -90,14 +119,14 @@ class ExceptionThread(threading.Thread):
             self.exception = e
 
 
-def worker_nodes(detect_q: Queue, result: DetectResult, templates):
+def worker_nodes(detect_q: Queue, result: DetectResult, templates, screenshot_scale, threshold):
     while True:
         item = detect_q.get()
         if item is None:
             break
 
         step, img = item
-        nodes = detect_nodes(img, templates, step)
+        nodes = detect_nodes(img, templates, step, screenshot_scale=screenshot_scale, threshold=threshold)
         with result.lock:
             result.ready_step = step
             result.nodes = nodes
@@ -122,9 +151,11 @@ def prepare_clean_folder(base_name: str, log):
     return folder
 
 
-def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
+def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lambda msg: None,
                       score_table: ScoreTable = None):
     finalizer = Finalizer()
+    templates = TemplateLibrary()
+    templates.scale_templates(Settings.template_scale)
     last_nodes = None
     step = 0
 
@@ -135,14 +166,8 @@ def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lamb
     log("Starting scanning process")
     switch_window(step)
 
-    # TODO: rewrite this so those nodes can be used
-    img = screenshot(save_folder, step)
-    templates, initial_nodes, resolution = pick_template_set(img, TEMPLATE_SETS)
-    if len(initial_nodes) == 0:
-        raise IOError(f"Step {step}: Nothing detected, is map visible?")
-    log(f"Matched template: {resolution}, with {len(initial_nodes)} matches")
-    if len(initial_nodes) <= 4:
-        raise IOError(f"Node count too low, is map fully visible?")
+    # screenshot now restricted to game area, returns game screen + top left corner pos
+    _, game_window_corner_offset = screenshot(save_folder, step)
 
     # connections worker
     work_q = Queue()
@@ -158,7 +183,7 @@ def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lamb
     detect_result = DetectResult()
     node_worker = ExceptionThread(
         target=worker_nodes,
-        args=(detect_q, detect_result, templates),
+        args=(detect_q, detect_result, templates, Settings.screenshot_scale, Settings.threshold),
         daemon=True
     )
     node_worker.start()
@@ -166,12 +191,13 @@ def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lamb
     if save_folder is not None:
         os.makedirs(save_folder, exist_ok=True)
 
-    while step < max_steps:
-        log(f"Step {step}, expected 5~10")
-        img = screenshot(save_folder, step)
+    while step <= max_steps:
+        duplicates = 0
+        img, game_window_corner_offset = screenshot(save_folder, step)
         detect_q.put((step, img))
-        if last_nodes is not None:
-            move_mouse(last_nodes[-1])
+        # skip movement if end MAY BE here, but not confirmed yet
+        if last_nodes is not None and last_nodes[-1].modifier != "SH" and last_nodes[-2].modifier != "SH":
+            move_mouse(last_nodes[-1], game_window_corner_offset)
         # wait for node detection to complete
         while True:
             with detect_result.lock:
@@ -184,14 +210,31 @@ def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lamb
         if len(nodes) == 0:
             switch_window(1)
             raise IOError(f"step_{step}: Nothing detected, is map visible?")
+        if len(nodes) <= 4:
+            switch_window(1)
+            raise IOError(
+                f"step_{step}: {len(nodes)} nodes detected, too low. Is your map fully visible? Did you perform calibration?")
+
+        if step <= max_steps:
+            log(f"Step {step}, expected 5~10; {len(nodes)} nodes detected")
+        else:
+            log(f"Step {step}, something is definitely wrong, consider making bug report")
+            raise IOError("Auto scanner failed")
+        if check_end(nodes, last_nodes):
+            break
+        # anti duplicate check
+        if check_duplicates(nodes, last_nodes):
+            log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
+            step += 1
+            if duplicates >= 3:
+                raise IOError(f"3rd duplicate, something is very broken, stopping...")
+            duplicates += 1
+            continue
 
         # send nodes result to connection worker
         work_q.put((img, nodes))
 
-        if check_end(nodes, last_nodes):
-            break
-
-        do_drag_move(nodes[-1], nodes[0])
+        do_drag_move(nodes[-1], nodes[0], game_window_corner_offset)
         last_nodes = nodes
         step += 1
 
@@ -224,7 +267,7 @@ def run_auto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lamb
     return map_obj, path, image
 
 
-def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=lambda msg: None,
+def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
                          score_table: ScoreTable = None):
     if save_folder is None:
         raise ValueError("run_offline_pipeline requires save_folder with images")
@@ -239,14 +282,11 @@ def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=l
 
     step = 0
     last_nodes = None
+    templates = TemplateLibrary()
+    templates.scale_templates(Settings.template_scale)
 
     log("Starting scanning process [folder based - no game / mouse interaction]")
     mock_switch_window()
-    first_img = mock_screenshot(os.path.join(save_folder, screenshots[0]))
-    templates, initial_nodes, resolution = pick_template_set(first_img, TEMPLATE_SETS)
-    if len(initial_nodes) == 0:
-        raise IOError(f"Step {step}: Nothing detected, is map visible?")
-    log(f"Matched template: {resolution}, with {len(initial_nodes)} matches")
 
     finalizer = Finalizer()
     work_q = Queue()
@@ -263,14 +303,21 @@ def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=l
         log(f"Step {step}, processing {s}")
 
         img = mock_screenshot(os.path.join(save_folder, s))
-        nodes = detect_nodes(img, templates, step)
+        nodes = detect_nodes(img, templates, step, screenshot_scale=Settings.screenshot_scale,
+                             threshold=Settings.threshold)
 
         if len(nodes) == 0:
             raise IOError(f"Step {step}: Nothing detected, is map visible?")
-
-        work_q.put((img, nodes))
         if check_end(nodes, last_nodes):
             break
+        # anti duplicate check
+        if check_duplicates(nodes, last_nodes):
+            log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
+            step += 1
+            continue
+
+        work_q.put((img, nodes))
+
         if len(nodes) >= 2:
             mock_move_screen(nodes[-1], nodes[0])
         last_nodes = nodes
@@ -302,39 +349,35 @@ def run_offline_pipeline(max_steps=30, save_folder=None, print_grid=False, log=l
 
 
 def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
-                           score_table: ScoreTable = None):
+                          score_table: ScoreTable = None):
     if save_folder is None:
         save_folder = prepare_clean_folder("Last_scan_result", log)
     else:
         os.makedirs(save_folder, exist_ok=True)
     log("Starting scanning process [half-auto]")
 
+    templates = TemplateLibrary()
+    templates.scale_templates(Settings.template_scale)
     screenshot_q = Queue()
     detect_q = Queue(maxsize=1)
     work_q = Queue()
     finalizer = Finalizer()
     detect_result = DetectResult()
-    listener = DragListener( #  TEST: change to mock
+    listener = DragListener(  # TEST: change to mock
         screenshot_q=screenshot_q,
         save_folder=save_folder,
         log=log
     )
     listener.start()
     log("Waiting for first screenshot...")
-    step, img = screenshot_q.get()
-
-    templates, nodes, resolution = pick_template_set(img, TEMPLATE_SETS)
-    if len(nodes) == 0:
-        listener.stop()
-        raise IOError(f"Step {step}: Nothing detected, is map visible?")
-    log(f"Matched template: {resolution}, with {len(nodes)} matches")
-    if len(nodes) <= 4:
-        listener.stop()
-        raise IOError("Node count too low, is map fully visible?")
+    data = screenshot_q.get()
+    if data is None:
+        raise IOError("Scanner stopped by user")
+    step, img = data
 
     node_worker = ExceptionThread(
         target=worker_nodes,
-        args=(detect_q, detect_result, templates),
+        args=(detect_q, detect_result, templates, Settings.screenshot_scale, Settings.threshold),
         daemon=True)
     node_worker.start()
 
@@ -357,10 +400,15 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
         if len(nodes) == 0:
             listener.stop()
             raise IOError(f"Step {step}: Nothing detected, is map visible?")
-
-        work_q.put((img, nodes))
         if check_end(nodes, last_nodes):
             break
+        # anti duplicate check
+        if check_duplicates(nodes, last_nodes):
+            log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
+            step += 1
+            continue
+
+        work_q.put((img, nodes))
 
         last_nodes = nodes
         data = screenshot_q.get()
@@ -398,6 +446,24 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
     return map_obj, path, image
 
 
+def get_game_screenshot(log):
+    try:
+        switch_window(0)
+        scr, _ = screenshot()
+        switch_window(1)
+        return scr
+    except Exception as e:
+        log(e)
+        if Settings.testmode:
+            try:
+                path = get_path(["Last_scan_result", "map_frag_03.png"])
+                scr = mock_screenshot(path)
+                return scr
+            except Exception:
+                log("Failed to load test image")
+    return None
+
+
 if __name__ == "__main__":
-    run_offline_pipeline(max_steps=30, save_folder=get_path("Example_scan_result"), print_grid=False,
+    run_offline_pipeline(save_folder=get_path("Example_scan_result"), print_grid=False,
                          log=lambda msg: print(msg))

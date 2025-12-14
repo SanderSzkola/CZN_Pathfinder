@@ -46,6 +46,16 @@ class Node:
         n.col = d.get("col")
         return n
 
+    @staticmethod
+    def is_duplicate(n1: "Node", n2: "Node"):
+        if (n1.type == n2.type and
+                ((n1.modifier is None and n2.modifier is None) or
+                 (n1.modifier is not None and n2.modifier is not None and n1.modifier == n2.modifier)) and
+                abs(n1.x - n2.x) <= 10 and
+                abs(n1.y - n2.y) <= 10):
+            return True
+        return False
+
     def __repr__(self):
         return (f"Node(id={self.id!r}, type={self.type!r}, "
                 f"x={self.x}, y={self.y}, row={self.row}, col={self.col})")

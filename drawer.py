@@ -113,7 +113,7 @@ def draw_map(
         encounter_counts: Optional[dict] = None,
 ):
     encounter_dir = get_path(["Images", "Encounter"])
-    modifier_dir = get_path(["Images", "Modifier_1920"])
+    modifier_dir = get_path(["Images", "Modifier_1600"])
 
     if isinstance(map_data, str):
         nodes, edges, _ = load_map(map_data)
