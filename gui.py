@@ -5,6 +5,8 @@ from tkinter import filedialog
 import ttkbootstrap as tb
 
 import cv2
+if not hasattr(cv2, "__version__"): # random GPT-approved dependency error fix
+    cv2.__version__ = "4"
 import numpy as np
 from PIL import Image, ImageTk
 

@@ -4,6 +4,9 @@ import time
 from typing import Optional
 
 import pyautogui
+import cv2
+if not hasattr(cv2, "__version__"): # random GPT-approved dependency error fix
+    cv2.__version__ = "4"
 import win32gui
 # import pygetwindow as gw
 from PIL import Image

@@ -191,11 +191,7 @@ def clean_previous_builds():
     for d in [DIST_DIR, BUILD_DIR]:
         if d.exists():
             shutil.rmtree(d)
-    files = os.listdir()
     to_be_removed = []
-    for f in files:
-        if f.endswith('.spec'):
-            to_be_removed.append(f)
 
     for f in os.listdir("Example_scan_result"):
         if not f.startswith("map"):
@@ -207,12 +203,8 @@ def clean_previous_builds():
 def build_executable():
     cmd = [
         "pyinstaller",
-        "--onefile",
         "--clean",
-        "--noconsole",
-        "--icon=Images/Icon.ico",
-        f"--name={EXE_NAME}",
-        SOURCE_SCRIPT
+        "CZN Pathfinder.spec"
     ]
     subprocess.run(cmd, check=True)
 
