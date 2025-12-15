@@ -7,6 +7,7 @@ from PIL.Image import Image
 
 from detect_nodes import TemplateLibrary
 from path_converter import get_path
+from settings import Settings
 
 PX_TOLERANCE = 16
 CORRIDOR_HALF = 16
@@ -151,7 +152,8 @@ def detect_connections(map_fragment, templates, nodes=None, screenshot_index=0):
             map_fragment,
             templates,
             screenshot_index=screenshot_index,
-            create_preview=False
+            create_preview=False,
+            screenshot_scale=Settings.screenshot_scale
         )
 
     columns, _ = _group_columns(nodes)
@@ -321,7 +323,6 @@ if __name__ == "__main__":
     maps = ["map_frag_0.png", ]
     # maps = os.listdir(map_folder)
     templates = TemplateLibrary()
-    from settings import Settings
     templates.scale_templates(Settings.template_scale)
     for i, map_name in enumerate(maps):
         name, ext = map_name.split('.')

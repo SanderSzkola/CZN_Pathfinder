@@ -123,7 +123,7 @@ def _assign_modifiers(nodes, modifier_hits, screenshot_scale):
                 best = node
                 best_dist = d
         if best is not None:
-            if best_dist < (130 * screenshot_scale) ** 2:
+            if best_dist < (130 / screenshot_scale) ** 2:
                 best.modifier = mod
                 # print(f"Mod {mod} assigned to {best.type} with distance {best_dist}")
             else:
@@ -221,7 +221,7 @@ def _detect_nodes(screenshot_str_or_img,
     counter = 0
 
     # deduplicate nodes
-    deduplicate_area = int((50 * screenshot_scale)) ** 2
+    deduplicate_area = int((50 / screenshot_scale)) ** 2
     for cx, cy, t, score in node_candidates:
         keep = True
         for n in nodes:
@@ -241,7 +241,7 @@ def _detect_nodes(screenshot_str_or_img,
 
     # restore original screen coordinates
     # needed for top and left trim, bottom and right have no influence
-    top_offset = int(TRIM_TOP_PX * screenshot_scale)
+    top_offset = int(TRIM_TOP_PX)
     for node in nodes:
         node.x = int(node.x / screenshot_scale)
         node.y = int(node.y / screenshot_scale)

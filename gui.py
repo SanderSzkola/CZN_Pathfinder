@@ -526,6 +526,7 @@ class PipelineGUI:
     # ======================================================================
     def _blink_loop(self):
         if Settings.calibrated():
+            self.recalibrate_button.config(bootstyle="primary")
             return
         interval = 700
         if self._blink_state:
