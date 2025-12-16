@@ -24,6 +24,9 @@ class Settings:
     remote_version: str | None = None
     local_version: str | None = "v0.4.0-rc1" # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow
     target_app_name: str = "Chaos Zero Nightmare"
+    keyboard_input: bool = False
+    keyboard_input_autoscanner: str = "z"
+    keyboard_input_halfautoscanner: str = "x"
 
     @classmethod
     def _ensure_path(cls) -> None:

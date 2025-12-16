@@ -6,7 +6,8 @@ from tkinter import filedialog
 import ttkbootstrap as tb
 
 import cv2
-if not hasattr(cv2, "__version__"): # random GPT-approved dependency error fix
+
+if not hasattr(cv2, "__version__"):  # random GPT-approved dependency error fix
     cv2.__version__ = "4"
 import numpy as np
 from PIL import Image, ImageTk
@@ -22,6 +23,7 @@ from path_converter import get_path
 from gui_calibrator import CalibrationPanel
 from settings import Settings
 from version_checker import check_for_update
+from gui_settings import SettingsPanel
 
 
 class PipelineGUI:
@@ -89,7 +91,6 @@ class PipelineGUI:
         panel.pack_propagate(False)
 
         self._build_log_display(panel)
-        self._build_folder_section(panel)
         self._build_button_rows(panel)
         self._build_score_table(panel)
 
@@ -118,10 +119,6 @@ class PipelineGUI:
         self.log_display.bind("<Enter>", lambda _: self.log_display.bind_all("<MouseWheel>", wheel))
         self.log_display.bind("<Leave>", lambda _: self.log_display.unbind_all("<MouseWheel>"))
 
-    def _build_folder_section(self, parent):
-        self.folder_label = tb.Label(parent, text="Folder: None", anchor="w")
-        self.folder_label.pack(pady=5)
-
     def _build_button_rows(self, parent):
         row1 = tb.Frame(parent)
         row1.pack(pady=5, fill="x")
@@ -138,8 +135,8 @@ class PipelineGUI:
         row2 = tb.Frame(parent)
         row2.pack(pady=5, fill="x")
 
-        (tb.Button(row2, text="Choose Folder", width=19, command=self.choose_folder, padding=4)
-         .pack(side="left", padx=3))
+        self.folder_button = tb.Button(row2, text="Choose Folder", width=19, command=self.choose_folder, padding=4)
+        self.folder_button.pack(side="left", padx=3)
         (tb.Button(row2, text="Halfauto Scanner", width=19, command=self.start_halfauto_pipeline, padding=4)
          .pack(side="left", padx=3))
 
@@ -148,7 +145,7 @@ class PipelineGUI:
 
         row3 = tb.Frame(parent)
         row3.pack(pady=5, fill="x")
-        (tb.Button(row3, text="Clear Folder", width=19, command=self.clear_folder, padding=4)
+        (tb.Button(row3, text="Settings", width=19, command=lambda: SettingsPanel(self.root), padding=4)
          .pack(side="left", padx=3))
         (tb.Button(row3, text="Offline Scanner", width=19, command=self.start_offline_pipeline, padding=4)
          .pack(side="left", padx=3))
@@ -160,6 +157,7 @@ class PipelineGUI:
         tb.Label(panel, text="Score Table", anchor="w").pack()
 
         self.score_vars = {}
+        self.score_labels = {}
         columns_frame = tb.Frame(panel)
         columns_frame.pack(fill="x")
 
@@ -204,6 +202,7 @@ class PipelineGUI:
         value_label.pack(side="top", anchor="n", padx=1)
         var = tb.IntVar(value=value)
         self.score_vars[key] = var
+        self.score_labels[key] = value_label
         bigger_scale = key == "EVTU"  # dimensional tunnel gets more points
         tk.Scale(
             row,
@@ -323,14 +322,16 @@ class PipelineGUI:
     # Folder Management
     # ======================================================================
     def choose_folder(self):
-        path = filedialog.askdirectory(initialdir=get_path())
-        if path:
-            self.selected_folder = path
-            self.folder_label.config(text=f"Folder: {path}")
-
-    def clear_folder(self):
-        self.selected_folder = None
-        self.folder_label.config(text="Folder: None")
+        if self.selected_folder is None:
+            path = filedialog.askdirectory(initialdir=get_path())
+            if path:
+                self.selected_folder = path
+                self.folder_button.configure(text="Clear Folder")
+                self.log(f"Selected Folder: {self.selected_folder}")
+        else:
+            self.selected_folder = None
+            self.folder_button.configure(text="Choose Folder")
+            self.log(f"Cleared folder selection")
 
     # ======================================================================
     # Pipeline Actions
@@ -478,6 +479,7 @@ class PipelineGUI:
             for key, val in st.table.items():
                 if key in self.score_vars:
                     self.score_vars[key].set(val)
+                    self.score_labels[key].config(text=str(int(float(val))))
 
             self.log("ScoreTable imported.")
 
