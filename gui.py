@@ -1,5 +1,6 @@
 import os
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog
 import ttkbootstrap as tb
@@ -9,6 +10,8 @@ if not hasattr(cv2, "__version__"): # random GPT-approved dependency error fix
     cv2.__version__ = "4"
 import numpy as np
 from PIL import Image, ImageTk
+import webbrowser
+import re
 
 from pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, get_game_screenshot, run_pathfinder
 from grabber import get_screen_res
@@ -18,6 +21,7 @@ from score_table import ScoreTable
 from path_converter import get_path
 from gui_calibrator import CalibrationPanel
 from settings import Settings
+from version_checker import check_for_update
 
 
 class PipelineGUI:
@@ -55,6 +59,7 @@ class PipelineGUI:
         self._blink_loop()
         if Settings.auto_import_score and ScoreTable.check_file_exists():
             self.import_score_table()
+        self._check_update()
 
     # ======================================================================
     # UI Construction
@@ -233,7 +238,35 @@ class PipelineGUI:
     def _append_log_line(self, line):
         try:
             self.log_display.configure(state="normal")
+            start_index = self.log_display.index("end-1c")
             self.log_display.insert("end", line + "\n")
+            end_index = self.log_display.index("end-1c")
+
+            urls = re.findall(r'https?://\S+', line)
+            style = tb.Style()
+            link_color = style.colors.info
+            for url in urls:
+                url_start = self.log_display.search(url, start_index, stopindex=end_index)
+                if url_start:
+                    url_end = f"{url_start}+{len(url)}c"
+                    self.log_display.tag_add(url, url_start, url_end)
+                    self.log_display.tag_config(
+                        url,
+                        foreground=link_color,
+                        underline=True
+                    )
+                    self.log_display.tag_bind(
+                        url,
+                        "<Button-1>",
+                        lambda e, link=url: webbrowser.open(link)
+                    )
+                    self.log_display.tag_bind(
+                        url, "<Enter>", lambda e: self.log_display.config(cursor="hand2")
+                    )
+                    self.log_display.tag_bind(
+                        url, "<Leave>", lambda e: self.log_display.config(cursor="")
+                    )
+
             self.log_display.configure(state="disabled")
             self.log_display.see("end")
         except tk.TclError:
@@ -415,6 +448,16 @@ class PipelineGUI:
             log=self.log,
             scr=scr,
         )
+
+    def _check_update(self):
+        def task():
+            try:
+                time.sleep(1)
+                check_for_update(self.log)
+            except Exception as e:
+                self.log(f"Update check error: {e}")
+
+        threading.Thread(target=task, daemon=True).start()
 
     # ======================================================================
     # Score Table Operations
