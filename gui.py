@@ -15,7 +15,7 @@ import webbrowser
 import re
 
 from pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, get_game_screenshot, run_pathfinder
-from grabber import get_screen_res
+from grabber import get_screen_res, KeyboardListener
 from calibrator import check_calibration_done
 from drawer import draw_map, load_icon
 from score_table import ScoreTable
@@ -55,8 +55,10 @@ class PipelineGUI:
         self._delayed_pathfinder_id = None
         self._icons = {}
         self._blink_state = False
+        self._scanner_running = False
 
         self._build_ui()
+        self._initiate_keyboard_listener()
         self._load_initial_background()
         self._blink_loop()
         if Settings.auto_import_score and ScoreTable.check_file_exists():
@@ -336,7 +338,9 @@ class PipelineGUI:
     # ======================================================================
     # Pipeline Actions
     # ======================================================================
-    def start_automatic_pipeline(self):
+    def start_automatic_pipeline(self, from_key=False):
+        if self._scanner_running:
+            self.log("Tried to run more than one scanner at once, ignoring request")
         if self.selected_folder:
             if os.listdir(self.selected_folder):
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
@@ -345,10 +349,12 @@ class PipelineGUI:
         if not check_calibration_done(self.log):
             return
 
-        if not self.ask_continue_dialog("auto"):
-            self.log("Scanning task cancelled.")
-            return
+        if not from_key:
+            if not self.ask_continue_dialog("auto"):
+                self.log("Scanning task cancelled")
+                return
 
+        self._scanner_running = True
         threading.Thread(target=self._run_auto_pipeline, daemon=True).start()
 
     def _run_auto_pipeline(self):
@@ -364,8 +370,12 @@ class PipelineGUI:
             self.display_image(img)
         except Exception as e:
             self.log(f"Pipeline error: {e}")
+        finally:
+            self._scanner_running = False
 
-    def start_halfauto_pipeline(self):
+    def start_halfauto_pipeline(self, from_key=False):
+        if self._scanner_running:
+            self.log("Tried to run more than one scanner at once, ignoring request")
         if self.selected_folder:
             if os.listdir(self.selected_folder):
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
@@ -374,10 +384,12 @@ class PipelineGUI:
         if not check_calibration_done(self.log):
             return
 
-        if not self.ask_continue_dialog("halfauto"):
-            self.log("Scanning task cancelled.")
-            return
+        if not from_key:
+            if not self.ask_continue_dialog("halfauto"):
+                self.log("Scanning task cancelled")
+                return
 
+        self._scanner_running = True
         threading.Thread(target=self._run_halfauto_pipeline, daemon=True).start()
 
     def _run_halfauto_pipeline(self):
@@ -393,15 +405,20 @@ class PipelineGUI:
             self.display_image(img)
         except Exception as e:
             self.log(f"Pipeline error: {e}")
+        finally:
+            self._scanner_running = False
 
     def start_offline_pipeline(self):
+        if self._scanner_running:
+            self.log("Tried to run more than one scanner at once, ignoring request")
         if not self.selected_folder:
-            self.log("Select folder with screenshots first.")
+            self.log("Select folder with screenshots first")
             return
 
         if not check_calibration_done(self.log):
             return
 
+        self._scanner_running = True
         threading.Thread(target=self._run_offline_pipeline, daemon=True).start()
 
     def _run_offline_pipeline(self):
@@ -416,10 +433,12 @@ class PipelineGUI:
             self.display_image(img)
         except Exception as e:
             self.log(f"Pipeline error: {e}")
+        finally:
+            self._scanner_running = False
 
     def rerun_pathfinder(self):
         if not self.last_map:
-            self.log("No map loaded.")
+            self.log("No map loaded")
             return
 
         self.log("Re-running pathfinder")
@@ -440,7 +459,7 @@ class PipelineGUI:
 
     def start_calibrator(self):
         if not self.ask_continue_dialog("calibrator"):
-            self.log("Calibrator task cancelled.")
+            self.log("Calibrator task cancelled")
             return
         scr = get_game_screenshot(self.log)
         CalibrationPanel(
@@ -449,16 +468,6 @@ class PipelineGUI:
             log=self.log,
             scr=scr,
         )
-
-    def _check_update(self):
-        def task():
-            try:
-                time.sleep(1)
-                check_for_update(self.log)
-            except Exception as e:
-                self.log(f"Update check error: {e}")
-
-        threading.Thread(target=task, daemon=True).start()
 
     # ======================================================================
     # Score Table Operations
@@ -481,7 +490,7 @@ class PipelineGUI:
                     self.score_vars[key].set(val)
                     self.score_labels[key].config(text=str(int(float(val))))
 
-            self.log("ScoreTable imported.")
+            self.log("ScoreTable imported")
 
             if self.last_map is not None:
                 if self._delayed_pathfinder_id is not None:
@@ -494,7 +503,7 @@ class PipelineGUI:
     def export_score_table(self):
         try:
             ScoreTable.export(self.score_table)
-            self.log("ScoreTable exported.")
+            self.log("ScoreTable exported")
         except Exception as e:
             self.log(f"Export error: {e}")
 
@@ -583,6 +592,47 @@ class PipelineGUI:
 
         self.root.after(interval, self._blink_loop)
 
+    def _check_update(self):
+        def task():
+            try:
+                time.sleep(1)
+                check_for_update(self.log)
+            except Exception as e:
+                self.log(f"Update check error: {e}")
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _initiate_keyboard_listener(self):
+        hotkeys = [
+            ("auto", Settings.keyboard_input_autoscanner),
+            ("halfauto", Settings.keyboard_input_halfautoscanner),
+        ]
+        if Settings.keyboard_input:
+            try:
+                self._kb_listener = KeyboardListener(
+                    hotkeys=hotkeys,
+                    on_trigger=self._on_keyboard_action
+                )
+                self._kb_listener.start()
+            except ValueError as e:
+                self._kb_listener = None
+                self.log(f"Keyboard detection inactive due to the error: {e}")
+        else:
+            self._kb_listener = None
+
+    def _on_keyboard_action(self, action):
+        self.root.after(0, lambda: self._handle_keyboard_action(action))
+
+    def _handle_keyboard_action(self, action):
+        if action == "auto":
+            self.start_automatic_pipeline(from_key=True)
+        elif action == "halfauto":
+            self.start_halfauto_pipeline()
+
+    def shutdown(self):
+        if self._kb_listener:
+            self._kb_listener.stop()
+
 
 # ======================================================================
 # Main
@@ -592,5 +642,13 @@ if __name__ == "__main__":
     theme = "darkly" if Settings.darkmode else "flatly"
     root = tb.Window(themename=theme)
     low_res = get_screen_res()[0] < 1600
-    PipelineGUI(root, low_res=low_res)
+    gui = PipelineGUI(root, low_res=low_res)
+
+
+    def on_close():
+        gui.shutdown()
+        root.destroy()
+
+
+    root.protocol("WM_DELETE_WINDOW", on_close)
     root.mainloop()

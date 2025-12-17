@@ -67,14 +67,17 @@ class SettingsPanel(tb.Toplevel):
             row += 1
 
         row = 0
+        add_explanation("Any change requires script restart to take effect")
         add_field("Target app name", "target_app_name")
-        add_bool("Dark mode (requires restart)", "darkmode")
+        add_bool("Dark mode", "darkmode")
         add_bool("Auto import score table", "auto_import_score")
 
         add_separator()
         add_bool("Detect keyboard", "keyboard_input")
+        add_explanation("Allows for calling scanners directly from the game")
         add_field("Run automatic scanner", "keyboard_input_autoscanner")
         add_field("Run halfauto scanner", "keyboard_input_halfautoscanner")
+        add_explanation("Accepts letters and digits, alone or joined by + sign")
 
         add_separator()
         add_bool("Check for update", "autoupdate")
