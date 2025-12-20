@@ -10,6 +10,8 @@ from path_converter import get_path
 GRID = 70
 ICON_SCALE = 0.35
 MODIFIER_Y_OFFSET = -4
+MIN_COLS = 17
+MIN_ROWS = 6 # 5 from game map + 1 extra for counters
 
 
 def load_map(path: str):
@@ -131,8 +133,10 @@ def draw_map(
     col_shift = -min_col + 1
     row_shift = -min_row + 1
 
-    width = (max_col - min_col + 2) * GRID
-    height = (max_row - min_row + 3) * GRID
+    col_span = max(max_col - min_col + 2, MIN_COLS)
+    row_span = max(max_row - min_row + 3, MIN_ROWS)
+    width = col_span * GRID
+    height = row_span * GRID
     canvas = np.zeros((height, width, 4), dtype=np.uint8)
 
     node_info = {}

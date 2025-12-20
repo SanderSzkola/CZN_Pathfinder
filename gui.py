@@ -627,7 +627,7 @@ class PipelineGUI:
         if action == "auto":
             self.start_automatic_pipeline(from_key=True)
         elif action == "halfauto":
-            self.start_halfauto_pipeline()
+            self.start_halfauto_pipeline(from_key=True)
 
     def shutdown(self):
         if self._kb_listener:
