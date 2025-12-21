@@ -200,6 +200,7 @@ def _detect_nodes(screenshot_str_or_img,
     screenshot = _load_map_image(screenshot_str_or_img)
     if Settings.testmode:
         print(
+            f"[Testmode] "
             f"Detect nodes step {screenshot_index}; screenshot_scale = {screenshot_scale}, thresh = {threshold}, "
             f"templates_scale = {templates.last_scale}")
     if screenshot_scale != 1.0:

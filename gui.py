@@ -341,6 +341,7 @@ class PipelineGUI:
     def start_automatic_pipeline(self, from_key=False):
         if self._scanner_running:
             self.log("Tried to run more than one scanner at once, ignoring request")
+            return
         if self.selected_folder:
             if os.listdir(self.selected_folder):
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
@@ -376,6 +377,7 @@ class PipelineGUI:
     def start_halfauto_pipeline(self, from_key=False):
         if self._scanner_running:
             self.log("Tried to run more than one scanner at once, ignoring request")
+            return
         if self.selected_folder:
             if os.listdir(self.selected_folder):
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
@@ -411,9 +413,14 @@ class PipelineGUI:
     def start_offline_pipeline(self):
         if self._scanner_running:
             self.log("Tried to run more than one scanner at once, ignoring request")
-        if not self.selected_folder:
-            self.log("Select folder with screenshots first")
             return
+        if not self.selected_folder:
+            if Settings.testmode:
+                self.log("No folder selected, TESTMODE; setting to Last_scan_result")
+                self.selected_folder = get_path("Last_scan_result")
+            else:
+                self.log("Select folder with screenshots first")
+                return
 
         if not check_calibration_done(self.log):
             return

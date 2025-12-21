@@ -49,6 +49,15 @@ def check_end(nodes, last_nodes):
     if (last_nodes is None or len(last_nodes) <= 2
             or nodes is None or len(nodes) <= 2):
         return False
+    # strong check, <4 columns, single screenshot is enough
+    non_empty_columns, _ = check_node_output_quality(nodes)
+    if non_empty_columns < 4 and nodes[-1].type == "RE" and (
+            nodes[-2].type == "RE" or  # same column must be rest
+            abs(nodes[-2].x - nodes[-1].x) > 10):  # other column
+        if Settings.testmode:
+            print("[Testmode] Check end returned with strong check")
+        return True
+    # weak check, needs two screenshots
     nodes_last_column = []
     last_col_idx = nodes[-1].col
     no_index_x = 0
@@ -72,6 +81,7 @@ def check_end(nodes, last_nodes):
     for n in nodes_last_column:
         if n.type != "RE":
             return False
+    print("[Testmode] Check end returned with weak check")
     return True
 
 
@@ -89,6 +99,28 @@ def check_duplicates(nodes, last_nodes):
     if duplicates == len(nodes):
         return True
     return False
+
+
+def check_node_output_quality(nodes):
+    c1, c2, c3, c4, c5 = [], [], [], [], []  # how does ultra-wide screen works? one extra, should I add more?
+    columns = [c1, c2, c3, c4, c5]
+    non_normals = 0
+    for node in nodes:
+        placed = False
+        if node.type != "NO":
+            non_normals += 1
+        for c in columns:
+            if len(c) == 0 or abs(c[0].x - node.x) < 10:
+                c.append(node)
+                placed = True
+                break
+        if not placed:
+            raise IOError("Got more columns that excepted max, stopping")
+    non_empty_columns = 0
+    for c in columns:
+        if len(c) > 0:
+            non_empty_columns += 1
+    return non_empty_columns, non_normals
 
 
 def worker_connections(queue: Queue, finalizer: Finalizer, templates, print_grid: bool = False):
@@ -207,36 +239,44 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
                     break
             time.sleep(0.01)
 
+        non_empty_columns, non_normals = check_node_output_quality(nodes)
         if len(nodes) == 0:
             switch_window(1)
             raise IOError(f"step_{step}: Nothing detected, is map visible?")
-        if len(nodes) <= 4:
+        if non_normals <= 2 and len(nodes) <= 4:
             switch_window(1)
             raise IOError(
-                f"step_{step}: {len(nodes)} nodes detected, too low. Is your map fully visible? Did you perform calibration?")
+                f"step_{step}: {len(nodes)}n/{non_normals}o nodes detected, too low. Is your map fully visible? Did you perform calibration?")
 
         if step <= max_steps:
-            log(f"Step {step}, expected 5~10; {len(nodes)} nodes detected")
+            log(f"Step {step}, expected 5~10; {len(nodes)}n / {non_normals}o nodes detected")
         else:
             log(f"Step {step}, something is definitely wrong, consider making bug report")
             raise IOError("Auto scanner failed")
+        should_end = False
         if check_end(nodes, last_nodes):
-            break
+            should_end = True
         # anti duplicate check
+        is_duplicate = False
         if check_duplicates(nodes, last_nodes):
-            log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
-            step += 1
-            if duplicates >= 3:
-                raise IOError(f"3rd duplicate, something is very broken, stopping...")
-            duplicates += 1
-            continue
+            is_duplicate = True
+            if not should_end:
+                log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
+                if duplicates >= 3:
+                    raise IOError(f"3rd duplicate, something is very broken, stopping...")
+                duplicates += 1
+                step += 1
+                continue
 
         # send nodes result to connection worker
-        work_q.put((img, nodes))
+        if not is_duplicate:
+            work_q.put((img, nodes))
+        step += 1
+        if should_end:
+            break
 
         do_drag_move(nodes[-1], nodes[0], game_window_corner_offset)
         last_nodes = nodes
-        step += 1
 
     # Finish workers
     work_q.join()
@@ -272,7 +312,6 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
     if save_folder is None:
         raise ValueError("run_offline_pipeline requires save_folder with images")
 
-    # Collect screenshots
     all_files = sorted(os.listdir(save_folder))
     screenshots = [
         s for s in all_files
@@ -300,28 +339,35 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
         if step >= max_steps:
             break
 
-        log(f"Step {step}, processing {s}")
-
         img = mock_screenshot(os.path.join(save_folder, s))
         nodes = detect_nodes(img, templates, step, screenshot_scale=Settings.screenshot_scale,
                              threshold=Settings.threshold)
 
         if len(nodes) == 0:
             raise IOError(f"Step {step}: Nothing detected, is map visible?")
-        if check_end(nodes, last_nodes):
-            break
-        # anti duplicate check
+        non_empty_columns, non_normals = check_node_output_quality(nodes)
+        if non_normals <= 2 and len(nodes) <= 4:
+            raise IOError(f"Step {step}: {len(nodes)}n/{non_normals}o nodes detected, too low")
+        log(f"Step {step} from screenshot {s}: {len(nodes)}n / {non_normals}o nodes detected")
+
+        should_end = check_end(nodes, last_nodes)
+        is_duplicate = False
         if check_duplicates(nodes, last_nodes):
-            log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
-            step += 1
-            continue
+            is_duplicate = True
+            if not should_end:
+                log(f"Step {step} discarded as duplicate")
+                step += 1
+                continue
 
-        work_q.put((img, nodes))
-
-        if len(nodes) >= 2:
-            mock_move_screen(nodes[-1], nodes[0])
+        if not is_duplicate:
+            work_q.put((img, nodes))
         last_nodes = nodes
         step += 1
+
+        if should_end:
+            break
+        if len(nodes) >= 2:
+            mock_move_screen(nodes[-1], nodes[0])
 
     work_q.join()
     work_q.put(None)
@@ -333,10 +379,10 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
         raise IOError("There were no valid map images in this folder..? Scan returned nothing.")
 
     log("Scanning done")
-    json_path = os.path.join(save_folder, "merged_map.json") if save_folder else None
+    json_path = os.path.join(save_folder, "merged_map.json")
     map_obj = finalizer.finalize(json_path)
     path, encounter_ranges, encounter_counts = run_pathfinder(map_obj, score_table)
-    image_path = os.path.join(save_folder, "merged_map.png") if save_folder else None
+    image_path = os.path.join(save_folder, "merged_map.png")
     image = draw_map(map_obj,
                      path,
                      output_path=image_path,
@@ -374,6 +420,7 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
     if data is None:
         raise IOError("Scanner stopped by user")
     step, img = data
+    last_nodes = None
 
     node_worker = ExceptionThread(
         target=worker_nodes,
@@ -388,7 +435,7 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
     conn_worker.start()
 
     detect_q.put((step, img))
-    last_nodes = None
+
     while step < max_steps:
         while True:
             with detect_result.lock:
@@ -400,22 +447,44 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
         if len(nodes) == 0:
             listener.stop()
             raise IOError(f"Step {step}: Nothing detected, is map visible?")
-        if check_end(nodes, last_nodes):
-            break
-        # anti duplicate check
-        if check_duplicates(nodes, last_nodes):
-            log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
-            step += 1
-            continue
 
-        work_q.put((img, nodes))
+        non_empty_columns, non_normals = check_node_output_quality(nodes)
+
+        if non_normals <= 2 and len(nodes) <= 4:
+            listener.stop()
+            raise IOError(f"Step {step}: {len(nodes)}n/{non_normals}o nodes detected, too low. Is map fully visible? Have you performed calibration?")
+
+        log(f"Step {step}, expected 5~10; {len(nodes)}n/{non_normals}o nodes detected")
+
+        should_end = check_end(nodes, last_nodes)
+        is_duplicate = False
+        if check_duplicates(nodes, last_nodes):
+            is_duplicate = True
+            if not should_end:
+                log(f"Step {step} discarded as duplicate")
+                step += 1
+                continue
+
+        if not is_duplicate:
+            work_q.put((img, nodes))
 
         last_nodes = nodes
+        step += 1
+
+        if should_end:
+            log(f"Step {step - 1}: end detected, stopping capture")
+            listener.stop()
+            try:
+                screenshot_q.put_nowait(None)
+            except Exception:
+                pass
+            break
+
         data = screenshot_q.get()
         if data is None:
             break
+
         step, img = data
-        log(f"Step {step}, expected 5~10")
         detect_q.put((step, img))
 
     listener.stop()
