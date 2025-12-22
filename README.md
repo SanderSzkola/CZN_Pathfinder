@@ -18,7 +18,7 @@
 
 ## Automatic scan demo
 
-Here's how automatic scan looks in action (old ui version):
+Here's how calibration and automatic scan looks in action:
 ![demo](Images/Demo.gif)
 
 ## Installation
