@@ -44,7 +44,7 @@ class PipelineGUI:
 
         self.root.title("CZN Pathfinder")
         self.root.iconbitmap("Images/Icon.ico")
-        self.root.geometry(f"{self.window_w}x{self.window_h}")
+        self.root.geometry(f"{self.window_w}x{self.window_h}+10+10")
 
         self.selected_folder = None
         self.last_map = None
@@ -56,6 +56,7 @@ class PipelineGUI:
         self._icons = {}
         self._blink_state = False
         self._scanner_running = False
+        self._demo_params_copy = []
 
         self._build_ui()
         self._initiate_keyboard_listener()
@@ -422,8 +423,13 @@ class PipelineGUI:
                 self.log("Select folder with screenshots first")
                 return
 
-        if not check_calibration_done(self.log):
-            return
+        demo_override = True if "Example_scan_result" in str(self.selected_folder) else False
+        if demo_override:
+            self._prepare_demo()
+            self.log("Preparing demo parameters")
+        else:
+            if not check_calibration_done(self.log):
+                return
 
         self._scanner_running = True
         threading.Thread(target=self._run_offline_pipeline, daemon=True).start()
@@ -442,6 +448,24 @@ class PipelineGUI:
             self.log(f"Pipeline error: {e}")
         finally:
             self._scanner_running = False
+            if len(self._demo_params_copy) > 0:
+                self._restore_after_demo()
+
+    def _prepare_demo(self):
+        self._demo_params_copy.clear()
+        self._demo_params_copy.append(Settings.screenshot_scale)
+        self._demo_params_copy.append(Settings.template_scale)
+        self._demo_params_copy.append(Settings.threshold)
+        Settings.screenshot_scale = 1.0
+        Settings.template_scale = 1.0
+        Settings.threshold = 0.97
+
+    def _restore_after_demo(self):
+        if len(self._demo_params_copy) != 3:
+            raise IOError("Restore impossible, unknown program state")
+        Settings.threshold = self._demo_params_copy.pop()
+        Settings.template_scale = self._demo_params_copy.pop()
+        Settings.screenshot_scale = self._demo_params_copy.pop()
 
     def rerun_pathfinder(self):
         if not self.last_map:

@@ -35,7 +35,9 @@ class CalibrationPanel(tb.Toplevel):
             self.map_w = 1300
             self.map_h = 500
 
-        self.geometry(f"{self.window_w}x{self.window_h}")
+        x = parent.winfo_x()
+        y = parent.winfo_y()
+        self.geometry(f"{self.window_w}x{self.window_h}+{x}+{y}")
         self.title("Calibration")
         self.transient(parent)
         self.grab_set()

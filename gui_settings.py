@@ -111,5 +111,5 @@ class SettingsPanel(tb.Toplevel):
     def _center(self, parent):
         self.update_idletasks()
         x = parent.winfo_x() + parent.winfo_width() // 2 - self.winfo_width() // 2
-        y = parent.winfo_y() + parent.winfo_height() // 2 - self.winfo_height() // 2
+        y = parent.winfo_y()
         self.geometry(f"+{x}+{y}")
