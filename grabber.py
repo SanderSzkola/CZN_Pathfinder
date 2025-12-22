@@ -102,7 +102,7 @@ def do_drag_move(node_from, node_to, game_window_corner_offset):
     if abs(current_x - node_from.x) > 50:
         pyautogui.moveTo(node_from.x + ox, node_from.y + oy, duration=0.4)
     else:
-        pyautogui.moveTo(node_from.x + ox, current_y + oy, duration=0.1)
+        pyautogui.moveTo(node_from.x + ox, current_y, duration=0.1)
     time.sleep(0.03)
     pyautogui.mouseDown()
     pyautogui.moveTo(node_to.x + ox, node_to.y + oy, duration=0.5)

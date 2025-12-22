@@ -32,15 +32,15 @@ class PipelineGUI:
         self.low_res = low_res
         if self.low_res:
             self.window_w = 1280
-            self.window_h = 420
+            self.window_h = 490
             self.left_panel_w = 880
-            self.left_panel_h = 420
+            self.left_panel_h = 490
             self.image_h = int(self.left_panel_h * self.left_panel_w / 1190)
         else:
             self.window_w = 1600
-            self.window_h = 420
+            self.window_h = 490
             self.left_panel_w = 1190
-            self.left_panel_h = 420
+            self.left_panel_h = 490
 
         self.root.title("CZN Pathfinder")
         self.root.iconbitmap("Images/Icon.ico")
@@ -126,7 +126,7 @@ class PipelineGUI:
         row1.pack(pady=5, fill="x")
 
         # keep reference so it can blink and annoy user if calibration is wrong
-        self.recalibrate_button = tb.Button(row1, text="Recalibrate", width=19, command=self.start_calibrator,
+        self.recalibrate_button = tb.Button(row1, text="Calibrator", width=19, command=self.start_calibrator,
                                             padding=4)
         self.recalibrate_button.pack(side="left", padx=3)
         (tb.Button(row1, text="Automatic Scanner", width=19, command=self.start_automatic_pipeline, padding=4)
