@@ -4,11 +4,14 @@ import time
 from typing import Optional
 
 import pyautogui
+import cv2
+
+if not hasattr(cv2, "__version__"):  # random GPT-approved dependency error fix
+    cv2.__version__ = "4"
 import win32gui
-# import pygetwindow as gw
 from PIL import Image
 from queue import Queue
-from pynput import mouse
+from pynput import mouse, keyboard
 
 from settings import Settings
 
@@ -21,16 +24,12 @@ and lower process cant send signals to elevated process or something.
 """
 
 GAME_WINDOW = Settings.target_app_name
-# GAME_WINDOW = "Spotify"
 SCRIPT_WINDOW = "CZN Pathfinder"
 
 
-def switch_window(step):  # TODO: think about some other way, alt-tab is unreliable // pygetwindow? win32gui?
+def switch_window(step):
     time.sleep(0.2)
-    # pyautogui.hotkey("alt", "tab")
-    # time.sleep(0.2)
     switch_window_win32gui(step)
-    # switch_window_pygetwindow(step)
 
 
 def _find_hwnd(title_substring: str):
@@ -56,24 +55,19 @@ def switch_window_win32gui(step):
 
     if hwnd is None:
         game_text = ". Is CZN running?" if step == 0 else ''
-        raise Exception(f"grabber / win32gui: Window not found: {label}" + game_text)
+        raise Exception(f"Window not found: {label}" + game_text)
 
-    win32gui.ShowWindow(hwnd, 5)
-    win32gui.SetForegroundWindow(hwnd)
+    try:  # breaks if called from game
+        win32gui.ShowWindow(hwnd, 5)
+        win32gui.SetForegroundWindow(hwnd)
+    except Exception:  # fallback, works only if script is first in alt-tab queue
+        pyautogui.hotkey("alt", "tab")
+        time.sleep(0.2)
+        target_window = GAME_WINDOW if step == 0 else SCRIPT_WINDOW
+        title = win32gui.GetWindowText(win32gui.GetForegroundWindow())
+        if not target_window.lower() in title.lower():
+            raise IOError("Window switched to unexcepted place, script stopped")
     time.sleep(0.2)
-
-
-# def switch_window_pygetwindow(step):
-#     name = GAME_WINDOW if step == 0 else SCRIPT_WINDOW
-#
-#     windows = [w for w in gw.getAllWindows() if name.lower() in w.title.lower()]
-#     if not windows:
-#         print("pygetwindow: Window not found:", name)
-#         return
-#
-#     w = windows[0]
-#     w.activate()
-#     time.sleep(0.2)
 
 
 def screenshot(save_folder: Optional[str] = None, index: int = -1, whole_screen_mode=False):
@@ -108,7 +102,7 @@ def do_drag_move(node_from, node_to, game_window_corner_offset):
     if abs(current_x - node_from.x) > 50:
         pyautogui.moveTo(node_from.x + ox, node_from.y + oy, duration=0.4)
     else:
-        pyautogui.moveTo(node_from.x + ox, current_y + oy, duration=0.1)
+        pyautogui.moveTo(node_from.x + ox, current_y, duration=0.1)
     time.sleep(0.03)
     pyautogui.mouseDown()
     pyautogui.moveTo(node_to.x + ox, node_to.y + oy, duration=0.5)
@@ -165,7 +159,7 @@ class DragListener:
 
     def _on_click(self, x, y, button, pressed):
         if button == mouse.Button.right and not pressed:
-            self.log("Drag scanner stopped (right click).")
+            self.log("Drag scanner stopped (right click)")
             self.screenshot_q.put(None)
             self.stop()
             return
@@ -225,3 +219,60 @@ class MockDragListener:
 
     def _on_click(self, x, y, button, pressed):
         return
+
+
+# keyboard listener for hotkey action triggers
+class KeyboardListener:
+    def __init__(self, hotkeys: list[tuple[str, str]], on_trigger):
+        self.hotkeys = [(action, parse_hotkey(combo)) for action, combo in hotkeys]
+
+        self.on_trigger = on_trigger
+        self.listener = None
+
+        self._pressed = set()
+        self._fired = set()
+
+    def start(self):
+        self.listener = keyboard.Listener(
+            on_press=self._on_press,
+            on_release=self._on_release)
+        self.listener.start()
+
+    def stop(self):
+        if self.listener:
+            self.listener.stop()
+            self.listener = None
+
+    def _on_press(self, key):
+        if not isinstance(key, keyboard.KeyCode):
+            return
+        self._pressed.add(key)
+        for action, combo in self.hotkeys:
+            if action in self._fired:
+                continue
+            if combo.issubset(self._pressed):
+                self._fired.add(action)
+                try:
+                    self.on_trigger(action)
+                except Exception:
+                    pass
+
+    def _on_release(self, key):
+        if not isinstance(key, keyboard.KeyCode):
+            return
+        self._pressed.discard(key)
+        for action, combo in self.hotkeys:
+            if key in combo:
+                self._fired.discard(action)
+
+
+def parse_hotkey(hotkey: str):
+    result = set()
+    for part in hotkey.lower().split("+"):
+        part = part.strip()
+        if len(part) == 1:
+            result.add(keyboard.KeyCode.from_char(part))
+        else:
+            raise ValueError(f"Unsupported key: {part}")
+
+    return result

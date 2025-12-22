@@ -18,7 +18,7 @@
 
 ## Automatic scan demo
 
-Here's how automatic scan looks in action:
+Here's how calibration and automatic scan looks in action:
 ![demo](Images/Demo.gif)
 
 ## Installation
@@ -39,6 +39,7 @@ Here's how automatic scan looks in action:
 
 Automatic and half-automatic scanners require admin elevation (right click / run as administrator).
 The game is elevated itself, and lower process cant send signals to higher process or something. Offline mode can work without it.<br><br>
+Designed for Windows and 16x9 screen resolution, should work up to 4k.<br><br>
 This is a convenience  tool, not a bot or cheat. It displays the full map and the optimal path.<br>
 It does not run the map for you. It does not modify or inject any code into the game.<br>
-It DOES emulate user input to scroll opened chaos map, but that action provides no unfair account advantage compared to something like autofarmers.
+It DOES emulate user input to scroll opened chaos map, but that action provides no unfair account advantage compared to something like autofarmers

@@ -1,5 +1,5 @@
 import json
-from datetime import date
+from datetime import datetime
 from pathlib import Path
 import sys
 
@@ -12,7 +12,7 @@ class Settings:
 
     # template params
     template_scale: float = 1.0
-    screenshot_scale: float = 0.0
+    screenshot_scale: float = 0.0 # 0 as uncalibrated flag, normally 1 or 0.5
     threshold: float = 0.98
 
     # whatever else
@@ -20,9 +20,13 @@ class Settings:
     darkmode: bool = True
     auto_import_score: bool = True
     autoupdate: bool = True
-    last_update_check: date | None = None
-    version: str | None = "v0.4.0"
+    last_update_check: datetime | None = None
+    remote_version: str | None = None
+    local_version: str | None = "v0.4.0" # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow
     target_app_name: str = "Chaos Zero Nightmare"
+    keyboard_input: bool = False
+    keyboard_input_autoscanner: str = "s+1"
+    keyboard_input_halfautoscanner: str = "s+2"
 
     @classmethod
     def _ensure_path(cls) -> None:
@@ -47,9 +51,11 @@ class Settings:
         for key, value in data.items():
             if not hasattr(cls, key):
                 continue
+            if key == "local_version":
+                continue
 
             if key == "last_update_check" and value is not None:
-                value = date.fromisoformat(value)
+                value = datetime.fromisoformat(value)
 
             setattr(cls, key, value)
 

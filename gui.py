@@ -1,21 +1,29 @@
 import os
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog
 import ttkbootstrap as tb
 
 import cv2
+
+if not hasattr(cv2, "__version__"):  # random GPT-approved dependency error fix
+    cv2.__version__ = "4"
 import numpy as np
 from PIL import Image, ImageTk
+import webbrowser
+import re
 
 from pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, get_game_screenshot, run_pathfinder
-from grabber import get_screen_res
+from grabber import get_screen_res, KeyboardListener
 from calibrator import check_calibration_done
 from drawer import draw_map, load_icon
 from score_table import ScoreTable
 from path_converter import get_path
 from gui_calibrator import CalibrationPanel
 from settings import Settings
+from version_checker import check_for_update
+from gui_settings import SettingsPanel
 
 
 class PipelineGUI:
@@ -24,19 +32,19 @@ class PipelineGUI:
         self.low_res = low_res
         if self.low_res:
             self.window_w = 1280
-            self.window_h = 420
+            self.window_h = 490
             self.left_panel_w = 880
-            self.left_panel_h = 420
+            self.left_panel_h = 490
             self.image_h = int(self.left_panel_h * self.left_panel_w / 1190)
         else:
             self.window_w = 1600
-            self.window_h = 420
+            self.window_h = 490
             self.left_panel_w = 1190
-            self.left_panel_h = 420
+            self.left_panel_h = 490
 
         self.root.title("CZN Pathfinder")
         self.root.iconbitmap("Images/Icon.ico")
-        self.root.geometry(f"{self.window_w}x{self.window_h}")
+        self.root.geometry(f"{self.window_w}x{self.window_h}+10+10")
 
         self.selected_folder = None
         self.last_map = None
@@ -47,12 +55,16 @@ class PipelineGUI:
         self._delayed_pathfinder_id = None
         self._icons = {}
         self._blink_state = False
+        self._scanner_running = False
+        self._demo_params_copy = []
 
         self._build_ui()
+        self._initiate_keyboard_listener()
         self._load_initial_background()
         self._blink_loop()
         if Settings.auto_import_score and ScoreTable.check_file_exists():
             self.import_score_table()
+        self._check_update()
 
     # ======================================================================
     # UI Construction
@@ -82,7 +94,6 @@ class PipelineGUI:
         panel.pack_propagate(False)
 
         self._build_log_display(panel)
-        self._build_folder_section(panel)
         self._build_button_rows(panel)
         self._build_score_table(panel)
 
@@ -111,16 +122,12 @@ class PipelineGUI:
         self.log_display.bind("<Enter>", lambda _: self.log_display.bind_all("<MouseWheel>", wheel))
         self.log_display.bind("<Leave>", lambda _: self.log_display.unbind_all("<MouseWheel>"))
 
-    def _build_folder_section(self, parent):
-        self.folder_label = tb.Label(parent, text="Folder: None", anchor="w")
-        self.folder_label.pack(pady=5)
-
     def _build_button_rows(self, parent):
         row1 = tb.Frame(parent)
         row1.pack(pady=5, fill="x")
 
         # keep reference so it can blink and annoy user if calibration is wrong
-        self.recalibrate_button = tb.Button(row1, text="Recalibrate", width=19, command=self.start_calibrator,
+        self.recalibrate_button = tb.Button(row1, text="Calibrator", width=19, command=self.start_calibrator,
                                             padding=4)
         self.recalibrate_button.pack(side="left", padx=3)
         (tb.Button(row1, text="Automatic Scanner", width=19, command=self.start_automatic_pipeline, padding=4)
@@ -131,8 +138,8 @@ class PipelineGUI:
         row2 = tb.Frame(parent)
         row2.pack(pady=5, fill="x")
 
-        (tb.Button(row2, text="Choose Folder", width=19, command=self.choose_folder, padding=4)
-         .pack(side="left", padx=3))
+        self.folder_button = tb.Button(row2, text="Choose Folder", width=19, command=self.choose_folder, padding=4)
+        self.folder_button.pack(side="left", padx=3)
         (tb.Button(row2, text="Halfauto Scanner", width=19, command=self.start_halfauto_pipeline, padding=4)
          .pack(side="left", padx=3))
 
@@ -141,7 +148,7 @@ class PipelineGUI:
 
         row3 = tb.Frame(parent)
         row3.pack(pady=5, fill="x")
-        (tb.Button(row3, text="Clear Folder", width=19, command=self.clear_folder, padding=4)
+        (tb.Button(row3, text="Settings", width=19, command=lambda: SettingsPanel(self.root), padding=4)
          .pack(side="left", padx=3))
         (tb.Button(row3, text="Offline Scanner", width=19, command=self.start_offline_pipeline, padding=4)
          .pack(side="left", padx=3))
@@ -153,6 +160,7 @@ class PipelineGUI:
         tb.Label(panel, text="Score Table", anchor="w").pack()
 
         self.score_vars = {}
+        self.score_labels = {}
         columns_frame = tb.Frame(panel)
         columns_frame.pack(fill="x")
 
@@ -197,6 +205,7 @@ class PipelineGUI:
         value_label.pack(side="top", anchor="n", padx=1)
         var = tb.IntVar(value=value)
         self.score_vars[key] = var
+        self.score_labels[key] = value_label
         bigger_scale = key == "EVTU"  # dimensional tunnel gets more points
         tk.Scale(
             row,
@@ -231,7 +240,35 @@ class PipelineGUI:
     def _append_log_line(self, line):
         try:
             self.log_display.configure(state="normal")
+            start_index = self.log_display.index("end-1c")
             self.log_display.insert("end", line + "\n")
+            end_index = self.log_display.index("end-1c")
+
+            urls = re.findall(r'https?://\S+', line)
+            style = tb.Style()
+            link_color = style.colors.info
+            for url in urls:
+                url_start = self.log_display.search(url, start_index, stopindex=end_index)
+                if url_start:
+                    url_end = f"{url_start}+{len(url)}c"
+                    self.log_display.tag_add(url, url_start, url_end)
+                    self.log_display.tag_config(
+                        url,
+                        foreground=link_color,
+                        underline=True
+                    )
+                    self.log_display.tag_bind(
+                        url,
+                        "<Button-1>",
+                        lambda e, link=url: webbrowser.open(link)
+                    )
+                    self.log_display.tag_bind(
+                        url, "<Enter>", lambda e: self.log_display.config(cursor="hand2")
+                    )
+                    self.log_display.tag_bind(
+                        url, "<Leave>", lambda e: self.log_display.config(cursor="")
+                    )
+
             self.log_display.configure(state="disabled")
             self.log_display.see("end")
         except tk.TclError:
@@ -288,19 +325,24 @@ class PipelineGUI:
     # Folder Management
     # ======================================================================
     def choose_folder(self):
-        path = filedialog.askdirectory(initialdir=get_path())
-        if path:
-            self.selected_folder = path
-            self.folder_label.config(text=f"Folder: {path}")
-
-    def clear_folder(self):
-        self.selected_folder = None
-        self.folder_label.config(text="Folder: None")
+        if self.selected_folder is None:
+            path = filedialog.askdirectory(initialdir=get_path())
+            if path:
+                self.selected_folder = path
+                self.folder_button.configure(text="Clear Folder")
+                self.log(f"Selected Folder: {self.selected_folder}")
+        else:
+            self.selected_folder = None
+            self.folder_button.configure(text="Choose Folder")
+            self.log(f"Cleared folder selection")
 
     # ======================================================================
     # Pipeline Actions
     # ======================================================================
-    def start_automatic_pipeline(self):
+    def start_automatic_pipeline(self, from_key=False):
+        if self._scanner_running:
+            self.log("Tried to run more than one scanner at once, ignoring request")
+            return
         if self.selected_folder:
             if os.listdir(self.selected_folder):
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
@@ -309,10 +351,12 @@ class PipelineGUI:
         if not check_calibration_done(self.log):
             return
 
-        if not self.ask_continue_dialog("auto"):
-            self.log("Scanning task cancelled.")
-            return
+        if not from_key:
+            if not self.ask_continue_dialog("auto"):
+                self.log("Scanning task cancelled")
+                return
 
+        self._scanner_running = True
         threading.Thread(target=self._run_auto_pipeline, daemon=True).start()
 
     def _run_auto_pipeline(self):
@@ -328,8 +372,13 @@ class PipelineGUI:
             self.display_image(img)
         except Exception as e:
             self.log(f"Pipeline error: {e}")
+        finally:
+            self._scanner_running = False
 
-    def start_halfauto_pipeline(self):
+    def start_halfauto_pipeline(self, from_key=False):
+        if self._scanner_running:
+            self.log("Tried to run more than one scanner at once, ignoring request")
+            return
         if self.selected_folder:
             if os.listdir(self.selected_folder):
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
@@ -338,10 +387,12 @@ class PipelineGUI:
         if not check_calibration_done(self.log):
             return
 
-        if not self.ask_continue_dialog("halfauto"):
-            self.log("Scanning task cancelled.")
-            return
+        if not from_key:
+            if not self.ask_continue_dialog("halfauto"):
+                self.log("Scanning task cancelled")
+                return
 
+        self._scanner_running = True
         threading.Thread(target=self._run_halfauto_pipeline, daemon=True).start()
 
     def _run_halfauto_pipeline(self):
@@ -357,15 +408,30 @@ class PipelineGUI:
             self.display_image(img)
         except Exception as e:
             self.log(f"Pipeline error: {e}")
+        finally:
+            self._scanner_running = False
 
     def start_offline_pipeline(self):
+        if self._scanner_running:
+            self.log("Tried to run more than one scanner at once, ignoring request")
+            return
         if not self.selected_folder:
-            self.log("Select folder with screenshots first.")
-            return
+            if Settings.testmode:
+                self.log("No folder selected, TESTMODE; setting to Last_scan_result")
+                self.selected_folder = get_path("Last_scan_result")
+            else:
+                self.log("Select folder with screenshots first")
+                return
 
-        if not check_calibration_done(self.log):
-            return
+        demo_override = True if "Example_scan_result" in str(self.selected_folder) else False
+        if demo_override:
+            self._prepare_demo()
+            self.log("Preparing demo parameters")
+        else:
+            if not check_calibration_done(self.log):
+                return
 
+        self._scanner_running = True
         threading.Thread(target=self._run_offline_pipeline, daemon=True).start()
 
     def _run_offline_pipeline(self):
@@ -380,10 +446,30 @@ class PipelineGUI:
             self.display_image(img)
         except Exception as e:
             self.log(f"Pipeline error: {e}")
+        finally:
+            self._scanner_running = False
+            if len(self._demo_params_copy) > 0:
+                self._restore_after_demo()
+
+    def _prepare_demo(self):
+        self._demo_params_copy.clear()
+        self._demo_params_copy.append(Settings.screenshot_scale)
+        self._demo_params_copy.append(Settings.template_scale)
+        self._demo_params_copy.append(Settings.threshold)
+        Settings.screenshot_scale = 1.0
+        Settings.template_scale = 1.0
+        Settings.threshold = 0.97
+
+    def _restore_after_demo(self):
+        if len(self._demo_params_copy) != 3:
+            raise IOError("Restore impossible, unknown program state")
+        Settings.threshold = self._demo_params_copy.pop()
+        Settings.template_scale = self._demo_params_copy.pop()
+        Settings.screenshot_scale = self._demo_params_copy.pop()
 
     def rerun_pathfinder(self):
         if not self.last_map:
-            self.log("No map loaded.")
+            self.log("No map loaded")
             return
 
         self.log("Re-running pathfinder")
@@ -404,7 +490,7 @@ class PipelineGUI:
 
     def start_calibrator(self):
         if not self.ask_continue_dialog("calibrator"):
-            self.log("Calibrator task cancelled.")
+            self.log("Calibrator task cancelled")
             return
         scr = get_game_screenshot(self.log)
         CalibrationPanel(
@@ -433,8 +519,9 @@ class PipelineGUI:
             for key, val in st.table.items():
                 if key in self.score_vars:
                     self.score_vars[key].set(val)
+                    self.score_labels[key].config(text=str(int(float(val))))
 
-            self.log("ScoreTable imported.")
+            self.log("ScoreTable imported")
 
             if self.last_map is not None:
                 if self._delayed_pathfinder_id is not None:
@@ -447,7 +534,7 @@ class PipelineGUI:
     def export_score_table(self):
         try:
             ScoreTable.export(self.score_table)
-            self.log("ScoreTable exported.")
+            self.log("ScoreTable exported")
         except Exception as e:
             self.log(f"Export error: {e}")
 
@@ -524,6 +611,7 @@ class PipelineGUI:
     # ======================================================================
     def _blink_loop(self):
         if Settings.calibrated():
+            self.recalibrate_button.config(bootstyle="primary")
             return
         interval = 700
         if self._blink_state:
@@ -535,6 +623,47 @@ class PipelineGUI:
 
         self.root.after(interval, self._blink_loop)
 
+    def _check_update(self):
+        def task():
+            try:
+                time.sleep(1)
+                check_for_update(self.log)
+            except Exception as e:
+                self.log(f"Update check error: {e}")
+
+        threading.Thread(target=task, daemon=True).start()
+
+    def _initiate_keyboard_listener(self):
+        hotkeys = [
+            ("auto", Settings.keyboard_input_autoscanner),
+            ("halfauto", Settings.keyboard_input_halfautoscanner),
+        ]
+        if Settings.keyboard_input:
+            try:
+                self._kb_listener = KeyboardListener(
+                    hotkeys=hotkeys,
+                    on_trigger=self._on_keyboard_action
+                )
+                self._kb_listener.start()
+            except ValueError as e:
+                self._kb_listener = None
+                self.log(f"Keyboard detection inactive due to the error: {e}")
+        else:
+            self._kb_listener = None
+
+    def _on_keyboard_action(self, action):
+        self.root.after(0, lambda: self._handle_keyboard_action(action))
+
+    def _handle_keyboard_action(self, action):
+        if action == "auto":
+            self.start_automatic_pipeline(from_key=True)
+        elif action == "halfauto":
+            self.start_halfauto_pipeline(from_key=True)
+
+    def shutdown(self):
+        if self._kb_listener:
+            self._kb_listener.stop()
+
 
 # ======================================================================
 # Main
@@ -544,5 +673,13 @@ if __name__ == "__main__":
     theme = "darkly" if Settings.darkmode else "flatly"
     root = tb.Window(themename=theme)
     low_res = get_screen_res()[0] < 1600
-    PipelineGUI(root, low_res=low_res)
+    gui = PipelineGUI(root, low_res=low_res)
+
+
+    def on_close():
+        gui.shutdown()
+        root.destroy()
+
+
+    root.protocol("WM_DELETE_WINDOW", on_close)
     root.mainloop()

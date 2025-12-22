@@ -10,6 +10,8 @@ from path_converter import get_path
 GRID = 70
 ICON_SCALE = 0.35
 MODIFIER_Y_OFFSET = -4
+MIN_COLS = 17
+MIN_ROWS = 8  # 5 from game map + 2 for counters + 1 for top / bottom padding
 
 
 def load_map(path: str):
@@ -131,8 +133,10 @@ def draw_map(
     col_shift = -min_col + 1
     row_shift = -min_row + 1
 
-    width = (max_col - min_col + 2) * GRID
-    height = (max_row - min_row + 3) * GRID
+    col_span = max(max_col - min_col + 2, MIN_COLS)
+    row_span = max(max_row - min_row + 2, MIN_ROWS)
+    width = col_span * GRID
+    height = row_span * GRID
     canvas = np.zeros((height, width, 4), dtype=np.uint8)
 
     node_info = {}
@@ -193,6 +197,9 @@ def draw_map(
     if encounter_counts:
         row_extra = (max_row - min_row + 2)
         y_grid = row_extra * GRID
+        font = cv2.FONT_HERSHEY_PLAIN
+        scale = 1.5
+        thick = 2
 
         items = list(encounter_counts.items())
         col_positions = [i * 2 + 1 for i in range(len(items))]
@@ -231,9 +238,6 @@ def draw_map(
             # write text
             tx = x_grid + ew // 2 + 4
             ty = y_grid + eh // 4 + 2
-            font = cv2.FONT_HERSHEY_PLAIN
-            scale = 1.5
-            thick = 2
             count_str = str(count)
             min_v, max_v = encounter_ranges[key]
             range_str = f"[{min_v},{max_v}]"
@@ -245,6 +249,14 @@ def draw_map(
             cv2.putText(canvas, range_str, (x2, ty),
                         font, scale, (0, 0, 0, 255), thick, cv2.LINE_AA)
 
+        # filler text
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        scale = 0.7
+        filler_text = "[Extra space for new nodes / modifiers]"
+        w_count = cv2.getTextSize(filler_text, font, scale, thick)[0][0]
+        cv2.putText(canvas, filler_text, (width - w_count - 30, (row_extra + 1) * GRID),
+                    font, scale, (0, 0, 0, 255), 1, cv2.LINE_AA)
+
     # compose with background
     pad = GRID // 2
     fg = canvas[pad:-pad]
@@ -252,7 +264,7 @@ def draw_map(
     bg_path = get_path(["Images", "background_img.png"])
     bg = make_tiled_background(bg_path, height - GRID, width)
 
-    bar_h = GRID  # grey bar on bottom
+    bar_h = GRID * 2  # grey bar on bottom
     bar_y0 = bg.shape[0] - bar_h
     gray = np.array([64, 64, 64], dtype=np.float32)
     alpha_bar = 0.67
