@@ -1,3 +1,5 @@
+**Does not work with Sereniel update yet, I'm working on it**
+<br>
 # CZN Pathfinder - find the best way to navigate chaos maps
 
 ![gui](Images/gui_image.png)
