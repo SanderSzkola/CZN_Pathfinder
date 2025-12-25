@@ -179,7 +179,8 @@ def _preview(map_img, nodes, map_fragment, save_file):
         cv2.line(overlay, (x, 0), (x + h, h), color, 9, cv2.LINE_AA)
 
     # mask out only the trimmed area
-    scale = Settings.template_scale / Settings.screenshot_scale
+    div = Settings.screenshot_scale if Settings.screenshot_scale != 0 else 1
+    scale = Settings.template_scale / div
     mask = np.zeros((h, w), dtype=np.uint8)
     mask[0:int(TRIM_TOP_PX * scale), :] = 255
     mask[int(TRIM_TOP_PX * scale):h, 0:int(TRIM_LEFT_PX * scale)] = 255
