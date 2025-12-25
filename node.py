@@ -7,7 +7,7 @@ class Node:
     - row, col : logical placement (assigned later)
     """
 
-    __slots__ = ("id", "x", "y", "type", "modifier", "row", "col")
+    __slots__ = ("id", "x", "y", "type", "modifier", "row", "col", "is_fringe")
 
     def __init__(self, x, y, node_type, modifier=None, node_id=None):
         if node_id is None:
@@ -19,6 +19,7 @@ class Node:
         self.modifier = modifier
         self.row = None
         self.col = None
+        self.is_fringe = False # only for detect_nodes
 
     def label(self):
         if self.modifier:

@@ -6,7 +6,7 @@ from detect_connections import detect_connections
 from path_converter import get_path
 
 MAX_VERTICAL_ROWS = 5
-HORIZONTAL_OFFSETS = [0, -1, -2, -3]
+HORIZONTAL_OFFSETS = [0, -1, -2, -3, -4, -5, -6]
 ROW_Y_TOLERANCE = 16
 
 """

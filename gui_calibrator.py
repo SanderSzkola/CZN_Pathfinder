@@ -2,9 +2,14 @@ import tkinter as tk
 import ttkbootstrap as tb
 from PIL import Image, ImageTk
 import numpy as np
+from pathlib import Path
 import cv2
+import re
 
 from calibrator import perform_calibration_exact, get_initial_params
+from settings import Settings
+from path_converter import get_path
+from grabber import mock_screenshot
 
 
 class CalibrationPanel(tb.Toplevel):
@@ -26,9 +31,9 @@ class CalibrationPanel(tb.Toplevel):
 
         if low_res:
             self.window_w = 1280
-            self.window_h = 550
+            self.window_h = 600
             self.map_w = 980
-            self.map_h = 550
+            self.map_h = 600
         else:
             self.window_w = 1600
             self.window_h = 500
@@ -49,9 +54,14 @@ class CalibrationPanel(tb.Toplevel):
         self.res_h = tk.IntVar(value=h)
         self.scale = tk.DoubleVar(value=initial_scale)
         self.threshold = tk.DoubleVar(value=initial_threshold)
+        self.auto_recalibrate = tk.BooleanVar(value=True)
+        self._suspend_autocal = False
+        self._current_screenshot_num = None
 
         self._img_tk = None
         self._build_ui()
+        self.scale.trace_add("write", self._on_param_change)
+        self.threshold.trace_add("write", self._on_param_change)
         self._reload_preview()
 
     # ==================================================================
@@ -90,6 +100,24 @@ class CalibrationPanel(tb.Toplevel):
         grid.columnconfigure(1, weight=0)  # fields
 
         row = 0
+
+        # ----------------------------
+        # Auto recalibrate
+        # ----------------------------
+        tb.Checkbutton(
+            grid,
+            text="Auto recalibrate on value change",
+            variable=self.auto_recalibrate,
+        ).grid(
+            row=row,
+            column=0,
+            columnspan=2,
+            padx=10,
+            pady=(0, 10),
+            sticky="w"
+        )
+
+        row += 1
 
         # ----------------------------
         # Resolution
@@ -176,7 +204,7 @@ class CalibrationPanel(tb.Toplevel):
 
         tb.Label(
             grid,
-            text="Tweak scale and threshold until every node and modifier is correctly labeled.\nInitial values are likely close to ideal ones.",
+            text="Tweak TEMPLATE SCALE and THRESHOLD until every node and modifier is correctly labeled.\nInitial values are likely close to ideal ones.",
             wraplength=260,
             justify="left",
             bootstyle="info"
@@ -195,14 +223,33 @@ class CalibrationPanel(tb.Toplevel):
         btns = tb.Frame(parent)
         btns.pack(pady=5)
 
+        recal_row = tb.Frame(btns)
+        recal_row.pack(pady=4)
+
+        if Settings.testmode:
+            tb.Button(
+                recal_row,
+                text="<",
+                width=3,
+                command=self._prev_image
+            ).pack(side="left", padx=4)
+
         tb.Button(
-            btns,
+            recal_row,
             text="Recalibrate",
             width=18,
             bootstyle="warning",
             command=self._apply,
             padding=4
-        ).pack(pady=4)
+        ).pack(side="left")
+
+        if Settings.testmode:
+            tb.Button(
+                recal_row,
+                text=">",
+                width=3,
+                command=self._next_image
+            ).pack(side="left", padx=4)
 
         tb.Button(
             btns,
@@ -224,10 +271,22 @@ class CalibrationPanel(tb.Toplevel):
         col = tb.Frame(parent)
         col.pack(side="left", padx=2)
 
-        tb.Button(col, text="▲", width=2, padding=1,
-                  command=lambda: var.set(round(var.get() + step, 5))).pack()
-        tb.Button(col, text="▼", width=2, padding=1,
-                  command=lambda: var.set(round(var.get() - step, 5))).pack()
+        def inc():
+            self._suspend_autocal = True
+            var.set(round(var.get() + step, 5))
+            self._suspend_autocal = False
+            if self.auto_recalibrate.get():
+                self._apply()
+
+        def dec():
+            self._suspend_autocal = True
+            var.set(round(var.get() - step, 5))
+            self._suspend_autocal = False
+            if self.auto_recalibrate.get():
+                self._apply()
+
+        tb.Button(col, text="▲", width=2, padding=1, command=inc).pack()
+        tb.Button(col, text="▼", width=2, padding=1, command=dec).pack()
 
     # ==================================================================
     # Preview image
@@ -267,6 +326,56 @@ class CalibrationPanel(tb.Toplevel):
 
         raise TypeError(f"Unsupported image type: {type(img)}")
 
+    def _load_test_screenshot(self, direction=0):
+        """
+        direction:
+            0  -> initial load
+           -1  -> previous
+            1  -> next
+        """
+        base_dir = Path(get_path(["Last_scan_result"]))
+        if not base_dir.exists():
+            return None
+
+        pattern = re.compile(r"map_frag_(\d+)\.png$")
+
+        files = []
+        for p in base_dir.iterdir():
+            if not p.is_file():
+                continue
+            m = pattern.match(p.name)
+            if m:
+                files.append((int(m.group(1)), p))
+
+        if not files:
+            if self.log:
+                self.log("No valid test images found")
+            return None
+
+        files.sort(key=lambda x: x[0])
+        indices = [i for i, _ in files]
+
+        # Initial load
+        if self._current_screenshot_num is None:
+            self._current_screenshot_num = indices[0]
+            path = files[0][1]
+            return mock_screenshot(str(path))
+
+        if self._current_screenshot_num not in indices:
+            self._current_screenshot_num = indices[0]
+            path = files[0][1]
+            return mock_screenshot(str(path))
+
+        cur_idx = indices.index(self._current_screenshot_num)
+        new_idx = cur_idx + direction
+
+        if new_idx < 0 or new_idx >= len(files):
+            return None  # no wrap, silent ignore
+
+        self._current_screenshot_num = indices[new_idx]
+        path = files[new_idx][1]
+        return mock_screenshot(str(path))
+
     # ==================================================================
     # Actions
     # ==================================================================
@@ -283,3 +392,23 @@ class CalibrationPanel(tb.Toplevel):
     def _show_original(self):
         self.scr = self.scr_original
         self._reload_preview()
+
+    def _on_param_change(self, *_):
+        if self._suspend_autocal:
+            return
+        if self.auto_recalibrate.get():
+            self._apply()
+
+    def _prev_image(self):
+        scr = self._load_test_screenshot(direction=-1)
+        if scr is not None:
+            self.scr_original = scr
+            self.scr = scr
+            self._reload_preview()
+
+    def _next_image(self):
+        scr = self._load_test_screenshot(direction=1)
+        if scr is not None:
+            self.scr_original = scr
+            self.scr = scr
+            self._reload_preview()

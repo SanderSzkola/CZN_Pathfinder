@@ -14,6 +14,9 @@ Detects nodes on provided screenshot based on templates from TemplateLibrary
 """
 TRIM_TOP_PX = 120
 TRIM_RIGHT_PX = 120
+TRIM_LEFT_PX = 120
+COLOR_MAX_DIFF = 50
+FRINGE_SAFETY_MARGIN = 60 + TRIM_RIGHT_PX  # this close to map edge means it still should be marked, but discarded after preview
 
 
 def color_verify(map_img, tmpl_rgb, mask_idx, x, y):
@@ -24,7 +27,7 @@ def color_verify(map_img, tmpl_rgb, mask_idx, x, y):
 
     diff = cv2.absdiff(patch, tmpl_rgb)
     diff = diff[mask_idx]
-    return float(np.mean(diff)) < 45
+    return float(np.mean(diff)) < COLOR_MAX_DIFF
 
 
 def _load_map_image(map_fragment):
@@ -47,9 +50,11 @@ def _load_map_image(map_fragment):
 def _trim_map(map_img, scale):
     top = int(TRIM_TOP_PX * scale)
     right = int(TRIM_RIGHT_PX * scale)
+    left = int(TRIM_LEFT_PX * scale)
+
     gray = cv2.cvtColor(map_img, cv2.COLOR_BGR2GRAY)
-    gray_trim = gray[top:, :-right]
-    rgb_trim = map_img[top:, :-right]
+    gray_trim = gray[top:, left:-right]
+    rgb_trim = map_img[top:, left:-right]
     return gray_trim, rgb_trim
 
 
@@ -97,7 +102,6 @@ def _detect_templates(map_gray, map_rgb, templates, threshold):
         ys = ys[order]
 
         pts = list(zip(xs, ys))
-
         taken = _non_max_suppression(pts, res.shape, w, h)
         abbrev = label[:2].upper()
 
@@ -136,10 +140,12 @@ def _preview(map_img, nodes, map_fragment, save_file):
     for node in nodes:
         x_offset = 40
         y_offset = 15
+        text_x = node.x - x_offset
+        text_y = node.y + y_offset
         cv2.putText(
             preview,
             node.label(),
-            (node.x - x_offset, node.y + y_offset),
+            (text_x, text_y),
             cv2.FONT_HERSHEY_SIMPLEX,
             1.5,
             (0, 0, 0),
@@ -149,13 +155,19 @@ def _preview(map_img, nodes, map_fragment, save_file):
         cv2.putText(
             preview,
             node.label(),
-            (node.x - x_offset, node.y + y_offset),
+            (text_x, text_y),
             cv2.FONT_HERSHEY_SIMPLEX,
             1.5,
             (80, 240, 0),
             4,
             cv2.LINE_AA,
         )
+        # nodes too close to fringe, not in excluded margin but to be discarded anyway
+        if node.is_fringe:
+            cv2.line(preview, (text_x, text_y - 40), (text_x + 90, text_y), (0, 0, 0), 8)
+            cv2.line(preview, (text_x, text_y), (text_x + 90, text_y - 40), (0, 0, 0), 8)
+            cv2.line(preview, (text_x, text_y - 40), (text_x + 90, text_y), (0, 90, 190), 6)
+            cv2.line(preview, (text_x, text_y), (text_x + 90, text_y - 40), (0, 90, 190), 6)
 
     # crossed non-scan area
     h, w = preview.shape[:2]
@@ -164,14 +176,14 @@ def _preview(map_img, nodes, map_fragment, save_file):
     color = (0, 192, 256, 80)
 
     for x in range(-h, w + h, step):
-        pt1 = (x, 0)
-        pt2 = (x + h, h)
-        cv2.line(overlay, pt1, pt2, color, 9, cv2.LINE_AA)
+        cv2.line(overlay, (x, 0), (x + h, h), color, 9, cv2.LINE_AA)
 
-    # mask out only the trimmed top and right area
+    # mask out only the trimmed area
+    scale = Settings.template_scale / Settings.screenshot_scale
     mask = np.zeros((h, w), dtype=np.uint8)
-    mask[0:TRIM_TOP_PX, :] = 255
-    mask[TRIM_TOP_PX:h, w - TRIM_RIGHT_PX:w] = 255
+    mask[0:int(TRIM_TOP_PX * scale), :] = 255
+    mask[int(TRIM_TOP_PX * scale):h, 0:int(TRIM_LEFT_PX * scale)] = 255
+    mask[int(TRIM_TOP_PX * scale):h, w - int(TRIM_RIGHT_PX * scale):w] = 255
 
     overlay[:, :, 3] = overlay[:, :, 3] * (mask // 255)
     bg = cv2.cvtColor(preview, cv2.COLOR_BGR2BGRA)
@@ -203,8 +215,8 @@ def _detect_nodes(screenshot_str_or_img,
             f"[Testmode] "
             f"Detect nodes step {screenshot_index}; screenshot_scale = {screenshot_scale}, thresh = {threshold}, "
             f"templates_scale = {templates.last_scale}")
+    h, w = screenshot.shape[:2]
     if screenshot_scale != 1.0:
-        h, w = screenshot.shape[:2]
         scaled_screenshot = cv2.resize(
             screenshot,
             (int(w * screenshot_scale), int(h * screenshot_scale)),
@@ -240,22 +252,18 @@ def _detect_nodes(screenshot_str_or_img,
     modifier_hits = _detect_templates(map_gray_trimmed, map_rgb_trimmed, templates.modifier_templates_scaled, threshold)
     _assign_modifiers(nodes, modifier_hits, screenshot_scale)
 
-    # restore original screen coordinates
-    # needed for top and left trim, bottom and right have no influence
     top_offset = int(TRIM_TOP_PX)
+    left_offset = int(TRIM_LEFT_PX)
     for node in nodes:
-        node.x = int(node.x / screenshot_scale)
-        node.y = int(node.y / screenshot_scale)
-        node.y += top_offset
-
-    if create_preview:
-        preview = _preview(screenshot, nodes, screenshot_str_or_img, save)
-    else:
-        preview = None
+        node.x = int(node.x / screenshot_scale) + left_offset
+        node.y = int(node.y / screenshot_scale) + top_offset
+        if node.x <= FRINGE_SAFETY_MARGIN or node.x >= w - FRINGE_SAFETY_MARGIN:
+            node.is_fringe = True
 
     nodes.sort(key=lambda n: n.x)
-
-    return nodes, preview
+    preview = _preview(screenshot, nodes, screenshot_str_or_img, save) if create_preview else None
+    nodes_filtered = [n for n in nodes if not n.is_fringe]
+    return nodes_filtered, preview
 
 
 def detect_nodes(screenshot_str_or_img,
@@ -281,18 +289,14 @@ def detect_nodes_with_preview(screenshot_str_or_img,
 
 
 if __name__ == "__main__":
-    from calibrator import validate_calibration, \
-        perform_calibration_exact  # here bc ide yells about circular dependency
-
     templates = TemplateLibrary()
     folder = get_path("Last_scan_result")
     # folder = get_path(["Test_scans", "Map_small_res_1"])
 
     # SINGLE
     path = os.path.join(folder, "map_frag_03.png")
-    # perform_calibration_exact(templates, path)
-    screenshot_scale, threshold, calibration_status = validate_calibration(templates, path, log=lambda msg: print(msg))
-    nodes = detect_nodes(path, templates, create_preview=True, screenshot_scale=screenshot_scale, threshold=threshold)
+    nodes = detect_nodes(path, templates, create_preview=True, screenshot_scale=Settings.screenshot_scale,
+                         threshold=Settings.threshold)
     for n in nodes:
         print(n)
     print(f"Total nodes: {len(nodes)}")

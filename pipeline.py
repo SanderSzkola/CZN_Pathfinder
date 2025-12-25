@@ -49,9 +49,9 @@ def check_end(nodes, last_nodes):
     if (last_nodes is None or len(last_nodes) <= 2
             or nodes is None or len(nodes) <= 2):
         return False
-    # strong check, <4 columns, single screenshot is enough
+    # strong check, <6 columns, single screenshot is enough
     non_empty_columns, _ = check_node_output_quality(nodes)
-    if non_empty_columns < 4 and nodes[-1].type == "RE" and (
+    if non_empty_columns < 6 and nodes[-1].type == "RE" and (
             nodes[-2].type == "RE" or  # same column must be rest
             abs(nodes[-2].x - nodes[-1].x) > 10):  # other column
         if Settings.testmode:
@@ -102,8 +102,8 @@ def check_duplicates(nodes, last_nodes):
 
 
 def check_node_output_quality(nodes):
-    c1, c2, c3, c4, c5 = [], [], [], [], []  # how does ultra-wide screen works? one extra, should I add more?
-    columns = [c1, c2, c3, c4, c5]
+    c1, c2, c3, c4, c5, c6, c7, c8, c9 = [], [], [], [], [], [], [], [], []
+    columns = [c1, c2, c3, c4, c5, c6, c7, c8, c9]
     non_normals = 0
     for node in nodes:
         placed = False
@@ -261,7 +261,8 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
         if check_duplicates(nodes, last_nodes):
             is_duplicate = True
             if not should_end:
-                log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
+                log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? "
+                    f"Is game opened in windowed state, not fullscreen? Is script run as admin?")
                 if duplicates >= 3:
                     raise IOError(f"3rd duplicate, something is very broken, stopping...")
                 duplicates += 1
@@ -452,7 +453,8 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
 
         if non_normals <= 2 and len(nodes) <= 4:
             listener.stop()
-            raise IOError(f"Step {step}: {len(nodes)}n/{non_normals}o nodes detected, too low. Is map fully visible? Have you performed calibration?")
+            raise IOError(f"Step {step}: {len(nodes)}n/{non_normals}o nodes detected, too low. Is map fully visible? "
+                          f"Have you performed calibration?")
 
         log(f"Step {step}, expected 5~10; {len(nodes)}n/{non_normals}o nodes detected")
 
