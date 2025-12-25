@@ -18,13 +18,14 @@ def initialize_global_nodes():
     return {}
 
 
-def print_map_grid(map_data, label):
-    print(f"\n--- {label} ---")
+def map_grid_to_string(map_data, label):
+    msg = ""
+    msg += f"\n--- {label} ---\n"
 
     nodes = list(map_data.values()) if type(map_data) is dict else map_data
     if not nodes:
-        print("[empty]")
-        return
+        msg += "[empty]\n"
+        return msg
 
     rows = sorted({n.row for n in nodes})
     cols = sorted({n.col for n in nodes})
@@ -40,7 +41,8 @@ def print_map_grid(map_data, label):
                     row_cells.append(f"{node.type}+{node.modifier}")
                 else:
                     row_cells.append(f"{node.type}")
-        print(" ".join(f"{cell:8}" for cell in row_cells))
+        msg += " ".join(f"{cell:8}" for cell in row_cells) + "\n"
+    return msg
 
 
 def normalize_fragment_rows(global_nodes, frag_nodes):
@@ -179,10 +181,10 @@ class Finalizer:
 
         result, corrected_edges = try_merge(self.global_nodes, frag_nodes, edges)
         if not result:
-            print("Merge failed, grid state:")
-            print_map_grid(self.global_nodes, f"GLOBAL step {self.step}")
-            print_map_grid(nodes, f"FRAGMENT step {self.step}")
-            raise IOError(f"Finalizer.add_fragment failed at step {self.step}")
+            msg = "Merge failed, grid state:\n"
+            msg+=map_grid_to_string(self.global_nodes, f"GLOBAL step {self.step}")
+            msg+=map_grid_to_string(nodes, f"FRAGMENT step {self.step}")
+            raise IOError(f"{msg}\nFinalizer.add_fragment failed at step {self.step}")
 
         for edge in corrected_edges:
             self.edges.add(edge)
@@ -191,8 +193,8 @@ class Finalizer:
         self.validate_edges()
 
         if print_grid:
-            print_map_grid(nodes, f"FRAGMENT step {self.step}")
-            print_map_grid(self.global_nodes, f"GLOBAL step {self.step}")
+            print(map_grid_to_string(nodes, f"FRAGMENT step {self.step}"))
+            print(map_grid_to_string(self.global_nodes, f"GLOBAL step {self.step}"))
 
         self.step += 1
 

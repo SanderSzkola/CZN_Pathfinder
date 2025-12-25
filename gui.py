@@ -372,6 +372,8 @@ class PipelineGUI:
             self.display_image(img)
         except Exception as e:
             self.log(f"Pipeline error: {e}")
+            if Settings.testmode:
+                raise
         finally:
             self._scanner_running = False
 
@@ -408,6 +410,8 @@ class PipelineGUI:
             self.display_image(img)
         except Exception as e:
             self.log(f"Pipeline error: {e}")
+            if Settings.testmode:
+                raise
         finally:
             self._scanner_running = False
 
@@ -446,6 +450,8 @@ class PipelineGUI:
             self.display_image(img)
         except Exception as e:
             self.log(f"Pipeline error: {e}")
+            if Settings.testmode:
+                raise
         finally:
             self._scanner_running = False
             if len(self._demo_params_copy) > 0:

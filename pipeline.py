@@ -3,6 +3,7 @@ import os
 import threading
 import time
 from queue import Queue
+import sys
 
 from node import Node
 from detect_connections import detect_connections
@@ -123,16 +124,33 @@ def check_node_output_quality(nodes):
     return non_empty_columns, non_normals
 
 
-def worker_connections(queue: Queue, finalizer: Finalizer, templates, print_grid: bool = False):
+def worker_connections(
+    queue: Queue,
+    finalizer: Finalizer,
+    templates,
+    print_grid: bool = False,
+    log=lambda msg: None):
+
     while True:
         item = queue.get()
         if item is None:
+            queue.task_done()
             break
 
         img, nodes = item
-        nodes_conn, edges_conn, _ = detect_connections(img, templates, nodes)
-        finalizer.add_fragment(nodes_conn, edges_conn, print_grid)
-        queue.task_done()
+        try:
+            nodes_conn, edges_conn, meta = detect_connections(img, templates, nodes)
+            log(f"[conn-worker] detect_connections ok: "  #  TODO: clean this after template / Sereniel is resolved
+                f"{len(nodes_conn)} nodes, {len(edges_conn)} edges")
+            finalizer.add_fragment(nodes_conn, edges_conn, print_grid)
+            log(f"[conn-worker] Fragment merged successfully (global step={finalizer.step - 1})")
+
+        except Exception as e:
+            log("[conn-worker] FATAL error while processing fragment")
+            raise
+
+        finally:
+            queue.task_done()
 
 
 class DetectResult:
@@ -144,11 +162,11 @@ class DetectResult:
 
 class ExceptionThread(threading.Thread):
     def run(self):
-        self.exception = None
+        self.exc_info = None
         try:
             super().run()
-        except Exception as e:
-            self.exception = e
+        except Exception:
+            self.exc_info = sys.exc_info()
 
 
 def worker_nodes(detect_q: Queue, result: DetectResult, templates, screenshot_scale, threshold):
@@ -205,7 +223,7 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
     work_q = Queue()
     conn_worker = ExceptionThread(
         target=worker_connections,
-        args=(work_q, finalizer, templates, print_grid),
+        args=(work_q, finalizer, templates, print_grid, log),
         daemon=True
     )
     conn_worker.start()
@@ -283,13 +301,15 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
     work_q.join()
     work_q.put(None)
     conn_worker.join(timeout=1.0)
-    if conn_worker.exception:
-        raise conn_worker.exception
+    if conn_worker.exc_info:
+        exc_type, exc_value, exc_tb = conn_worker.exc_info
+        raise exc_value.with_traceback(exc_tb)
 
     detect_q.put(None)
     node_worker.join(timeout=1.0)
-    if node_worker.exception:
-        raise node_worker.exception
+    if node_worker.exc_info:
+        exc_type, exc_value, exc_tb = node_worker.exc_info
+        raise exc_value.with_traceback(exc_tb)
 
     log("Scanning done")
 
@@ -332,7 +352,7 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
     work_q = Queue()
     conn_worker = ExceptionThread(
         target=worker_connections,
-        args=(work_q, finalizer, templates, print_grid),
+        args=(work_q, finalizer, templates, print_grid, log),
         daemon=True)
     conn_worker.start()
 
@@ -373,8 +393,9 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
     work_q.join()
     work_q.put(None)
     conn_worker.join(timeout=1.0)
-    if conn_worker.exception:
-        raise conn_worker.exception
+    if conn_worker.exc_info:
+        exc_type, exc_value, exc_tb = conn_worker.exc_info
+        raise exc_value.with_traceback(exc_tb)
 
     if step == 0:
         raise IOError("There were no valid map images in this folder..? Scan returned nothing.")
@@ -431,7 +452,7 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
 
     conn_worker = ExceptionThread(
         target=worker_connections,
-        args=(work_q, finalizer, templates, print_grid),
+        args=(work_q, finalizer, templates, print_grid, log),
         daemon=True)
     conn_worker.start()
 
@@ -493,14 +514,16 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
 
     detect_q.put(None)
     node_worker.join(timeout=1.0)
-    if node_worker.exception:
-        raise node_worker.exception
+    if node_worker.exc_info:
+        exc_type, exc_value, exc_tb = node_worker.exc_info
+        raise exc_value.with_traceback(exc_tb)
 
     work_q.join()
     work_q.put(None)
     conn_worker.join(timeout=1.0)
-    if conn_worker.exception:
-        raise conn_worker.exception
+    if conn_worker.exc_info:
+        exc_type, exc_value, exc_tb = conn_worker.exc_info
+        raise exc_value.with_traceback(exc_tb)
 
     log("Scanning done")
 
