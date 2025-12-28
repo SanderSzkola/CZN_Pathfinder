@@ -18,16 +18,41 @@ class CalibrationPanel(tb.Toplevel):
             parent,
             low_res: bool,
             scr,
+            folder: str,
             log=None
     ):
         super().__init__(parent)
-        if scr is None:
+        self.log = log
+
+        # image and folder
+        if scr is None and not Settings.testmode:
             self.destroy()
             return
+
+        if Settings.testmode and scr is None:
+            self.folder = Path(folder)
+            if not self.folder.exists() or not self.folder.is_dir():
+                log(f"Calibrator: Wrong folder path {self.folder}")
+                self.destroy()
+                return
+
+            self._image_files = self._scan_folder(self.folder)
+            self._current_index = 0
+
+            if not self._image_files:
+                log(f"Calibrator: No images in {self.folder}")
+                self.destroy()
+                return
+
+            scr = self._load_image_at_index(0)
+            if scr is None:
+                self.destroy()
+                return
+
+        # rest of init
         self.parent = parent
         # self.low_res = low_res
         low_res = True  # do not need much space now, leave possibility later
-        self.log = log
 
         if low_res:
             self.window_w = 1280
@@ -56,7 +81,6 @@ class CalibrationPanel(tb.Toplevel):
         self.threshold = tk.DoubleVar(value=initial_threshold)
         self.auto_recalibrate = tk.BooleanVar(value=True)
         self._suspend_autocal = False
-        self._current_screenshot_num = None
 
         self._img_tk = None
         self._build_ui()
@@ -226,7 +250,7 @@ class CalibrationPanel(tb.Toplevel):
         recal_row = tb.Frame(btns)
         recal_row.pack(pady=4)
 
-        if Settings.testmode:
+        if Settings.testmode and hasattr(self, "_image_files"):
             tb.Button(
                 recal_row,
                 text="<",
@@ -243,7 +267,7 @@ class CalibrationPanel(tb.Toplevel):
             padding=4
         ).pack(side="left")
 
-        if Settings.testmode:
+        if Settings.testmode and hasattr(self, "_image_files"):
             tb.Button(
                 recal_row,
                 text=">",
@@ -326,55 +350,17 @@ class CalibrationPanel(tb.Toplevel):
 
         raise TypeError(f"Unsupported image type: {type(img)}")
 
-    def _load_test_screenshot(self, direction=0):
-        """
-        direction:
-            0  -> initial load
-           -1  -> previous
-            1  -> next
-        """
-        base_dir = Path(get_path(["Last_scan_result"]))
-        if not base_dir.exists():
+    @staticmethod
+    def _scan_folder(folder: Path):
+        ext = ".png"
+        files = [p for p in folder.iterdir() if p.is_file() and p.suffix.lower() == ext]
+        files.sort()
+        return files
+
+    def _load_image_at_index(self, idx):
+        if idx < 0 or idx >= len(self._image_files):
             return None
-
-        pattern = re.compile(r"map_frag_(\d+)\.png$")
-
-        files = []
-        for p in base_dir.iterdir():
-            if not p.is_file():
-                continue
-            m = pattern.match(p.name)
-            if m:
-                files.append((int(m.group(1)), p))
-
-        if not files:
-            if self.log:
-                self.log("No valid test images found")
-            return None
-
-        files.sort(key=lambda x: x[0])
-        indices = [i for i, _ in files]
-
-        # Initial load
-        if self._current_screenshot_num is None:
-            self._current_screenshot_num = indices[0]
-            path = files[0][1]
-            return mock_screenshot(str(path))
-
-        if self._current_screenshot_num not in indices:
-            self._current_screenshot_num = indices[0]
-            path = files[0][1]
-            return mock_screenshot(str(path))
-
-        cur_idx = indices.index(self._current_screenshot_num)
-        new_idx = cur_idx + direction
-
-        if new_idx < 0 or new_idx >= len(files):
-            return None  # no wrap, silent ignore
-
-        self._current_screenshot_num = indices[new_idx]
-        path = files[new_idx][1]
-        return mock_screenshot(str(path))
+        return mock_screenshot(str(self._image_files[idx]))
 
     # ==================================================================
     # Actions
@@ -400,15 +386,23 @@ class CalibrationPanel(tb.Toplevel):
             self._apply()
 
     def _prev_image(self):
-        scr = self._load_test_screenshot(direction=-1)
+        if self._current_index <= 0:
+            return
+        self._current_index -= 1
+        scr = self._load_image_at_index(self._current_index)
         if scr is not None:
             self.scr_original = scr
             self.scr = scr
             self._reload_preview()
+            self._apply()
 
     def _next_image(self):
-        scr = self._load_test_screenshot(direction=1)
+        if self._current_index >= len(self._image_files) - 1:
+            return
+        self._current_index += 1
+        scr = self._load_image_at_index(self._current_index)
         if scr is not None:
             self.scr_original = scr
             self.scr = scr
             self._reload_preview()
+            self._apply()

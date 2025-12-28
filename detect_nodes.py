@@ -140,6 +140,8 @@ def _assign_modifiers(nodes, modifier_hits, screenshot_scale):
 
 def _preview(map_img, nodes, map_fragment, save_file):
     preview = map_img.copy()
+    div = Settings.screenshot_scale if Settings.screenshot_scale != 0 else 1
+    scale = Settings.template_scale / div
     for node in nodes:
         x_offset = 40
         y_offset = 15
@@ -150,9 +152,9 @@ def _preview(map_img, nodes, map_fragment, save_file):
             node.label(),
             (text_x, text_y),
             cv2.FONT_HERSHEY_SIMPLEX,
-            1.5,
+            1.5 * scale,
             (0, 0, 0),
-            7,
+            int(7 * scale),
             cv2.LINE_AA,
         )
         cv2.putText(
@@ -160,9 +162,9 @@ def _preview(map_img, nodes, map_fragment, save_file):
             node.label(),
             (text_x, text_y),
             cv2.FONT_HERSHEY_SIMPLEX,
-            1.5,
+            1.5 * scale,
             (80, 240, 0),
-            4,
+            int(4 * scale),
             cv2.LINE_AA,
         )
         # nodes too close to fringe, not in excluded margin but to be discarded anyway
@@ -182,8 +184,6 @@ def _preview(map_img, nodes, map_fragment, save_file):
         cv2.line(overlay, (x, 0), (x + h, h), color, 9, cv2.LINE_AA)
 
     # mask out only the trimmed area
-    div = Settings.screenshot_scale if Settings.screenshot_scale != 0 else 1
-    scale = Settings.template_scale / div
     mask = np.zeros((h, w), dtype=np.uint8)
     mask[0:int(TRIM_TOP_PX * scale), :] = 255
     mask[int(TRIM_TOP_PX * scale):h, 0:int(TRIM_LEFT_PX * scale)] = 255
@@ -258,10 +258,12 @@ def _detect_nodes(screenshot_str_or_img,
 
     top_offset = int(TRIM_TOP_PX)
     left_offset = int(TRIM_LEFT_PX)
+    div = Settings.screenshot_scale if Settings.screenshot_scale != 0 else 1
+    fringe_safety_margin = int(FRINGE_SAFETY_MARGIN * Settings.template_scale / div)
     for node in nodes:
         node.x = int(node.x / screenshot_scale) + left_offset
         node.y = int(node.y / screenshot_scale) + top_offset
-        if node.x <= FRINGE_SAFETY_MARGIN or node.x >= w - FRINGE_SAFETY_MARGIN:
+        if node.x <= fringe_safety_margin or node.x >= w - fringe_safety_margin:
             node.is_fringe = True
 
     nodes.sort(key=lambda n: n.x)

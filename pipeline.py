@@ -548,13 +548,6 @@ def get_game_screenshot(log):
         return scr
     except Exception as e:
         log(e)
-        if Settings.testmode:
-            try:
-                path = get_path(["Last_scan_result", "map_frag_03.png"])
-                scr = mock_screenshot(path)
-                return scr
-            except Exception:
-                log("Failed to load test image")
     return None
 
 

@@ -504,6 +504,8 @@ class PipelineGUI:
             low_res=self.low_res,
             log=self.log,
             scr=scr,
+            folder=get_path(["Test_scans","Last_scan_result_1440"])
+            # folder = get_path(["Last_scan_result"])
         )
 
     # ======================================================================
