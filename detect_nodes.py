@@ -8,6 +8,7 @@ from node import Node
 from path_converter import get_path
 from template_library import TemplateLibrary
 from settings import Settings
+from score_table import ScoreTable
 
 """
 Detects nodes on provided screenshot based on templates from TemplateLibrary
@@ -17,6 +18,7 @@ TRIM_RIGHT_PX = 120
 TRIM_LEFT_PX = 120
 COLOR_MAX_DIFF = 50
 FRINGE_SAFETY_MARGIN = 60 + TRIM_RIGHT_PX  # this close to map edge means it still should be marked, but discarded after preview
+SCORE_TABLE = ScoreTable().table  # MUST CONTAIN EVERY VALID COMBINATION OF NODE+MODIFIER
 
 
 def color_verify(map_img, tmpl_rgb, mask_idx, x, y):
@@ -128,8 +130,9 @@ def _assign_modifiers(nodes, modifier_hits, screenshot_scale):
                 best_dist = d
         if best is not None:
             if best_dist < (130 / screenshot_scale) ** 2:
-                best.modifier = mod
-                # print(f"Mod {mod} assigned to {best.type} with distance {best_dist}")
+                if (best.type + mod) in SCORE_TABLE:
+                    best.modifier = mod
+                    # print(f"Mod {mod} assigned to {best.type} with distance {best_dist}")
             else:
                 # print(f"Mod {mod} with distance {best_dist} DISCARDED")
                 pass
@@ -262,6 +265,9 @@ def _detect_nodes(screenshot_str_or_img,
             node.is_fringe = True
 
     nodes.sort(key=lambda n: n.x)
+    # random waypoint fix is back :(
+    if len(nodes) > 2 and nodes[-1].type == "WA" and nodes[-2].type != "WA" and abs(nodes[-1].x - nodes[-2].x) > 10:
+        nodes = nodes[:-1]
     preview = _preview(screenshot, nodes, screenshot_str_or_img, save) if create_preview else None
     nodes_filtered = [n for n in nodes if not n.is_fringe]
     return nodes_filtered, preview

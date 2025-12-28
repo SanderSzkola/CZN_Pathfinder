@@ -1,4 +1,3 @@
-import math
 import os
 
 import cv2
@@ -13,8 +12,9 @@ PX_TOLERANCE = 16
 CORRIDOR_HALF = 16
 CORRIDOR_OFFSET = 10
 THRESHOLD = 128
-CONNECTION_WHITE_RATIO = 0.045
+CONNECTION_WHITE_RATIO = 0.035
 ORIENTATION_ANGLE_DEG = 20
+RECTANGLE_MULT = 1.4
 
 
 # ------------------------------------------------------------
@@ -97,16 +97,29 @@ def _corridor_patch(map_gray, n1, n2):
     mx = int((n1.x + n2.x) * 0.5)
     my = int((n1.y + n2.y) * 0.5) + CORRIDOR_OFFSET
     r = CORRIDOR_HALF
+    rectangle_mult = RECTANGLE_MULT * Settings.template_scale / Settings.screenshot_scale
 
     y1 = max(0, my - r)
     y2 = min(map_gray.shape[0], my + r)
-    x1 = max(0, mx - r)
-    x2 = min(map_gray.shape[1], mx + r)
+    x1 = max(0, int(mx - r * rectangle_mult))
+    x2 = min(map_gray.shape[1], int(mx + r * rectangle_mult))
 
     return map_gray[y1:y2, x1:x2], mx, my
 
 
+def _keep_longest_line(patch_bin):
+    patch_bin = (patch_bin > 0).astype(np.uint8)
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(patch_bin, connectivity=8)
+    if num_labels <= 1:
+        return np.zeros_like(patch_bin)
+
+    largest_label = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
+    cleaned = (labels == largest_label).astype(np.uint8)
+    return cleaned
+
+
 def _corridor_orientation(patch_bin):
+    patch_bin = _keep_longest_line(patch_bin)
     ys, xs = np.where(patch_bin == 1)
     if xs.size < 3:
         return None
@@ -116,8 +129,7 @@ def _corridor_orientation(patch_bin):
     except Exception:
         return None
 
-    angle = math.degrees(math.atan(a))
-
+    angle = np.degrees(np.arctan(a))
     if abs(angle) <= ORIENTATION_ANGLE_DEG:
         return "same"
     return "down" if a > 0 else "up"
@@ -153,8 +165,8 @@ def detect_connections(map_fragment, templates, nodes=None, screenshot_index=0):
             templates,
             screenshot_index=screenshot_index,
             create_preview=False,
-            screenshot_scale=Settings.screenshot_scale
-        )
+            screenshot_scale=Settings.screenshot_scale,
+            threshold=Settings.threshold)
 
     columns, _ = _group_columns(nodes)
     nodes = _group_rows(nodes)
@@ -224,21 +236,22 @@ def detect_connections(map_fragment, templates, nodes=None, screenshot_index=0):
                 if n1.col != n2.col or m1.col != m2.col:
                     continue
 
-                reversed_order = (
-                        (n1.row < n2.row and m1.row > m2.row) or
-                        (n1.row > n2.row and m1.row < m2.row)
-                )
+                if not _segments_intersect(
+                        n1.x, n1.y, m1.x, m1.y,
+                        n2.x, n2.y, m2.x, m2.y):
+                    continue
 
-                if reversed_order:
-                    if j1 > j2:
-                        to_remove = i
-                    elif j2 > j1:
-                        to_remove = j
-                    else:
-                        to_remove = i if w1 < w2 else j
+                # Smaller vertical jump
+                if j1 != j2:
+                    to_remove = i if j1 > j2 else j
+                # Stronger corridor signal
+                elif w1 != w2:
+                    to_remove = i if w1 < w2 else j
+                else:
+                    to_remove = j
 
-                    changed = True
-                    break
+                changed = True
+                break
 
             if changed:
                 break
@@ -263,9 +276,10 @@ def render_preview(map_name, nodes, edges, corridor_debug):
     for mx, my, accepted in corridor_debug:
         offset = 1 if accepted else -1
         r = CORRIDOR_HALF
-        x1 = mx - r + offset
+        rectangle_mult = RECTANGLE_MULT * Settings.template_scale / Settings.screenshot_scale
+        x1 = mx - int(r * rectangle_mult) + offset
         y1 = my - r + offset
-        x2 = mx + r + offset
+        x2 = mx + int(r * rectangle_mult) + offset
         y2 = my + r + offset
 
         color = (0, 255, 0) if accepted else (0, 0, 255)
@@ -293,6 +307,14 @@ def render_preview(map_name, nodes, edges, corridor_debug):
         if icon is None:
             continue
 
+        scale = Settings.template_scale
+        if scale != 1.0:
+            new_w = int(icon.shape[1] * scale)
+            new_h = int(icon.shape[0] * scale)
+            if new_w <= 0 or new_h <= 0:
+                continue
+            icon = cv2.resize(icon, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
         if icon.shape[2] == 4:
             b, g, r, a = cv2.split(icon)
             icon_rgb = cv2.merge([b, g, r])
@@ -319,9 +341,9 @@ def render_preview(map_name, nodes, edges, corridor_debug):
 
 
 if __name__ == "__main__":
-    map_folder = get_path("Example_scan_result")
-    maps = ["map_frag_0.png", ]
-    # maps = os.listdir(map_folder)
+    map_folder = get_path("Last_scan_result")
+    # maps = ["map_frag_02.png", ]
+    maps = os.listdir(map_folder)
     templates = TemplateLibrary()
     templates.scale_templates(Settings.template_scale)
     for i, map_name in enumerate(maps):
