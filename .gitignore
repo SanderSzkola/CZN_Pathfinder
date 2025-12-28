@@ -1,3 +1,7 @@
+# Python cache
+__pycache__/
+*.pyc
+
 /shelf/
 /workspace.xml
 .idea/

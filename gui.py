@@ -1,4 +1,24 @@
+import ctypes
+import sys
 import os
+import subprocess
+
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+if not is_admin():
+    pythonw = sys.executable.replace("python.exe", "pythonw.exe")
+    if not os.path.exists(pythonw):
+        pythonw = sys.executable # fallback
+    script_path = f'"{os.path.abspath(sys.argv[0])}"'
+    params = subprocess.list2cmdline(sys.argv[1:])
+    arguments = f"{script_path} {params}"
+    ctypes.windll.shell32.ShellExecuteW(None, "runas", pythonw, arguments, None, 1)
+    sys.exit()
+
 import threading
 import time
 import tkinter as tk
