@@ -140,11 +140,7 @@ def worker_connections(
         img, nodes = item
         try:
             nodes_conn, edges_conn, meta = detect_connections(img, templates, nodes)
-            log(f"[conn-worker] detect_connections ok: "  #  TODO: clean this after template / Sereniel is resolved
-                f"{len(nodes_conn)} nodes, {len(edges_conn)} edges")
             finalizer.add_fragment(nodes_conn, edges_conn, print_grid)
-            log(f"[conn-worker] Fragment merged successfully (global step={finalizer.step - 1})")
-
         except Exception as e:
             log("[conn-worker] FATAL error while processing fragment")
             raise

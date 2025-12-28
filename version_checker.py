@@ -11,7 +11,7 @@ def check_for_update(log):
     now = datetime.now(timezone.utc)
     if (Settings.last_update_check is None or
             Settings.remote_version is None or
-            now - Settings.last_update_check >= timedelta(days=2)):
+            now - Settings.last_update_check >= timedelta(days=1)):
         if Settings.testmode:
             log("Asking github for update")
         Settings.last_update_check = now
