@@ -3,6 +3,7 @@ import os
 import threading
 import time
 from queue import Queue
+import sys
 
 from node import Node
 from detect_connections import detect_connections
@@ -49,9 +50,9 @@ def check_end(nodes, last_nodes):
     if (last_nodes is None or len(last_nodes) <= 2
             or nodes is None or len(nodes) <= 2):
         return False
-    # strong check, <4 columns, single screenshot is enough
+    # strong check, <6 columns, single screenshot is enough
     non_empty_columns, _ = check_node_output_quality(nodes)
-    if non_empty_columns < 4 and nodes[-1].type == "RE" and (
+    if non_empty_columns < 6 and nodes[-1].type == "RE" and (
             nodes[-2].type == "RE" or  # same column must be rest
             abs(nodes[-2].x - nodes[-1].x) > 10):  # other column
         if Settings.testmode:
@@ -102,8 +103,8 @@ def check_duplicates(nodes, last_nodes):
 
 
 def check_node_output_quality(nodes):
-    c1, c2, c3, c4, c5 = [], [], [], [], []  # how does ultra-wide screen works? one extra, should I add more?
-    columns = [c1, c2, c3, c4, c5]
+    c1, c2, c3, c4, c5, c6, c7, c8, c9 = [], [], [], [], [], [], [], [], []
+    columns = [c1, c2, c3, c4, c5, c6, c7, c8, c9]
     non_normals = 0
     for node in nodes:
         placed = False
@@ -123,16 +124,29 @@ def check_node_output_quality(nodes):
     return non_empty_columns, non_normals
 
 
-def worker_connections(queue: Queue, finalizer: Finalizer, templates, print_grid: bool = False):
+def worker_connections(
+    queue: Queue,
+    finalizer: Finalizer,
+    templates,
+    print_grid: bool = False,
+    log=lambda msg: None):
+
     while True:
         item = queue.get()
         if item is None:
+            queue.task_done()
             break
 
         img, nodes = item
-        nodes_conn, edges_conn, _ = detect_connections(img, templates, nodes)
-        finalizer.add_fragment(nodes_conn, edges_conn, print_grid)
-        queue.task_done()
+        try:
+            nodes_conn, edges_conn, meta = detect_connections(img, templates, nodes)
+            finalizer.add_fragment(nodes_conn, edges_conn, print_grid)
+        except Exception as e:
+            log("[conn-worker] FATAL error while processing fragment")
+            raise
+
+        finally:
+            queue.task_done()
 
 
 class DetectResult:
@@ -144,11 +158,11 @@ class DetectResult:
 
 class ExceptionThread(threading.Thread):
     def run(self):
-        self.exception = None
+        self.exc_info = None
         try:
             super().run()
-        except Exception as e:
-            self.exception = e
+        except Exception:
+            self.exc_info = sys.exc_info()
 
 
 def worker_nodes(detect_q: Queue, result: DetectResult, templates, screenshot_scale, threshold):
@@ -205,7 +219,7 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
     work_q = Queue()
     conn_worker = ExceptionThread(
         target=worker_connections,
-        args=(work_q, finalizer, templates, print_grid),
+        args=(work_q, finalizer, templates, print_grid, log),
         daemon=True
     )
     conn_worker.start()
@@ -261,7 +275,8 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
         if check_duplicates(nodes, last_nodes):
             is_duplicate = True
             if not should_end:
-                log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? Is game opened in windowed state, not fullscreen? Is script run as admin?")
+                log(f"Step {step} discarded as duplicate, that should not happen. Is map being dragged correctly? "
+                    f"Is game opened in windowed state, not fullscreen? Is script run as admin?")
                 if duplicates >= 3:
                     raise IOError(f"3rd duplicate, something is very broken, stopping...")
                 duplicates += 1
@@ -282,13 +297,15 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
     work_q.join()
     work_q.put(None)
     conn_worker.join(timeout=1.0)
-    if conn_worker.exception:
-        raise conn_worker.exception
+    if conn_worker.exc_info:
+        exc_type, exc_value, exc_tb = conn_worker.exc_info
+        raise exc_value.with_traceback(exc_tb)
 
     detect_q.put(None)
     node_worker.join(timeout=1.0)
-    if node_worker.exception:
-        raise node_worker.exception
+    if node_worker.exc_info:
+        exc_type, exc_value, exc_tb = node_worker.exc_info
+        raise exc_value.with_traceback(exc_tb)
 
     log("Scanning done")
 
@@ -331,7 +348,7 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
     work_q = Queue()
     conn_worker = ExceptionThread(
         target=worker_connections,
-        args=(work_q, finalizer, templates, print_grid),
+        args=(work_q, finalizer, templates, print_grid, log),
         daemon=True)
     conn_worker.start()
 
@@ -372,8 +389,9 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
     work_q.join()
     work_q.put(None)
     conn_worker.join(timeout=1.0)
-    if conn_worker.exception:
-        raise conn_worker.exception
+    if conn_worker.exc_info:
+        exc_type, exc_value, exc_tb = conn_worker.exc_info
+        raise exc_value.with_traceback(exc_tb)
 
     if step == 0:
         raise IOError("There were no valid map images in this folder..? Scan returned nothing.")
@@ -430,7 +448,7 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
 
     conn_worker = ExceptionThread(
         target=worker_connections,
-        args=(work_q, finalizer, templates, print_grid),
+        args=(work_q, finalizer, templates, print_grid, log),
         daemon=True)
     conn_worker.start()
 
@@ -452,7 +470,8 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
 
         if non_normals <= 2 and len(nodes) <= 4:
             listener.stop()
-            raise IOError(f"Step {step}: {len(nodes)}n/{non_normals}o nodes detected, too low. Is map fully visible? Have you performed calibration?")
+            raise IOError(f"Step {step}: {len(nodes)}n/{non_normals}o nodes detected, too low. Is map fully visible? "
+                          f"Have you performed calibration?")
 
         log(f"Step {step}, expected 5~10; {len(nodes)}n/{non_normals}o nodes detected")
 
@@ -491,14 +510,16 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
 
     detect_q.put(None)
     node_worker.join(timeout=1.0)
-    if node_worker.exception:
-        raise node_worker.exception
+    if node_worker.exc_info:
+        exc_type, exc_value, exc_tb = node_worker.exc_info
+        raise exc_value.with_traceback(exc_tb)
 
     work_q.join()
     work_q.put(None)
     conn_worker.join(timeout=1.0)
-    if conn_worker.exception:
-        raise conn_worker.exception
+    if conn_worker.exc_info:
+        exc_type, exc_value, exc_tb = conn_worker.exc_info
+        raise exc_value.with_traceback(exc_tb)
 
     log("Scanning done")
 
@@ -523,13 +544,6 @@ def get_game_screenshot(log):
         return scr
     except Exception as e:
         log(e)
-        if Settings.testmode:
-            try:
-                path = get_path(["Last_scan_result", "map_frag_03.png"])
-                scr = mock_screenshot(path)
-                return scr
-            except Exception:
-                log("Failed to load test image")
     return None
 
 

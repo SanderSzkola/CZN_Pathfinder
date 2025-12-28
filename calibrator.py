@@ -62,10 +62,10 @@ def get_initial_params(templates, screenshot):
     scale_w = scr_w / tw
     scale_h = scr_h / th
 
-    template_scale = round(scale_w + 0.001, 3)
+    template_scale = round(scale_h + 0.001, 3)
     template_scale = min(template_scale, 1.0)
     if templates is not None:
         templates.scale_templates(template_scale)
-    threshold = 0.98
+    threshold = 0.97
 
     return screenshot_scale, template_scale, threshold, w, h

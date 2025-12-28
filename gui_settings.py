@@ -81,7 +81,7 @@ class SettingsPanel(tb.Toplevel):
 
         add_separator()
         add_bool("Check for update", "autoupdate")
-        add_explanation("Checked once every 2 days to not annoy GitHub"
+        add_explanation("Checked once every day to not annoy GitHub"
                         "\nThe response is saved so you can be annoyed on every startup"
                         "\nuntil you decide to update")
         add_field("Local version", "local_version", True)
