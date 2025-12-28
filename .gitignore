@@ -7,6 +7,7 @@
 *.exe
 /Exe_build_folder/
 /settings.json
+/template_update_helper.py
 
 # Test material
 /Test_scans/
