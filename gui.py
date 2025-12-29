@@ -3,37 +3,11 @@ import sys
 import os
 import subprocess
 import argparse
-
-def is_admin():
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
-        return False
-
-parser = argparse.ArgumentParser(add_help=False)
-parser.add_argument('--elevate', action='store_true', help='Run as admin')
-args, unknown = parser.parse_known_args()
-if args.elevate and not is_admin():
-    executable = sys.executable
-    if "python.exe" in executable:
-        executable = executable.replace("python.exe", "pythonw.exe")
-        if not os.path.exists(executable):
-            executable = sys.executable
-    cmd_args = subprocess.list2cmdline(sys.argv[1:])
-    script_path = f'"{os.path.abspath(sys.argv[0])}"'
-    if getattr(sys,'frozen', False):
-        final_arguments = cmd_args
-    else:
-        final_arguments = f"{script_path} {cmd_args}"
-    ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, final_arguments, None, 1)
-    sys.exit()
-
 import threading
 import time
 import tkinter as tk
 from tkinter import filedialog
 import ttkbootstrap as tb
-
 import cv2
 
 if not hasattr(cv2, "__version__"):  # random GPT-approved dependency error fix
@@ -53,6 +27,32 @@ from gui_calibrator import CalibrationPanel
 from settings import Settings
 from version_checker import check_for_update
 from gui_settings import SettingsPanel
+
+
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument('--elevate', action='store_true', help='Run as admin')
+args, unknown = parser.parse_known_args()
+if (args.elevate or Settings.request_admin) and not is_admin():
+    executable = sys.executable
+    if "python.exe" in executable:
+        executable = executable.replace("python.exe", "pythonw.exe")
+        if not os.path.exists(executable):
+            executable = sys.executable
+    cmd_args = subprocess.list2cmdline(sys.argv[1:])
+    script_path = f'"{os.path.abspath(sys.argv[0])}"'
+    if getattr(sys, 'frozen', False):
+        final_arguments = cmd_args
+    else:
+        final_arguments = f"{script_path} {cmd_args}"
+    ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, final_arguments, None, 1)
+    sys.exit()
 
 
 class PipelineGUI:
@@ -533,8 +533,8 @@ class PipelineGUI:
             low_res=self.low_res,
             log=self.log,
             scr=scr,
-            folder=get_path(["Test_scans","Last_scan_result_1440"])
-            # folder = get_path(["Last_scan_result"])
+            # folder=get_path(["Test_scans","Last_scan_result_1440"])
+            folder=get_path(["Last_scan_result"])
         )
 
     # ======================================================================
