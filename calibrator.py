@@ -66,6 +66,6 @@ def get_initial_params(templates, screenshot):
     template_scale = min(template_scale, 1.0)
     if templates is not None:
         templates.scale_templates(template_scale)
-    threshold = 0.97
+    threshold = 0.975
 
     return screenshot_scale, template_scale, threshold, w, h

@@ -6,9 +6,11 @@ from pathlib import Path
 import fnmatch
 import sys
 
+from settings import Settings
+
 SOURCE_SCRIPT = "gui.py"
 EXE_NAME = "CZN Pathfinder"
-ZIP_NAME = "CZN_Pathfinder_exe_build.zip"
+ZIP_NAME = f"CZN_Pathfinder_exe_build_{Settings.local_version}.zip"
 
 # should yell if it detects new item not in expected or ignored
 expected_items = [
@@ -232,6 +234,7 @@ def main():
     create_zip()
     clean_previous_builds()
     print("Build completed.")
+    print(f"Version {Settings.local_version}, github {Settings.remote_version}, CHECK IF THIS IS CORRECT")
 
 
 if __name__ == "__main__":
