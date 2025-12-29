@@ -2,6 +2,7 @@ import ctypes
 import sys
 import os
 import subprocess
+import argparse
 
 def is_admin():
     try:
@@ -9,14 +10,22 @@ def is_admin():
     except:
         return False
 
-if not is_admin():
-    pythonw = sys.executable.replace("python.exe", "pythonw.exe")
-    if not os.path.exists(pythonw):
-        pythonw = sys.executable # fallback
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument('--elevate', action='store_true', help='Run as admin')
+args, unknown = parser.parse_known_args()
+if args.elevate and not is_admin():
+    executable = sys.executable
+    if "python.exe" in executable:
+        executable = executable.replace("python.exe", "pythonw.exe")
+        if not os.path.exists(executable):
+            executable = sys.executable
+    cmd_args = subprocess.list2cmdline(sys.argv[1:])
     script_path = f'"{os.path.abspath(sys.argv[0])}"'
-    params = subprocess.list2cmdline(sys.argv[1:])
-    arguments = f"{script_path} {params}"
-    ctypes.windll.shell32.ShellExecuteW(None, "runas", pythonw, arguments, None, 1)
+    if getattr(sys,'frozen', False):
+        final_arguments = cmd_args
+    else:
+        final_arguments = f"{script_path} {cmd_args}"
+    ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, final_arguments, None, 1)
     sys.exit()
 
 import threading
