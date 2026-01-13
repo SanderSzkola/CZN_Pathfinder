@@ -1,7 +1,6 @@
 import json
 from datetime import datetime
 from pathlib import Path
-import sys
 
 from path_converter import get_path
 
@@ -83,6 +82,13 @@ class Settings:
     @classmethod
     def calibrated(cls):
         return cls.screenshot_scale > 0
+
+    @classmethod
+    def get_scale(cls):
+        if cls.screenshot_scale != 0:
+            return cls.template_scale / cls.screenshot_scale
+        else:
+            return cls.template_scale
 
 
 # autoload on import
