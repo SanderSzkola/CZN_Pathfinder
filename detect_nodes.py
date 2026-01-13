@@ -17,7 +17,7 @@ TRIM_TOP_PX = 120
 TRIM_RIGHT_PX = 120
 TRIM_LEFT_PX = 120
 COLOR_MAX_DIFF = 50
-FRINGE_SAFETY_MARGIN = 60 + TRIM_RIGHT_PX  # this close to map edge means it still should be marked, but discarded after preview
+FRINGE_SAFETY_MARGIN = 120 + TRIM_RIGHT_PX  # this close to map edge means it still should be marked, but discarded after preview
 SCORE_TABLE = ScoreTable().table  # MUST CONTAIN EVERY VALID COMBINATION OF NODE+MODIFIER
 
 
@@ -140,8 +140,7 @@ def _assign_modifiers(nodes, modifier_hits, screenshot_scale):
 
 def _preview(map_img, nodes, map_fragment, save_file):
     preview = map_img.copy()
-    div = Settings.screenshot_scale if Settings.screenshot_scale != 0 else 1
-    scale = Settings.template_scale / div
+    scale = Settings.get_scale()
     for node in nodes:
         x_offset = 40
         y_offset = 15
@@ -258,8 +257,7 @@ def _detect_nodes(screenshot_str_or_img,
 
     top_offset = int(TRIM_TOP_PX)
     left_offset = int(TRIM_LEFT_PX)
-    div = Settings.screenshot_scale if Settings.screenshot_scale != 0 else 1
-    fringe_safety_margin = int(FRINGE_SAFETY_MARGIN * Settings.template_scale / div)
+    fringe_safety_margin = int(FRINGE_SAFETY_MARGIN * Settings.get_scale())
     for node in nodes:
         node.x = int(node.x / screenshot_scale) + left_offset
         node.y = int(node.y / screenshot_scale) + top_offset

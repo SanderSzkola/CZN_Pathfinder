@@ -44,8 +44,10 @@ class CalibrationPanel(tb.Toplevel):
                 self.destroy()
                 return
 
+            log(f"Calibrator: Loading test image from {self.folder}")
             scr = self._load_image_at_index(0)
             if scr is None:
+                log(f"Calibrator: Loading test image from {self.folder} failed somehow")
                 self.destroy()
                 return
 

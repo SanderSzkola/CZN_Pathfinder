@@ -18,7 +18,7 @@ import webbrowser
 import re
 
 from pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, get_game_screenshot, run_pathfinder
-from grabber import get_screen_res, KeyboardListener
+from grabber import get_screen_res, KeyboardListener, switch_window
 from calibrator import check_calibration_done
 from drawer import draw_map, load_icon
 from score_table import ScoreTable
@@ -401,6 +401,7 @@ class PipelineGUI:
             self.display_image(img)
         except Exception as e:
             self.log(f"Pipeline error: {e}")
+            switch_window(1)
             if Settings.testmode:
                 raise
         finally:
@@ -439,6 +440,7 @@ class PipelineGUI:
             self.display_image(img)
         except Exception as e:
             self.log(f"Pipeline error: {e}")
+            switch_window(1)
             if Settings.testmode:
                 raise
         finally:

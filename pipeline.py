@@ -124,31 +124,6 @@ def check_node_output_quality(nodes):
     return non_empty_columns, non_normals
 
 
-def worker_connections(
-    queue: Queue,
-    finalizer: Finalizer,
-    templates,
-    print_grid: bool = False,
-    log=lambda msg: None):
-
-    while True:
-        item = queue.get()
-        if item is None:
-            queue.task_done()
-            break
-
-        img, nodes = item
-        try:
-            nodes_conn, edges_conn, meta = detect_connections(img, templates, nodes)
-            finalizer.add_fragment(nodes_conn, edges_conn, print_grid)
-        except Exception as e:
-            log("[conn-worker] FATAL error while processing fragment")
-            raise
-
-        finally:
-            queue.task_done()
-
-
 class DetectResult:
     def __init__(self):
         self.lock = threading.Lock()
@@ -165,7 +140,11 @@ class ExceptionThread(threading.Thread):
             self.exc_info = sys.exc_info()
 
 
-def worker_nodes(detect_q: Queue, result: DetectResult, templates, screenshot_scale, threshold):
+def worker_nodes(detect_q: Queue,
+                 result: DetectResult,
+                 templates,
+                 screenshot_scale,
+                 threshold):
     while True:
         item = detect_q.get()
         if item is None:
@@ -178,6 +157,29 @@ def worker_nodes(detect_q: Queue, result: DetectResult, templates, screenshot_sc
             result.nodes = nodes
 
         detect_q.task_done()
+
+
+def worker_connections(
+        queue: Queue,
+        finalizer: Finalizer,
+        templates,
+        print_grid: bool = False,
+        log=lambda msg: None):
+    while True:
+        item = queue.get()
+        if item is None:
+            return
+
+        img, nodes = item
+        try:
+            nodes_conn, edges_conn, meta = detect_connections(img, templates, nodes)
+            finalizer.add_fragment(nodes_conn, edges_conn, print_grid)
+        except Exception as e:
+            print(
+                f"[conn-worker] FATAL error while processing fragment:\n{e}")  # gui log already prints it, no need to log twice
+            raise
+        finally:
+            queue.task_done()
 
 
 def prepare_clean_folder(base_name: str, log):
@@ -292,6 +294,9 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
 
         do_drag_move(nodes[-1], nodes[0], game_window_corner_offset)
         last_nodes = nodes
+        if conn_worker.exc_info:  # stop queue when error
+            exc_type, exc_value, exc_tb = conn_worker.exc_info
+            raise exc_value.with_traceback(exc_tb)
 
     # Finish workers
     work_q.join()
@@ -385,11 +390,14 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
             break
         if len(nodes) >= 2:
             mock_move_screen(nodes[-1], nodes[0])
+        if conn_worker.exc_info:  # stop queue when error
+            exc_type, exc_value, exc_tb = conn_worker.exc_info
+            raise exc_value.with_traceback(exc_tb)
 
     work_q.join()
     work_q.put(None)
     conn_worker.join(timeout=1.0)
-    if conn_worker.exc_info:
+    if conn_worker.exc_info:  # check again after queue is done
         exc_type, exc_value, exc_tb = conn_worker.exc_info
         raise exc_value.with_traceback(exc_tb)
 

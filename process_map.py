@@ -184,7 +184,7 @@ class Finalizer:
             msg = "Merge failed, grid state:\n"
             msg+=map_grid_to_string(self.global_nodes, f"GLOBAL step {self.step}")
             msg+=map_grid_to_string(nodes, f"FRAGMENT step {self.step}")
-            raise IOError(f"{msg}\nFinalizer.add_fragment failed at step {self.step}")
+            raise IOError(f"{msg}\nFinalizer.add_fragment failed at step {self.step}, caused by node grid mismatch, most likely caused by wrong calibration")
 
         for edge in corrected_edges:
             self.edges.add(edge)
@@ -262,4 +262,4 @@ if __name__ == "__main__":
     from detect_nodes import TemplateLibrary
 
     templates = TemplateLibrary()
-    main(get_path("Example_scan_result"), templates)
+    main(get_path("Last_scan_result"), templates)
