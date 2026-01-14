@@ -8,8 +8,8 @@ from path_converter import get_path
 from settings import Settings
 
 PX_TOLERANCE = 16
-CORRIDOR_HALF = 10
-CORRIDOR_OFFSET = 12
+CORRIDOR_HALF = 6
+CORRIDOR_OFFSET = 14
 THRESHOLD = 128
 MIN_CORRIDOR_FILL = 0.50
 ANGLE_MERGE_DEG = 10
