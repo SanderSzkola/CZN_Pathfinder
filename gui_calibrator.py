@@ -25,11 +25,11 @@ class CalibrationPanel(tb.Toplevel):
         self.log = log
 
         # image and folder
-        if scr is None and not Settings.testmode:
+        if (scr is None or scr.size[0] == 0) and not Settings.testmode:
             self.destroy()
             return
 
-        if Settings.testmode and scr is None:
+        if Settings.testmode and (scr is None or scr.size[0] == 0):
             self.folder = Path(folder)
             if not self.folder.exists() or not self.folder.is_dir():
                 log(f"Calibrator: Wrong folder path {self.folder}")
@@ -59,7 +59,7 @@ class CalibrationPanel(tb.Toplevel):
         if low_res:
             self.window_w = 1280
             self.window_h = 600
-            self.map_w = 980
+            self.map_w = 900
             self.map_h = 600
         else:
             self.window_w = 1600
@@ -67,6 +67,7 @@ class CalibrationPanel(tb.Toplevel):
             self.map_w = 1300
             self.map_h = 500
 
+        self.right_panel_width = self.window_w - self.map_w
         x = parent.winfo_x()
         y = parent.winfo_y()
         self.geometry(f"{self.window_w}x{self.window_h}+{x}+{y}")
@@ -109,15 +110,26 @@ class CalibrationPanel(tb.Toplevel):
         self.image_label.pack(fill="both", expand=True)
 
     def _build_right_panel(self, parent):
-        panel = tb.Frame(parent, width=300, height=self.window_h)
+        panel = tb.Frame(parent, width=self.right_panel_width, height=self.window_h)
         panel.pack(side="left", fill="both")
         panel.pack_propagate(False)
 
-        self._build_controls(panel)
+        self._build_tabs(panel)
+
+    def _build_tabs(self, parent):
+        notebook = tb.Notebook(parent, bootstyle="secondary")
+        notebook.pack(fill="both", expand=True, padx=5, pady=5)
+
+        tab_calibration = tb.Frame(notebook)
+        notebook.add(tab_calibration, text="Calibration")
+
+        tab_other = tb.Frame(notebook)
+        notebook.add(tab_other, text="Other")
+
+        self._build_controls(tab_calibration)
+        self._build_other_panel(tab_other)
 
     def _build_controls(self, parent):
-        parent.pack_propagate(False)
-
         # Grid container
         grid = tb.Frame(parent)
         grid.pack(pady=15, anchor="n")
@@ -154,7 +166,7 @@ class CalibrationPanel(tb.Toplevel):
         tb.Label(
             grid,
             text="Detected resolution from captured screenshot. Should be somewhere around chosen game resolution.\nTemplates res is 1920 x 1080",
-            wraplength=260,
+            wraplength=self.right_panel_width - 40,
             justify="left",
         ).grid(
             row=row + 1,
@@ -183,7 +195,7 @@ class CalibrationPanel(tb.Toplevel):
         tb.Label(
             grid,
             text="Rescale multiplier for templates. Halved if over 1.\nExample: If your res is 1440p, halved its 720p,\n720 / 1080 ~ 0.667",
-            wraplength=260,
+            wraplength=self.right_panel_width - 40,
             justify="left",
         ).grid(
             row=row + 1,
@@ -211,7 +223,7 @@ class CalibrationPanel(tb.Toplevel):
         tb.Label(
             grid,
             text="How accurate a valid match should be. Too high and it skips nodes, too low and it hallucinates them.",
-            wraplength=260,
+            wraplength=self.right_panel_width - 40,
             justify="left",
         ).grid(
             row=row + 1,
@@ -231,7 +243,7 @@ class CalibrationPanel(tb.Toplevel):
         tb.Label(
             grid,
             text="Tweak TEMPLATE SCALE and THRESHOLD until every node and modifier is correctly labeled.\nInitial values are likely close to ideal ones.",
-            wraplength=260,
+            wraplength=self.right_panel_width - 40,
             justify="left",
             bootstyle="info"
         ).grid(
@@ -311,8 +323,36 @@ class CalibrationPanel(tb.Toplevel):
             if self.auto_recalibrate.get():
                 self._apply()
 
-        tb.Button(col, text="▲", width=2, padding=1, command=inc).pack()
-        tb.Button(col, text="▼", width=2, padding=1, command=dec).pack()
+        tb.Button(col, text="▲", width=2, padding=0, command=inc).pack()
+        tb.Button(col, text="▼", width=2, padding=0, command=dec).pack()
+
+    def _build_other_panel(self, parent):
+        parent.pack_propagate(False)
+
+        self._folders = self.list_valid_image_folders()
+        self._folder_var = tk.StringVar()
+
+        container = tb.Frame(parent)
+        container.pack(fill="both", expand=True, pady=10)
+
+        tb.Label(
+            container,
+            text="Image folders",
+            font=("Segoe UI", 10, "bold")
+        ).pack(anchor="w", padx=10, pady=(0, 5))
+
+        self._folder_list = tk.Listbox(
+            container,
+            height=18,
+            exportselection=False
+        )
+        self._folder_list.pack(fill="both", expand=True, padx=10)
+
+        for path, selectable, indent in self._folders:
+            label = f"{'  ' * indent}{path.name}"
+            self._folder_list.insert("end", label)
+
+        self._folder_list.bind("<<ListboxSelect>>", self._on_folder_selected)
 
     # ==================================================================
     # Preview image
@@ -354,15 +394,63 @@ class CalibrationPanel(tb.Toplevel):
 
     @staticmethod
     def _scan_folder(folder: Path):
-        ext = ".png"
-        files = [p for p in folder.iterdir() if p.is_file() and p.suffix.lower() == ext]
+        files = []
+
+        for f in folder.iterdir():
+            if not f.is_file():
+                continue
+            if '.' not in f.name:
+                continue
+
+            name, ext = f.name.rsplit('.', 1)
+
+            if name.endswith("preview"):
+                continue
+            if name.startswith("merged"):
+                continue
+            if not ext.lower().endswith("png"):
+                continue
+            if not CalibrationPanel._is_image_height_valid(f, 700):
+                continue
+
+            files.append(f)
+
         files.sort()
         return files
+
+    @staticmethod
+    def _is_image_height_valid(path: Path, min_h: int = 700) -> bool:
+        try:
+            with Image.open(path) as img:
+                return img.height > min_h
+        except Exception:
+            return False
 
     def _load_image_at_index(self, idx):
         if idx < 0 or idx >= len(self._image_files):
             return None
         return mock_screenshot(str(self._image_files[idx]))
+
+    def list_valid_image_folders(self):
+        base = Path(get_path())
+        valid_folders = []
+        for p in base.rglob("*"):
+            if not p.is_dir():
+                continue
+            if CalibrationPanel._scan_folder(p):
+                valid_folders.append(p)
+
+        parents = {}
+        for f in valid_folders:
+            parents.setdefault(f.parent, []).append(f)
+        entries = []
+        for parent in sorted(parents.keys(), key=lambda p: p.as_posix().lower()):
+            entries.append((parent, False, 0))
+            children = sorted(parents[parent], key=lambda p: p.name.lower())
+            for child in children:
+                entries.append((child, True, 1))
+
+        return entries
 
     # ==================================================================
     # Actions
@@ -408,3 +496,37 @@ class CalibrationPanel(tb.Toplevel):
             self.scr = scr
             self._reload_preview()
             self._apply()
+
+    def _on_folder_selected(self, event):
+        sel = self._folder_list.curselection()
+        if not sel:
+            return
+
+        idx = sel[0]
+        path, selectable, _ = self._folders[idx]
+        if not selectable:
+            return  # parent folder → do nothing
+
+        self.folder = path
+        self._image_files = self._scan_folder(path)
+        self._current_index = 0
+
+        if not self._image_files:
+            return
+        scr = self._load_image_at_index(0)
+        if scr is None:
+            return
+
+        self._suspend_autocal = True
+        self.scr_original = scr
+        self.scr = scr
+        self._reload_preview()
+        # Recalculate template scale and resolution as if reopening window with normal screenshot
+        _, initial_scale, initial_threshold, w, h = get_initial_params(None, scr)
+        self.res_w.set(w)
+        self.res_h.set(h)
+        self.scale.set(initial_scale)
+        self.threshold.set(initial_threshold)
+        self._suspend_autocal = False
+
+        self._apply()
