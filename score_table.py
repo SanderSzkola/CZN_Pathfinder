@@ -1,3 +1,4 @@
+# score_table.py
 import json
 import os.path
 from typing import Dict

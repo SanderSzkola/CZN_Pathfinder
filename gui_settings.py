@@ -1,3 +1,4 @@
+# gui_settings.py
 import tkinter as tk
 import ttkbootstrap as tb
 
