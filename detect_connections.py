@@ -324,7 +324,7 @@ if __name__ == "__main__":
             continue
         map_path = os.path.join(map_folder, map_name)
         if i == 0:
-            perform_calibration_exact(map_path, log=lambda msg: print(msg))
+            perform_calibration_exact(screenshot=map_path, log=lambda msg: print(msg))
             templates.scale_templates(Settings.template_scale)
         nodes, edges, corridor_debug = detect_connections(map_path, templates, screenshot_index=i)
         render_preview(map_path, nodes, edges, corridor_debug)

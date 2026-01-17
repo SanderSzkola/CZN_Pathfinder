@@ -15,6 +15,14 @@ class Settings:
     screenshot_scale: float = 0.0  # 0 as uncalibrated flag, normally 1 or 0.5
     threshold: float = 0.98
 
+    # preview draw flags
+    preview_dim_background: bool = True
+    preview_draw_corridors: bool = True
+    preview_draw_nodes_text: bool = True
+    preview_draw_fringe_marks: bool = True
+    preview_draw_node_icons: bool = True
+    preview_draw_trim_overlay: bool = True
+
     # whatever else
     testmode: bool = False
     request_admin: bool = False

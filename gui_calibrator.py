@@ -11,6 +11,10 @@ from calibrator import perform_calibration_exact, get_initial_params
 from settings import Settings
 from path_converter import get_path
 from grabber import mock_screenshot
+from unified_preview import UnifiedPreview
+from detect_nodes import detect_nodes
+from detect_connections import detect_connections
+from template_library import TemplateLibrary
 
 
 class CalibrationPanel(tb.Toplevel):
@@ -75,20 +79,23 @@ class CalibrationPanel(tb.Toplevel):
         self.title("Calibration")
         self.transient(parent)
         self.grab_set()
-        self.scr = scr
-        self.scr_original = scr.copy()
+        self.scr_original_pil = self._to_pil(scr)
+        self.scr_display_pil = self.scr_original_pil.copy()
+        self.preview = None
+        self.templates = TemplateLibrary()
 
-        _, initial_scale, initial_threshold, w, h = get_initial_params(None, scr)
+        screenshot_scale, initial_scale, initial_threshold, w, h = get_initial_params(scr)
         self.res_w = tk.IntVar(value=w)
         self.res_h = tk.IntVar(value=h)
-        self.scale = tk.DoubleVar(value=initial_scale)
+        self.templates_scale = tk.DoubleVar(value=initial_scale)
         self.threshold = tk.DoubleVar(value=initial_threshold)
+        self.screenshot_scale = screenshot_scale
         self.auto_recalibrate = tk.BooleanVar(value=True)
         self._suspend_autocal = False
 
         self._img_tk = None
         self._build_ui()
-        self.scale.trace_add("write", self._on_param_change)
+        self.templates_scale.trace_add("write", self._on_param_change)
         self.threshold.trace_add("write", self._on_param_change)
         self._reload_preview()
 
@@ -210,8 +217,8 @@ class CalibrationPanel(tb.Toplevel):
         scale_frame = tb.Frame(grid)
         scale_frame.grid(row=row, column=1, sticky="w")
 
-        tb.Entry(scale_frame, textvariable=self.scale, width=8, ).pack(side="left")
-        self._spin_buttons(scale_frame, self.scale, 0.005)
+        tb.Entry(scale_frame, textvariable=self.templates_scale, width=8, ).pack(side="left")
+        self._spin_buttons(scale_frame, self.templates_scale, 0.005)
 
         row += 2
 
@@ -329,13 +336,53 @@ class CalibrationPanel(tb.Toplevel):
 
     def _build_other_panel(self, parent):
         parent.pack_propagate(False)
-
-        self._folders = self.list_valid_image_folders()
-        self._folder_var = tk.StringVar()
-
         container = tb.Frame(parent)
         container.pack(fill="both", expand=True, pady=10)
 
+        # checkboxes
+        self._preview_vars = {
+            "dim": tk.BooleanVar(value=Settings.preview_dim_background),
+            "corridors": tk.BooleanVar(value=Settings.preview_draw_corridors),
+            "nodes_text": tk.BooleanVar(value=Settings.preview_draw_nodes_text),
+            "fringe": tk.BooleanVar(value=Settings.preview_draw_fringe_marks),
+            "icons": tk.BooleanVar(value=Settings.preview_draw_node_icons),
+            "trim": tk.BooleanVar(value=Settings.preview_draw_trim_overlay),
+        }
+
+        preview_box = tb.Labelframe(
+            container,
+            text="Preview overlays",
+            padding=8
+        )
+        preview_box.pack(fill="x", padx=10, pady=(0, 10))
+
+        def add_cb(text, var, setting_attr):
+            def on_change():
+                setattr(Settings, setting_attr, var.get())
+                Settings.save()
+                if self.preview is not None:
+                    self.preview.apply_settings()
+                    self.scr_display_pil = self._to_pil(self.preview.render())
+                    self._reload_preview()
+
+            cb = tb.Checkbutton(
+                preview_box,
+                text=text,
+                variable=var,
+                command=on_change
+            )
+            cb.pack(anchor="w")
+
+        add_cb("Dim background", self._preview_vars["dim"], "preview_dim_background")
+        add_cb("Draw corridors", self._preview_vars["corridors"], "preview_draw_corridors")
+        add_cb("Draw node text", self._preview_vars["nodes_text"], "preview_draw_nodes_text")
+        add_cb("Draw fringe marks", self._preview_vars["fringe"], "preview_draw_fringe_marks")
+        add_cb("Draw node icons", self._preview_vars["icons"], "preview_draw_node_icons")
+        add_cb("Draw trim overlay", self._preview_vars["trim"], "preview_draw_trim_overlay")
+
+        # folders
+        self._folders = self.list_valid_image_folders()
+        self._folder_var = tk.StringVar()
         tb.Label(
             container,
             text="Image folders",
@@ -360,8 +407,8 @@ class CalibrationPanel(tb.Toplevel):
     # ==================================================================
     def _reload_preview(self):
 
-        self.scr = self._fit_image(self.scr, self.map_w, self.map_h)
-        self._img_tk = ImageTk.PhotoImage(self.scr)
+        self.scr_display_pil = self._fit_image(self.scr_display_pil, self.map_w, self.map_h)
+        self._img_tk = ImageTk.PhotoImage(self.scr_display_pil)
         self.image_label.config(image=self._img_tk)
 
     @staticmethod
@@ -457,17 +504,36 @@ class CalibrationPanel(tb.Toplevel):
     # Actions
     # ==================================================================
     def _apply(self):
-        _, _, src_tmp = perform_calibration_exact(
-            screenshot=self.scr_original,
+        base_np = cv2.cvtColor(np.array(self.scr_original_pil), cv2.COLOR_RGB2BGR)
+        if self.preview is None:
+            self.preview = UnifiedPreview(base_np)
+        else:
+            self.preview.base_img = base_np
+        self.preview.scale = self.templates_scale.get() / self.screenshot_scale
+        self.templates.scale_templates(self.templates_scale.get())
+        nodes = detect_nodes(
+            self.preview.base_img,
+            self.templates,
+            screenshot_scale=self.screenshot_scale,
+            threshold=self.threshold.get()
+        )
+        _, edges, corridor_debug = detect_connections(self.preview.base_img, templates=self.templates, nodes=nodes)
+        _, _ = perform_calibration_exact(
+            screenshot=self.scr_original_pil,
+            nodes=nodes,
             log=self.log,
-            template_scale=self.scale.get(),
+            template_scale=self.templates_scale.get(),
             threshold=self.threshold.get(),
         )
-        self.scr = self._to_pil(src_tmp)
+        self.preview.set_nodes(nodes)
+        self.preview.set_connections(edges, corridor_debug)
+        self.preview.apply_settings()
+
+        self.scr_display_pil = self._to_pil(self.preview.render())
         self._reload_preview()
 
     def _show_original(self):
-        self.scr = self.scr_original
+        self.scr_display_pil = self.scr_original_pil
         self._reload_preview()
 
     def _on_param_change(self, *_):
@@ -482,8 +548,8 @@ class CalibrationPanel(tb.Toplevel):
         self._current_index -= 1
         scr = self._load_image_at_index(self._current_index)
         if scr is not None:
-            self.scr_original = scr
-            self.scr = scr
+            self.scr_original_pil = scr.copy()
+            self.scr_display_pil = scr.copy()
             self._reload_preview()
             self._apply()
 
@@ -493,8 +559,8 @@ class CalibrationPanel(tb.Toplevel):
         self._current_index += 1
         scr = self._load_image_at_index(self._current_index)
         if scr is not None:
-            self.scr_original = scr
-            self.scr = scr
+            self.scr_original_pil = scr.copy()
+            self.scr_display_pil = scr.copy()
             self._reload_preview()
             self._apply()
 
@@ -519,15 +585,16 @@ class CalibrationPanel(tb.Toplevel):
             return
 
         self._suspend_autocal = True
-        self.scr_original = scr
-        self.scr = scr
+        self.scr_original_pil = scr.copy()
+        self.scr_display_pil = scr.copy()
         self._reload_preview()
         # Recalculate template scale and resolution as if reopening window with normal screenshot
-        _, initial_scale, initial_threshold, w, h = get_initial_params(None, scr)
+        screenshot_scale, initial_scale, initial_threshold, w, h = get_initial_params(scr)
         self.res_w.set(w)
         self.res_h.set(h)
-        self.scale.set(initial_scale)
+        self.templates_scale.set(initial_scale)
         self.threshold.set(initial_threshold)
+        self.screenshot_scale = screenshot_scale
         self._suspend_autocal = False
 
         self._apply()
