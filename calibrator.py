@@ -1,5 +1,5 @@
 # calibrator.py
-from detect_nodes import detect_nodes, detect_nodes_with_preview, _load_map_image
+from detect_nodes import detect_nodes, _load_map_image
 from template_library import TemplateLibrary, TEMPLATE_RES
 from settings import Settings
 

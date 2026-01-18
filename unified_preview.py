@@ -4,6 +4,7 @@ import numpy as np
 
 from settings import Settings
 from detect_connections import load_icon_map
+from detect_nodes import FRINGE_SAFETY_MARGIN
 
 CORRIDOR_ALPHA = 0.07
 TRIM_TOP_PX = 120
@@ -141,21 +142,20 @@ class UnifiedPreview:
 
         return img
 
-    def _draw_trim(self, img):
+    def _apply_overlay(self, img, mask, color_bgr, alpha_value):
         h, w = img.shape[:2]
         overlay = np.zeros((h, w, 4), dtype=np.uint8)
 
         step = 40
-        color = (0, 192, 256, 80)
-
         for x in range(-h, w + h, step):
-            cv2.line(overlay, (x, 0), (x + h, h), color, 9, cv2.LINE_AA)
-
-        mask = np.zeros((h, w), dtype=np.uint8)
-        mask[0:int(TRIM_TOP_PX * self.scale), :] = 255
-        mask[int(TRIM_TOP_PX * self.scale):h, 0:int(TRIM_LEFT_PX * self.scale)] = 255
-        mask[int(TRIM_TOP_PX * self.scale):h,
-        w - int(TRIM_RIGHT_PX * self.scale):w] = 255
+            cv2.line(
+                overlay,
+                (x, 0),
+                (x + h, h),
+                (*color_bgr, alpha_value),
+                9,
+                cv2.LINE_AA,
+            )
 
         overlay[:, :, 3] *= (mask // 255)
 
@@ -165,11 +165,48 @@ class UnifiedPreview:
 
         return cv2.cvtColor(bg, cv2.COLOR_BGRA2BGR)
 
+    def _draw_trim(self, img):
+        h, w = img.shape[:2]
+
+        s = self.scale
+        top = int(TRIM_TOP_PX * s)
+        left = int(TRIM_LEFT_PX * s)
+        right = int(TRIM_RIGHT_PX * s)
+        fringe = int(FRINGE_SAFETY_MARGIN * s * 0.9)  # slightly reduced so it does not obscure very close nodes
+
+        fringe_mask = np.zeros((h, w), dtype=np.uint8)
+        x0 = max(0, w - (right + fringe))
+        x1 = max(0, w - right)
+
+        if x1 > x0:
+            fringe_mask[top:h, x0:x1] = 255
+
+        hard_mask = np.zeros((h, w), dtype=np.uint8)
+        hard_mask[0:top, :] = 255
+        hard_mask[top:h, 0:left] = 255
+        hard_mask[top:h, w - right:w] = 255
+
+        img = self._apply_overlay(
+            img,
+            fringe_mask,
+            color_bgr=(255, 255, 0),
+            alpha_value=70,
+        )
+
+        img = self._apply_overlay(
+            img,
+            hard_mask,
+            color_bgr=(0, 192, 255),
+            alpha_value=90,
+        )
+
+        return img
+
     def render(self):
         img = self.base_img.copy()
 
         if self.dim_background:
-            img = (img.astype(np.float32) * 0.7).astype(np.uint8)
+            img = (img.astype(np.float32) * 0.6).astype(np.uint8)
 
         if self.draw_corridors:
             img = self._draw_corridors(img)

@@ -90,6 +90,8 @@ class CalibrationPanel(tb.Toplevel):
         self.templates_scale = tk.DoubleVar(value=initial_scale)
         self.threshold = tk.DoubleVar(value=initial_threshold)
         self.screenshot_scale = screenshot_scale
+        Settings.template_scale = initial_scale
+        Settings.screenshot_scale = screenshot_scale
         self.auto_recalibrate = tk.BooleanVar(value=True)
         self._suspend_autocal = False
 
@@ -515,12 +517,15 @@ class CalibrationPanel(tb.Toplevel):
             self.preview.base_img,
             self.templates,
             screenshot_scale=self.screenshot_scale,
-            threshold=self.threshold.get()
+            threshold=self.threshold.get(),
+            filter_fringe=False
         )
-        _, edges, corridor_debug = detect_connections(self.preview.base_img, templates=self.templates, nodes=nodes)
+        nodes_filtered = [n for n in nodes if not n.is_fringe]
+        _, edges, corridor_debug = detect_connections(self.preview.base_img, templates=self.templates,
+                                                      nodes=nodes_filtered)
         _, _ = perform_calibration_exact(
             screenshot=self.scr_original_pil,
-            nodes=nodes,
+            nodes=nodes_filtered,
             log=self.log,
             template_scale=self.templates_scale.get(),
             threshold=self.threshold.get(),
@@ -550,7 +555,6 @@ class CalibrationPanel(tb.Toplevel):
         if scr is not None:
             self.scr_original_pil = scr.copy()
             self.scr_display_pil = scr.copy()
-            self._reload_preview()
             self._apply()
 
     def _next_image(self):
@@ -561,7 +565,6 @@ class CalibrationPanel(tb.Toplevel):
         if scr is not None:
             self.scr_original_pil = scr.copy()
             self.scr_display_pil = scr.copy()
-            self._reload_preview()
             self._apply()
 
     def _on_folder_selected(self, event):
@@ -587,7 +590,7 @@ class CalibrationPanel(tb.Toplevel):
         self._suspend_autocal = True
         self.scr_original_pil = scr.copy()
         self.scr_display_pil = scr.copy()
-        self._reload_preview()
+
         # Recalculate template scale and resolution as if reopening window with normal screenshot
         screenshot_scale, initial_scale, initial_threshold, w, h = get_initial_params(scr)
         self.res_w.set(w)
@@ -595,6 +598,9 @@ class CalibrationPanel(tb.Toplevel):
         self.templates_scale.set(initial_scale)
         self.threshold.set(initial_threshold)
         self.screenshot_scale = screenshot_scale
+        Settings.template_scale = initial_scale
+        Settings.screenshot_scale = screenshot_scale
+        # do NOT save unconfirmed values, that's decided inside _apply
         self._suspend_autocal = False
 
         self._apply()

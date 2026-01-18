@@ -181,7 +181,6 @@ def detect_connections(map_fragment, templates, nodes=None, screenshot_index=0):
             map_fragment,
             templates,
             screenshot_index=screenshot_index,
-            create_preview=False,
             screenshot_scale=Settings.screenshot_scale,
             threshold=Settings.threshold
         )

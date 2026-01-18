@@ -139,80 +139,12 @@ def _assign_modifiers(nodes, modifier_hits, screenshot_scale):
                 pass
 
 
-def _preview(map_img, nodes, map_fragment, save_file):
-    preview = map_img.copy()
-    scale = Settings.get_scale()
-    for node in nodes:
-        x_offset = 40
-        y_offset = 15
-        text_x = node.x - x_offset
-        text_y = node.y + y_offset
-        cv2.putText(
-            preview,
-            node.label(),
-            (text_x, text_y),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.5 * scale,
-            (0, 0, 0),
-            int(7 * scale),
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            preview,
-            node.label(),
-            (text_x, text_y),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.5 * scale,
-            (80, 240, 0),
-            int(4 * scale),
-            cv2.LINE_AA,
-        )
-        # nodes too close to fringe, not in excluded margin but to be discarded anyway
-        if node.is_fringe:
-            cv2.line(preview, (text_x, text_y - 40), (text_x + 90, text_y), (0, 0, 0), 8)
-            cv2.line(preview, (text_x, text_y), (text_x + 90, text_y - 40), (0, 0, 0), 8)
-            cv2.line(preview, (text_x, text_y - 40), (text_x + 90, text_y), (0, 90, 190), 6)
-            cv2.line(preview, (text_x, text_y), (text_x + 90, text_y - 40), (0, 90, 190), 6)
-
-    # crossed non-scan area
-    h, w = preview.shape[:2]
-    overlay = np.zeros((h, w, 4), dtype=np.uint8)
-    step = 40
-    color = (0, 192, 256, 80)
-
-    for x in range(-h, w + h, step):
-        cv2.line(overlay, (x, 0), (x + h, h), color, 9, cv2.LINE_AA)
-
-    # mask out only the trimmed area
-    mask = np.zeros((h, w), dtype=np.uint8)
-    mask[0:int(TRIM_TOP_PX * scale), :] = 255
-    mask[int(TRIM_TOP_PX * scale):h, 0:int(TRIM_LEFT_PX * scale)] = 255
-    mask[int(TRIM_TOP_PX * scale):h, w - int(TRIM_RIGHT_PX * scale):w] = 255
-
-    overlay[:, :, 3] = overlay[:, :, 3] * (mask // 255)
-    bg = cv2.cvtColor(preview, cv2.COLOR_BGR2BGRA)
-    out = bg.copy()
-    alpha = overlay[:, :, 3:4] / 255.0
-    out[:, :, :3] = (1.0 - alpha) * bg[:, :, :3] + alpha * overlay[:, :, :3]
-    preview = cv2.cvtColor(out, cv2.COLOR_BGRA2BGR)
-
-    if save_file:
-        if isinstance(map_fragment, str):
-            base = get_path(map_fragment.split(".")[:-1])
-            cv2.imwrite(f"{base}_nodes_preview.png", preview)
-        else:
-            now = datetime.now().strftime("%H%M%S")
-            cv2.imwrite(get_path(f"nodes_preview_{now}.png"), preview)
-    return preview
-
-
-def _detect_nodes(screenshot_str_or_img,
-                  templates: TemplateLibrary,
-                  screenshot_index=0,
-                  create_preview=False,
-                  save=False,
-                  threshold=0.98,
-                  screenshot_scale=1.0):
+def detect_nodes(screenshot_str_or_img,
+                 templates: TemplateLibrary,
+                 screenshot_index=0,
+                 threshold=0.98,
+                 screenshot_scale=1.0,
+                 filter_fringe=True):
     screenshot = _load_map_image(screenshot_str_or_img)
     if Settings.testmode:
         print(
@@ -269,31 +201,9 @@ def _detect_nodes(screenshot_str_or_img,
     # random waypoint fix is back :(
     if len(nodes) > 2 and nodes[-1].type == "WA" and nodes[-2].type != "WA" and abs(nodes[-1].x - nodes[-2].x) > 10:
         nodes = nodes[:-1]
-    preview = _preview(screenshot, nodes, screenshot_str_or_img, save) if create_preview else None
-    nodes_filtered = [n for n in nodes if not n.is_fringe]
-    return nodes_filtered, preview
-
-
-def detect_nodes(screenshot_str_or_img,
-                 templates: TemplateLibrary,
-                 screenshot_index=0,
-                 create_preview=False,
-                 threshold=0.98,
-                 screenshot_scale=1.0):
-    nodes, _ = _detect_nodes(screenshot_str_or_img, templates, screenshot_index, create_preview, create_preview,
-                             threshold, screenshot_scale)
+    if filter_fringe:
+        nodes = [n for n in nodes if not n.is_fringe]
     return nodes
-
-
-def detect_nodes_with_preview(screenshot_str_or_img,
-                              templates: TemplateLibrary,
-                              screenshot_index=0,
-                              create_preview=True,
-                              threshold=0.98,
-                              screenshot_scale=1.0):
-    nodes, preview = _detect_nodes(screenshot_str_or_img, templates, screenshot_index, create_preview, False,
-                                   threshold, screenshot_scale)
-    return nodes, preview
 
 
 if __name__ == "__main__":
@@ -303,7 +213,7 @@ if __name__ == "__main__":
 
     # SINGLE
     path = os.path.join(folder, "map_frag_03.png")
-    nodes = detect_nodes(path, templates, create_preview=True, screenshot_scale=Settings.screenshot_scale,
+    nodes = detect_nodes(path, templates, screenshot_scale=Settings.screenshot_scale,
                          threshold=Settings.threshold)
     for n in nodes:
         print(n)
