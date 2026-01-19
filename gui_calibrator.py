@@ -28,7 +28,7 @@ class CalibrationPanel(tb.Toplevel):
     ):
         super().__init__(parent)
         self.log = log
-
+        self._from_folder = False
         # image and folder
         if (scr is None or scr.size[0] == 0) and not Settings.testmode:
             self.destroy()
@@ -36,6 +36,7 @@ class CalibrationPanel(tb.Toplevel):
 
         if Settings.testmode and (scr is None or scr.size[0] == 0):
             self.folder = Path(folder)
+            self._from_folder = True
             if not self.folder.exists() or not self.folder.is_dir():
                 log(f"Calibrator: Wrong folder path {self.folder}")
                 self.destroy()
@@ -100,6 +101,8 @@ class CalibrationPanel(tb.Toplevel):
         self.templates_scale.trace_add("write", self._on_param_change)
         self.threshold.trace_add("write", self._on_param_change)
         self._reload_preview()
+        self._update_map_label()
+        self._update_nav_buttons()
 
     # ==================================================================
     # UI
@@ -115,9 +118,21 @@ class CalibrationPanel(tb.Toplevel):
         panel = tb.Frame(parent, width=self.map_w, height=self.map_h)
         panel.pack(side="left", fill="both")
         panel.pack_propagate(False)
+        content = tb.Frame(panel)
+        content.pack(expand=True)
 
-        self.image_label = tb.Label(panel, anchor="center")
-        self.image_label.pack(fill="both", expand=True)
+        self._map_label = tb.Label(
+            content,
+            anchor="center",
+            justify="center",
+            font=("Segoe UI", 12)
+        )
+        self._map_label.pack(fill="x", pady=(0, 4))
+        self.image_label = tb.Label(
+            content,
+            anchor="center"
+        )
+        self.image_label.pack()
 
     def _build_right_panel(self, parent):
         panel = tb.Frame(parent, width=self.right_panel_width, height=self.window_h)
@@ -132,12 +147,16 @@ class CalibrationPanel(tb.Toplevel):
 
         tab_calibration = tb.Frame(notebook)
         notebook.add(tab_calibration, text="Calibration")
-
-        tab_other = tb.Frame(notebook)
-        notebook.add(tab_other, text="Other")
-
         self._build_controls(tab_calibration)
-        self._build_other_panel(tab_other)
+
+        tab_overlays = tb.Frame(notebook)
+        notebook.add(tab_overlays, text="Overlays")
+        self._build_overlays_panel(tab_overlays)
+
+        if Settings.testmode:
+            tab_folders = tb.Frame(notebook)
+            notebook.add(tab_folders, text="Folders")
+            self._build_folders_panel(tab_folders)
 
     def _build_controls(self, parent):
         # Grid container
@@ -274,13 +293,13 @@ class CalibrationPanel(tb.Toplevel):
         recal_row = tb.Frame(btns)
         recal_row.pack(pady=4)
 
-        if Settings.testmode and hasattr(self, "_image_files"):
-            tb.Button(
-                recal_row,
-                text="<",
-                width=3,
-                command=self._prev_image
-            ).pack(side="left", padx=4)
+        self._btn_prev = tb.Button(
+            recal_row,
+            text="<",
+            width=3,
+            command=self._prev_image
+        )
+        self._btn_prev.pack(side="left", padx=4)
 
         tb.Button(
             recal_row,
@@ -291,13 +310,13 @@ class CalibrationPanel(tb.Toplevel):
             padding=4
         ).pack(side="left")
 
-        if Settings.testmode and hasattr(self, "_image_files"):
-            tb.Button(
-                recal_row,
-                text=">",
-                width=3,
-                command=self._next_image
-            ).pack(side="left", padx=4)
+        self._btn_next = tb.Button(
+            recal_row,
+            text=">",
+            width=3,
+            command=self._next_image
+        )
+        self._btn_next.pack(side="left", padx=4)
 
         tb.Button(
             btns,
@@ -336,12 +355,11 @@ class CalibrationPanel(tb.Toplevel):
         tb.Button(col, text="▲", width=2, padding=0, command=inc).pack()
         tb.Button(col, text="▼", width=2, padding=0, command=dec).pack()
 
-    def _build_other_panel(self, parent):
+    def _build_overlays_panel(self, parent):
         parent.pack_propagate(False)
         container = tb.Frame(parent)
         container.pack(fill="both", expand=True, pady=10)
 
-        # checkboxes
         self._preview_vars = {
             "dim": tk.BooleanVar(value=Settings.preview_dim_background),
             "corridors": tk.BooleanVar(value=Settings.preview_draw_corridors),
@@ -367,13 +385,12 @@ class CalibrationPanel(tb.Toplevel):
                     self.scr_display_pil = self._to_pil(self.preview.render())
                     self._reload_preview()
 
-            cb = tb.Checkbutton(
+            tb.Checkbutton(
                 preview_box,
                 text=text,
                 variable=var,
                 command=on_change
-            )
-            cb.pack(anchor="w")
+            ).pack(anchor="w")
 
         add_cb("Dim background", self._preview_vars["dim"], "preview_dim_background")
         add_cb("Draw corridors", self._preview_vars["corridors"], "preview_draw_corridors")
@@ -382,7 +399,11 @@ class CalibrationPanel(tb.Toplevel):
         add_cb("Draw node icons", self._preview_vars["icons"], "preview_draw_node_icons")
         add_cb("Draw trim overlay", self._preview_vars["trim"], "preview_draw_trim_overlay")
 
-        # folders
+    def _build_folders_panel(self, parent):
+        parent.pack_propagate(False)
+        container = tb.Frame(parent)
+        container.pack(fill="both", expand=True, pady=10)
+
         self._folders = self.list_valid_image_folders()
         self._folder_var = tk.StringVar()
         tb.Label(
@@ -556,6 +577,7 @@ class CalibrationPanel(tb.Toplevel):
             self.scr_original_pil = scr.copy()
             self.scr_display_pil = scr.copy()
             self._apply()
+            self._update_map_label()
 
     def _next_image(self):
         if self._current_index >= len(self._image_files) - 1:
@@ -566,6 +588,7 @@ class CalibrationPanel(tb.Toplevel):
             self.scr_original_pil = scr.copy()
             self.scr_display_pil = scr.copy()
             self._apply()
+            self._update_map_label()
 
     def _on_folder_selected(self, event):
         sel = self._folder_list.curselection()
@@ -604,3 +627,21 @@ class CalibrationPanel(tb.Toplevel):
         self._suspend_autocal = False
 
         self._apply()
+        self._from_folder = True
+        self._update_map_label()
+        self._update_nav_buttons()
+
+    def _update_map_label(self):
+        if self._from_folder:
+            img = self._image_files[self._current_index].name
+            folder = self.folder.name
+            text = f"Loaded image: {img} from {folder} folder"
+        else:
+            text = "Loaded image: captured from game"
+
+        self._map_label.config(text=text)
+
+    def _update_nav_buttons(self):
+        state = "normal" if self._from_folder else "disabled"
+        self._btn_prev.config(state=state)
+        self._btn_next.config(state=state)
