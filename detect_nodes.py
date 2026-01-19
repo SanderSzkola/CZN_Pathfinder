@@ -194,7 +194,7 @@ def detect_nodes(screenshot_str_or_img,
     for node in nodes:
         node.x = int(node.x / screenshot_scale) + left_offset
         node.y = int(node.y / screenshot_scale) + top_offset
-        if node.x <= fringe_safety_margin or node.x >= w - fringe_safety_margin:
+        if node.x <= fringe_safety_margin / 4 or node.x >= w - fringe_safety_margin:
             node.is_fringe = True
 
     nodes.sort(key=lambda n: n.x)

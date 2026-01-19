@@ -83,32 +83,72 @@ class UnifiedPreview:
             self._icon_map = load_icon_map()
 
         for n in self.nodes:
-            icon = self._icon_map.get(n.type)
-            if icon is None:
+            type_icon = self._icon_map.get(n.type)
+            if type_icon is None:
                 continue
+
+            mod_icon = None
+            if n.modifier is not None:
+                mod_icon = self._icon_map.get(n.modifier)
 
             if self.scale != 1.0:
-                icon = cv2.resize(
-                    icon,
-                    (int(icon.shape[1] * self.scale),
-                     int(icon.shape[0] * self.scale)),
-                    interpolation=cv2.INTER_AREA
+                type_icon = cv2.resize(
+                    type_icon,
+                    (int(type_icon.shape[1] * self.scale),
+                     int(type_icon.shape[0] * self.scale)),
+                    interpolation=cv2.INTER_AREA,
                 )
+                if mod_icon is not None:
+                    mod_icon = cv2.resize(
+                        mod_icon,
+                        (int(mod_icon.shape[1] * self.scale),
+                         int(mod_icon.shape[0] * self.scale)),
+                        interpolation=cv2.INTER_AREA,
+                    )
 
-            if icon.shape[2] == 4:
-                cut_x = icon.shape[1] // 2
-                icon = icon.copy()
-                icon[:, cut_x:, 3] = 0
+            if type_icon.shape[2] == 4:
+                cut_x = type_icon.shape[1] // 2
+                type_icon = type_icon.copy()
+                type_icon[:, cut_x:, 3] = 0
 
-            h, w = icon.shape[:2]
-            x1, y1 = n.x - w // 2, n.y - h // 2
+            th, tw = type_icon.shape[:2]
+            mh, mw = mod_icon.shape[:2] if mod_icon is not None else (0, 0)
+            cx, cy = int(n.x), int(n.y)
+            tx = cx - tw // 2
+            ty = cy - th // 2
 
-            if x1 < 0 or y1 < 0 or x1 + w > img.shape[1] or y1 + h > img.shape[0]:
+            if (tx < 0 or ty < 0 or
+                    tx + tw > img.shape[1] or
+                    ty + th > img.shape[0]
+            ):
                 continue
 
-            roi = img[y1:y1 + h, x1:x1 + w]
-            mask = icon[:, :, 3].astype(bool)
-            roi[mask] = icon[:, :, :3][mask]
+            # draw type icon
+            roi = img[ty:ty + th, tx:tx + tw]
+            if type_icon.shape[2] == 4:
+                mask = type_icon[:, :, 3].astype(bool)
+                roi[mask] = type_icon[:, :, :3][mask]
+            else:
+                roi[:] = type_icon[:, :, :3]
+
+            # modifier, drawn on top
+            if mod_icon is None:
+                continue
+            mx = cx - mw // 2
+            my = ty - mh
+
+            if (mx < 0 or my < 0 or
+                    mx + mw > img.shape[1] or
+                    my + mh > img.shape[0]
+            ):
+                continue
+
+            roi = img[my:my + mh, mx:mx + mw]
+            if mod_icon.shape[2] == 4:
+                mask = mod_icon[:, :, 3].astype(bool)
+                roi[mask] = mod_icon[:, :, :3][mask]
+            else:
+                roi[:] = mod_icon[:, :, :3]
 
         return img
 
@@ -134,11 +174,28 @@ class UnifiedPreview:
                 cv2.LINE_AA
             )
 
-            if self.draw_fringe_marks and n.is_fringe:
-                cv2.line(img, (x, y - 40), (x + 90, y), (0, 0, 0), 8)
-                cv2.line(img, (x, y), (x + 90, y - 40), (0, 0, 0), 8)
-                cv2.line(img, (x, y - 40), (x + 90, y), (0, 90, 190), 6)
-                cv2.line(img, (x, y), (x + 90, y - 40), (0, 90, 190), 6)
+        return img
+
+    def _draw_fringe_marks(self, img):
+        s = self.scale
+        size = int(28 * s)
+        thickness_bg = int(8 * s)
+        thickness_fg = int(6 * s)
+
+        for n in self.nodes:
+            if not n.is_fringe:
+                continue
+
+            cx, cy = int(n.x), int(n.y)
+
+            p1 = (cx - size, cy - size)
+            p2 = (cx + size, cy + size)
+            p3 = (cx - size, cy + size)
+            p4 = (cx + size, cy - size)
+            cv2.line(img, p1, p2, (0, 0, 0), thickness_bg, cv2.LINE_AA)
+            cv2.line(img, p3, p4, (0, 0, 0), thickness_bg, cv2.LINE_AA)
+            cv2.line(img, p1, p2, (0, 90, 190), thickness_fg, cv2.LINE_AA)
+            cv2.line(img, p3, p4, (0, 90, 190), thickness_fg, cv2.LINE_AA)
 
         return img
 
@@ -174,13 +231,19 @@ class UnifiedPreview:
         right = int(TRIM_RIGHT_PX * s)
         fringe = int(FRINGE_SAFETY_MARGIN * s * 0.9)  # slightly reduced so it does not obscure very close nodes
 
+        # soft discard
         fringe_mask = np.zeros((h, w), dtype=np.uint8)
-        x0 = max(0, w - (right + fringe))
-        x1 = max(0, w - right)
+        rx0 = max(0, w - (right + fringe))
+        rx1 = max(0, w - right)
+        if rx1 > rx0:
+            fringe_mask[top:h, rx0:rx1] = 255
 
-        if x1 > x0:
-            fringe_mask[top:h, x0:x1] = 255
+        lx0 = min(w, left)
+        lx1 = min(w, int(left + fringe / 4))
+        if lx1 > lx0:
+            fringe_mask[top:h, lx0:lx1] = 255
 
+        # hard delete
         hard_mask = np.zeros((h, w), dtype=np.uint8)
         hard_mask[0:top, :] = 255
         hard_mask[top:h, 0:left] = 255
@@ -208,6 +271,9 @@ class UnifiedPreview:
         if self.dim_background:
             img = (img.astype(np.float32) * 0.6).astype(np.uint8)
 
+        if self.draw_trim_overlay:
+            img = self._draw_trim(img)
+
         if self.draw_corridors:
             img = self._draw_corridors(img)
 
@@ -217,8 +283,8 @@ class UnifiedPreview:
         if self.draw_nodes_text:
             img = self._draw_node_text(img)
 
-        if self.draw_trim_overlay:
-            img = self._draw_trim(img)
+        if self.draw_fringe_marks:
+            img = self._draw_fringe_marks(img)
 
         return img
 

@@ -46,14 +46,14 @@ def group_rows(nodes):
 # ------------------------------------------------------------
 
 def load_icon_map():
-    base = get_path(["Images", "Encounter"])
+    base_paths = [get_path(["Images", "Encounter"]), get_path(["Images", "Modifier_1920"])]
     icons = {}
-
-    for file in os.listdir(base):
-        if not file.lower().endswith(".png"):
-            continue
-        key = os.path.splitext(file)[0][:2].upper()
-        icons[key] = cv2.imread(os.path.join(base, file), cv2.IMREAD_UNCHANGED)
+    for base in base_paths:
+        for file in os.listdir(base):
+            if not file.lower().endswith(".png"):
+                continue
+            key = os.path.splitext(file)[0][:2].upper()
+            icons[key] = cv2.imread(os.path.join(base, file), cv2.IMREAD_UNCHANGED)
 
     return icons
 
