@@ -272,6 +272,9 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
         should_end = False
         if check_end(nodes, last_nodes):
             should_end = True
+        if conn_worker.exc_info:  # stop queue when error
+            exc_type, exc_value, exc_tb = conn_worker.exc_info
+            raise exc_value.with_traceback(exc_tb)
         # anti duplicate check
         is_duplicate = False
         if check_duplicates(nodes, last_nodes):
@@ -380,6 +383,10 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
                 log(f"Step {step} discarded as duplicate")
                 step += 1
                 continue
+
+        if conn_worker.exc_info:  # stop queue when error
+            exc_type, exc_value, exc_tb = conn_worker.exc_info
+            raise exc_value.with_traceback(exc_tb)
 
         if not is_duplicate:
             work_q.put((img, nodes))

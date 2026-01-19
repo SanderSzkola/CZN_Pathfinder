@@ -184,7 +184,10 @@ class Finalizer:
             msg = "Merge failed, grid state:\n"
             msg+=map_grid_to_string(self.global_nodes, f"GLOBAL step {self.step}")
             msg+=map_grid_to_string(nodes, f"FRAGMENT step {self.step}")
-            raise IOError(f"{msg}\nFinalizer.add_fragment failed at step {self.step}, caused by node grid mismatch, most likely caused by wrong calibration")
+            raise IOError(f"{msg}\nFinalizer.add_fragment failed at step {self.step}, caused by node grid mismatch, "
+                          f"most likely caused by wrong calibration. You can see what exactly failed by loading "
+                          f"Last_scan_result folder into calibrator and checking whole sequence of screenshots. "
+                          f"Check nodes and paths on every screenshot, most likely one node is labeled incorrectly.")
 
         for edge in corrected_edges:
             self.edges.add(edge)

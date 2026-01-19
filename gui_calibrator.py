@@ -158,6 +158,10 @@ class CalibrationPanel(tb.Toplevel):
             notebook.add(tab_folders, text="Folders")
             self._build_folders_panel(tab_folders)
 
+        tab_help = tb.Frame(notebook)
+        notebook.add(tab_help, text="Help")
+        self._build_help_panel(tab_help)
+
     def _build_controls(self, parent):
         # Grid container
         grid = tb.Frame(parent)
@@ -395,8 +399,8 @@ class CalibrationPanel(tb.Toplevel):
         add_cb("Dim background", self._preview_vars["dim"], "preview_dim_background")
         add_cb("Draw corridors", self._preview_vars["corridors"], "preview_draw_corridors")
         add_cb("Draw node text", self._preview_vars["nodes_text"], "preview_draw_nodes_text")
-        add_cb("Draw fringe marks", self._preview_vars["fringe"], "preview_draw_fringe_marks")
         add_cb("Draw node icons", self._preview_vars["icons"], "preview_draw_node_icons")
+        add_cb("Draw fringe marks", self._preview_vars["fringe"], "preview_draw_fringe_marks")
         add_cb("Draw trim overlay", self._preview_vars["trim"], "preview_draw_trim_overlay")
 
     def _build_folders_panel(self, parent):
@@ -424,6 +428,45 @@ class CalibrationPanel(tb.Toplevel):
             self._folder_list.insert("end", label)
 
         self._folder_list.bind("<<ListboxSelect>>", self._on_folder_selected)
+
+    def _build_help_panel(self, parent):
+        parent.pack_propagate(False)
+
+        container = tb.Frame(parent)
+        container.pack(fill="both", expand=True, padx=12, pady=12)
+
+        tb.Label(
+            container,
+            text="Calibration Help",
+            font=("Segoe UI", 11, "bold")
+        ).pack(anchor="w", pady=(0, 8))
+
+        help_text = (
+            "General workflow:\n"
+            "1. Take a screenshot or select an image folder.\n"
+            "2. Lower THRESHOLD a few times until all nodes are labeled.\n"
+            "3. If some node refuses to be labeled, try changing TEMPLATE SCALE.\n"
+            "4. Confirm if every existing path between labeled nodes is highlighted.\n"
+            "\n"
+            "Tips:\n"
+            "- Template scale is resolution-dependent; initial values are usually close.\n"
+            "- If nodes are missing, lower the threshold.\n"
+            "- If extra modifiers appear, increase the threshold.\n"
+            "- The first column of a map may have wrongly detected modifiers, ignore them.\n"
+            "- Yellow crossed area is excluded from detection due to game's ui elements.\n"
+            "- Blue crossed area is a safety margin, nodes located there are hard to read, so they are discarded. You may adjust it based on your own experience.\n"
+            "\n"
+            "Goal:\n"
+            "Every node and modifier should be detected and correctly labeled."
+        )
+
+        tb.Label(
+            container,
+            text=help_text,
+            justify="left",
+            anchor="nw",
+            wraplength=self.right_panel_width - 40
+        ).pack(fill="both", expand=True)
 
     # ==================================================================
     # Preview image
