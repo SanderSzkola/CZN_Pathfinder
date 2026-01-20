@@ -14,7 +14,8 @@ TRIM_LEFT_PX = 120
 
 class UnifiedPreview:
     def __init__(self, base_img):
-        self.base_img = base_img.copy()
+        if base_img is not None:
+            self.base_img = base_img.copy()
         self.scale = Settings.get_scale()
 
         self.dim_background = False
@@ -295,3 +296,6 @@ class UnifiedPreview:
         self.draw_fringe_marks = Settings.preview_draw_fringe_marks
         self.draw_node_icons = Settings.preview_draw_node_icons
         self.draw_trim_overlay = Settings.preview_draw_trim_overlay
+
+    def save(self, filename):
+        cv2.imwrite(filename, self.render())

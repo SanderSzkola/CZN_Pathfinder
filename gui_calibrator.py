@@ -448,6 +448,9 @@ class CalibrationPanel(tb.Toplevel):
             "3. If some node refuses to be labeled, try changing TEMPLATE SCALE.\n"
             "4. Confirm if every existing path between labeled nodes is highlighted.\n"
             "\n"
+            "Goal:\n"
+            "Every node and modifier should be detected and correctly labeled.\n"
+            "\n"
             "Tips:\n"
             "- Template scale is resolution-dependent; initial values are usually close.\n"
             "- If nodes are missing, lower the threshold.\n"
@@ -456,8 +459,14 @@ class CalibrationPanel(tb.Toplevel):
             "- Yellow crossed area is excluded from detection due to game's ui elements.\n"
             "- Blue crossed area is a safety margin, nodes located there are hard to read, so they are discarded. You may adjust it based on your own experience.\n"
             "\n"
-            "Goal:\n"
-            "Every node and modifier should be detected and correctly labeled."
+            "Legend:\n"
+            "NO - normal fight\n"
+            "EL - elite fight\n"
+            "EV - random event\n"
+            "RE - rest\n"
+            "SH - shop\n"
+            "OR - chaos orb / aura / harder monster\n"
+            "TU - dimensional tunnel\n"
         )
 
         tb.Label(

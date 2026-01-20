@@ -14,7 +14,6 @@ CORRIDOR_OFFSET = 14
 THRESHOLD = 128
 MIN_CORRIDOR_FILL = 0.50
 ANGLE_MERGE_DEG = 10
-CORRIDOR_ALPHA = 0.1
 
 
 # ------------------------------------------------------------
@@ -247,75 +246,17 @@ def detect_connections(map_fragment, templates, nodes=None, screenshot_index=0):
     return nodes, [(n.id, m.id) for n, m, _, _ in edges], corridor_debug
 
 
-# ------------------------------------------------------------
-# Preview rendering
-# ------------------------------------------------------------
-
-def render_preview(map_path, nodes, edges, corridor_debug):
-    base = cv2.imread(map_path, cv2.IMREAD_COLOR)
-    overlay = base.copy()
-    base = (base.astype(np.float32) * 0.1).astype(np.uint8)
-    icons = load_icon_map()
-
-    # draw corridors
-    for (x1, y1, x2, y2, h), ok in sorted(corridor_debug, key=lambda item: item[1]):
-        angle = np.arctan2(y2 - y1, x2 - x1)
-        nx, ny = -np.sin(angle) * h, np.cos(angle) * h
-
-        pts = np.array([
-            (x1 + nx, y1 + ny),
-            (x2 + nx, y2 + ny),
-            (x2 - nx, y2 - ny),
-            (x1 - nx, y1 - ny)
-        ], dtype=np.int32)
-
-        color = (0, 255, 0) if ok else (0, 0, 255)
-        temp = overlay.copy()
-        cv2.fillPoly(temp, [pts], color)
-        alpha = CORRIDOR_ALPHA * 3 if ok else CORRIDOR_ALPHA
-        overlay = cv2.addWeighted(temp, alpha, overlay, 1 - alpha, 0)
-        cv2.polylines(overlay, [pts], True, color, 1)
-
-    result = cv2.addWeighted(base, 0.5, overlay, 0.5, 0)
-
-    # paste scaled icons
-    for n in nodes:
-        icon = icons.get(n.type)
-        if icon is None:
-            continue
-
-        scale = Settings.get_scale()
-        if scale != 1.0:
-            icon = cv2.resize(
-                icon,
-                (int(icon.shape[1] * scale), int(icon.shape[0] * scale)),
-                interpolation=cv2.INTER_AREA
-            )
-
-        # cut icon in half, left side
-        if icon.shape[2] == 4:
-            cut_x = icon.shape[1] // 2
-            icon = icon.copy()
-            icon[:, cut_x:, 3] = 0
-
-        h, w = icon.shape[:2]
-        x1, y1 = n.x - w // 2, n.y - h // 2
-        if x1 < 0 or y1 < 0 or x1 + w > result.shape[1] or y1 + h > result.shape[0]:
-            continue
-
-        roi = result[y1:y1 + h, x1:x1 + w]
-        mask = icon[:, :, 3].astype(bool)
-        roi[mask] = icon[:, :, :3][mask]
-
-    cv2.imwrite(get_path(f"{map_path.split('.')[0]}_connections_preview.png"), result)
-
-
 if __name__ == "__main__":
-    map_folder = get_path(["Test_scans", "Last_scan_result_pathCoveredByTunnel"])
+    from calibrator import perform_calibration_exact  # needed only here for quick testing
+    from unified_preview import UnifiedPreview
+
+    map_folder = get_path(["Test_scans", "Last_scan_result_1080_pathCoveredByTunnel"])
     # maps = ["map_frag_02.png", ]
     maps = os.listdir(map_folder)
-    from calibrator import perform_calibration_exact  # needed only here for quick testing
     templates = TemplateLibrary()
+    preview = UnifiedPreview(None)
+    preview.enable_connections_preview()
+    preview.enable_trim_overlay()
     for i, map_name in enumerate(maps):
         name, ext = map_name.split('.')
         if name.endswith("preview") or name.startswith("merged") or not ext.endswith("png"):
@@ -326,6 +267,9 @@ if __name__ == "__main__":
             perform_calibration_exact(screenshot=map_path, log=lambda msg: print(msg))
             templates.scale_templates(Settings.template_scale)
         nodes, edges, corridor_debug = detect_connections(map_path, templates, screenshot_index=i)
-        render_preview(map_path, nodes, edges, corridor_debug)
+        preview.base_img = ensure_gray(map_path)[0]
+        preview.set_nodes(nodes)
+        preview.set_connections(edges, corridor_debug)
+        preview.save(get_path([map_folder, f"{name}_connections_preview.png"]))
         print(f"{map_name} done")
     print("Done.")

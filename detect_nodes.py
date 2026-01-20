@@ -207,26 +207,28 @@ def detect_nodes(screenshot_str_or_img,
 
 
 if __name__ == "__main__":
+    from calibrator import perform_calibration_exact  # needed only here for quick testing
+    from unified_preview import UnifiedPreview
+
+    map_folder = get_path(["Test_scans", "Last_scan_result_1080_pathCoveredByTunnel"])
+    # maps = ["map_frag_02.png", ]
+    maps = os.listdir(map_folder)
     templates = TemplateLibrary()
-    folder = get_path("Last_scan_result")
-    # folder = get_path(["Test_scans", "Map_small_res_1"])
-
-    # SINGLE
-    path = os.path.join(folder, "map_frag_03.png")
-    nodes = detect_nodes(path, templates, screenshot_scale=Settings.screenshot_scale,
-                         threshold=Settings.threshold)
-    for n in nodes:
-        print(n)
-    print(f"Total nodes: {len(nodes)}")
-
-    # FOLDER
-    # path = os.path.join(folder, "map_frag_4.png")
-    # screenshot_scale, threshold, calibration_status = validate_calibration(templates, path, log=lambda msg: print(msg))
-    # for f in os.listdir(folder):
-    #     if f.split('.')[0].endswith("preview") or f.startswith("merged"):
-    #         continue
-    #     if f.split('.')[1] != "png":
-    #         continue
-    #     path = os.path.join(folder, f)
-    #     nodes = detect_nodes(path, templates, create_preview=True, screenshot_scale=screenshot_scale, threshold=threshold)
-    #     print(f"{f} done, {len(nodes)} obj detected")
+    preview = UnifiedPreview(None)
+    preview.enable_nodes_preview()
+    preview.enable_trim_overlay()
+    for i, map_name in enumerate(maps):
+        name, ext = map_name.split('.')
+        if name.endswith("preview") or name.startswith("merged") or not ext.endswith("png"):
+            i -= 1
+            continue
+        map_path = os.path.join(map_folder, map_name)
+        if i == 0:
+            perform_calibration_exact(screenshot=map_path, log=lambda msg: print(msg))
+            templates.scale_templates(Settings.template_scale)
+        nodes = detect_nodes(map_path, templates, filter_fringe=False)
+        preview.base_img = _load_map_image(map_path)
+        preview.set_nodes(nodes)
+        preview.save(get_path([map_folder, f"{name}_nodes_preview.png"]))
+        print(f"{map_name} done")
+    print("Done.")
