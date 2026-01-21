@@ -239,8 +239,8 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
     if save_folder is not None:
         os.makedirs(save_folder, exist_ok=True)
 
+    duplicates = 0
     while step <= max_steps:
-        duplicates = 0
         img, game_window_corner_offset = screenshot(save_folder, step)
         detect_q.put((step, img))
         # skip movement if end MAY BE here, but not confirmed yet
@@ -262,10 +262,10 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
         if non_normals <= 2 and len(nodes) <= 4:
             switch_window(1)
             raise IOError(
-                f"step_{step}: {len(nodes)}n/{non_normals}o nodes detected, too low. Is your map fully visible? Did you perform calibration?")
+                f"step_{step}: {len(nodes)}n / {non_normals}o nodes detected, too low. Is your map fully visible? Did you perform calibration?")
 
         if step <= max_steps:
-            log(f"Step {step}, expected 5~10; {len(nodes)}n / {non_normals}o nodes detected")
+            log(f"Step {step}, expected 3~6; {len(nodes)}n / {non_normals}o nodes detected")
         else:
             log(f"Step {step}, something is definitely wrong, consider making bug report")
             raise IOError("Auto scanner failed")
@@ -372,7 +372,7 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
             raise IOError(f"Step {step}: Nothing detected, is map visible?")
         non_empty_columns, non_normals = check_node_output_quality(nodes)
         if non_normals <= 2 and len(nodes) <= 4:
-            raise IOError(f"Step {step}: {len(nodes)}n/{non_normals}o nodes detected, too low")
+            raise IOError(f"Step {step}: {len(nodes)}n / {non_normals}o nodes detected, too low")
         log(f"Step {step} from screenshot {s}: {len(nodes)}n / {non_normals}o nodes detected")
 
         should_end = check_end(nodes, last_nodes)
@@ -485,10 +485,10 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
 
         if non_normals <= 2 and len(nodes) <= 4:
             listener.stop()
-            raise IOError(f"Step {step}: {len(nodes)}n/{non_normals}o nodes detected, too low. Is map fully visible? "
+            raise IOError(f"Step {step}: {len(nodes)}n / {non_normals}o nodes detected, too low. Is map fully visible? "
                           f"Have you performed calibration?")
 
-        log(f"Step {step}, expected 5~10; {len(nodes)}n/{non_normals}o nodes detected")
+        log(f"Step {step}, expected 3~6; {len(nodes)}n / {non_normals}o nodes detected")
 
         should_end = check_end(nodes, last_nodes)
         is_duplicate = False
