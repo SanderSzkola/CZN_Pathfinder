@@ -13,14 +13,14 @@ class Settings:
     # template params
     template_scale: float = 1.0
     screenshot_scale: float = 0.0  # 0 as uncalibrated flag, normally 1 or 0.5
-    threshold: float = 0.98
+    threshold: float = 0.975
 
     # preview draw flags
-    preview_dim_background: bool = False
+    preview_dim_background: bool = True
     preview_draw_corridors: bool = True
     preview_draw_nodes_text: bool = True
-    preview_draw_fringe_marks: bool = True
     preview_draw_node_icons: bool = False
+    preview_draw_fringe_marks: bool = True
     preview_draw_trim_overlay: bool = True
 
     # whatever else
@@ -31,7 +31,7 @@ class Settings:
     autoupdate: bool = True
     last_update_check: datetime | None = None
     remote_version: str | None = None
-    local_version: str | None = "v0.4.3-rc1"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow
+    local_version: str | None = "v0.4.3"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow
     target_app_name: str = "Chaos Zero Nightmare"
     keyboard_input: bool = False
     keyboard_input_autoscanner: str = "s+1"
