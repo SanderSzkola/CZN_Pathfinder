@@ -10,6 +10,7 @@ import tkinter as tk
 from tkinter import filedialog
 import ttkbootstrap as tb
 import cv2
+from pathlib import Path
 
 if not hasattr(cv2, "__version__"):  # random GPT-approved dependency error fix
     cv2.__version__ = "4"
@@ -526,17 +527,41 @@ class PipelineGUI:
 
         threading.Thread(target=task, daemon=True).start()
 
+    def _get_valid_calibration_folder(self):
+        folder = Path(get_path(["Last_scan_result"]))
+        if not folder.exists() or not folder.is_dir():
+            return None
+
+        try:
+            files = CalibrationPanel.scan_folder(folder)
+            return folder if files else None
+        except Exception:
+            return None
+
     def start_calibrator(self):
         if not self.ask_continue_dialog("calibrator"):
             self.log("Calibrator task cancelled")
             return
+
         scr = get_game_screenshot(self.log)
+        has_game_image = scr is not None and getattr(scr, "size", (0, 0))[0] > 0
+        folder = self._get_valid_calibration_folder()
+
+        if not has_game_image and not folder is not None:
+            self.log("Calibration aborted: no game screenshot and no valid image folder found")
+            return
+
+        if not has_game_image and folder is not None and not Settings.testmode:
+            if not self.ask_continue_dialog("calibrator_no_game"):
+                self.log("Calibrator task cancelled")
+                return
+
         CalibrationPanel(
             parent=self.root,
             low_res=self.low_res,
             log=self.log,
-            scr=scr,
-            folder=get_path(["Last_scan_result"])
+            scr=scr if has_game_image else None,
+            folder=folder
         )
 
     # ======================================================================
@@ -609,6 +634,12 @@ class PipelineGUI:
                 "Make sure alt-tab leads to the game, the game has minimap opened and in a position that shows different\n"
                 "types of nodes and modifiers, the more the better. Starting position is BAD, move it to the right a bit.\n\n"
                 "If the script failed to switch window, alt-tab to game and back, then start again."
+            )
+        elif variant == "calibrator_no_game":
+            text = (
+                "Game screenshot capture failed.\n\n"
+                "To try again, choose Cancel, alt-tab to game and back, then press Calibrator.\n"
+                "To load Last_scan_result folder instead, choose Continue."
             )
         else:
             text = "Not implemented"

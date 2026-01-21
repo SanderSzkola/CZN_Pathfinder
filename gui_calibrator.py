@@ -5,7 +5,6 @@ from PIL import Image, ImageTk
 import numpy as np
 from pathlib import Path
 import cv2
-import re
 
 from calibrator import perform_calibration_exact, get_initial_params
 from settings import Settings
@@ -23,42 +22,42 @@ class CalibrationPanel(tb.Toplevel):
             parent,
             low_res: bool,
             scr,
-            folder: str,
+            folder: str | Path | None,
             log=None
     ):
         super().__init__(parent)
         self.log = log
+
         self._from_folder = False
-        # image and folder
-        if (scr is None or scr.size[0] == 0) and not Settings.testmode:
-            self.destroy()
-            return
+        self.folder = None
+        self._image_files = []
+        self._current_index = 0
 
-        if Settings.testmode and (scr is None or scr.size[0] == 0):
+        # try folder-based calibration
+        if scr is None or getattr(scr, "size", (0, 0))[0] == 0:
+            if folder is None:
+                self.log("Calibrator: No image source available")
+                self.destroy()
+                return
             self.folder = Path(folder)
-            self._from_folder = True
             if not self.folder.exists() or not self.folder.is_dir():
-                log(f"Calibrator: Wrong folder path {self.folder}")
+                self.log(f"Calibrator: Invalid folder {self.folder}")
                 self.destroy()
                 return
-
-            self._image_files = self._scan_folder(self.folder)
-            self._current_index = 0
-
+            self._image_files = self.scan_folder(self.folder)
             if not self._image_files:
-                log(f"Calibrator: No images in {self.folder}")
+                self.log(f"Calibrator: No valid images in {self.folder}")
                 self.destroy()
                 return
-
-            log(f"Calibrator: Loading test image from {self.folder}")
+            self._from_folder = True
+            self._current_index = 0
             scr = self._load_image_at_index(0)
             if scr is None:
-                log(f"Calibrator: Loading test image from {self.folder} failed somehow")
+                self.log("Calibrator: Failed to load image from folder")
                 self.destroy()
                 return
 
         # rest of init
-        self.parent = parent
         # self.low_res = low_res
         low_res = True  # do not need much space now, leave possibility later
 
@@ -153,10 +152,9 @@ class CalibrationPanel(tb.Toplevel):
         notebook.add(tab_overlays, text="Overlays")
         self._build_overlays_panel(tab_overlays)
 
-        if Settings.testmode:
-            tab_folders = tb.Frame(notebook)
-            notebook.add(tab_folders, text="Folders")
-            self._build_folders_panel(tab_folders)
+        tab_folders = tb.Frame(notebook)
+        notebook.add(tab_folders, text="Folders")
+        self._build_folders_panel(tab_folders)
 
         tab_help = tb.Frame(notebook)
         notebook.add(tab_help, text="Help")
@@ -428,6 +426,9 @@ class CalibrationPanel(tb.Toplevel):
             self._folder_list.insert("end", label)
 
         self._folder_list.bind("<<ListboxSelect>>", self._on_folder_selected)
+        if not self._folders:
+            self._folder_list.insert("end", "No valid image folders found")
+            self._folder_list.config(state="disabled")
 
     def _build_help_panel(self, parent):
         parent.pack_propagate(False)
@@ -446,7 +447,7 @@ class CalibrationPanel(tb.Toplevel):
             "1. Take a screenshot or select an image folder.\n"
             "2. Lower THRESHOLD a few times until all nodes are labeled.\n"
             "3. If some node refuses to be labeled, try changing TEMPLATE SCALE.\n"
-            "4. Confirm if every existing path between labeled nodes is highlighted.\n"
+            "4. Confirm that every existing path between labeled nodes is highlighted.\n"
             "\n"
             "Goal:\n"
             "Every node and modifier should be detected and correctly labeled.\n"
@@ -455,8 +456,8 @@ class CalibrationPanel(tb.Toplevel):
             "- Template scale is resolution-dependent; initial values are usually close.\n"
             "- If nodes are missing, lower the threshold.\n"
             "- If extra modifiers appear, increase the threshold.\n"
-            "- The first column of a map may have wrongly detected modifiers, ignore them.\n"
-            "- Yellow crossed area is excluded from detection due to game's ui elements.\n"
+            "- The first column of a map (that glow beam) may have wrongly detected modifiers, ignore them.\n"
+            "- Yellow crossed area is excluded from detection due to game's ui elements potentially overlapping with nodes.\n"
             "- Blue crossed area is a safety margin, nodes located there are hard to read, so they are discarded. You may adjust it based on your own experience.\n"
             "\n"
             "Legend:\n"
@@ -465,7 +466,7 @@ class CalibrationPanel(tb.Toplevel):
             "EV - random event\n"
             "RE - rest\n"
             "SH - shop\n"
-            "OR - chaos orb / aura / harder monster\n"
+            "OR - chaos orb / aura monster / harder monster\n"
             "TU - dimensional tunnel\n"
         )
 
@@ -516,7 +517,7 @@ class CalibrationPanel(tb.Toplevel):
         raise TypeError(f"Unsupported image type: {type(img)}")
 
     @staticmethod
-    def _scan_folder(folder: Path):
+    def scan_folder(folder: Path):
         files = []
 
         for f in folder.iterdir():
@@ -560,7 +561,7 @@ class CalibrationPanel(tb.Toplevel):
         for p in base.rglob("*"):
             if not p.is_dir():
                 continue
-            if CalibrationPanel._scan_folder(p):
+            if CalibrationPanel.scan_folder(p):
                 valid_folders.append(p)
 
         parents = {}
@@ -653,7 +654,7 @@ class CalibrationPanel(tb.Toplevel):
             return  # parent folder → do nothing
 
         self.folder = path
-        self._image_files = self._scan_folder(path)
+        self._image_files = self.scan_folder(path)
         self._current_index = 0
 
         if not self._image_files:
