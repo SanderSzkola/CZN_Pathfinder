@@ -1,5 +1,5 @@
+# detect_connections.py
 import os
-
 import cv2
 import numpy as np
 from PIL.Image import Image
@@ -9,26 +9,71 @@ from path_converter import get_path
 from settings import Settings
 
 PX_TOLERANCE = 16
-CORRIDOR_HALF = 16
-CORRIDOR_OFFSET = 10
+CORRIDOR_HALF = 6
+CORRIDOR_OFFSET = 14
 THRESHOLD = 128
-CONNECTION_WHITE_RATIO = 0.035
-ORIENTATION_ANGLE_DEG = 20
-RECTANGLE_MULT = 1.4
+MIN_CORRIDOR_FILL = 0.50
+ANGLE_MERGE_DEG = 10
 
 
 # ------------------------------------------------------------
-# Image handling
+# Node grouping
 # ------------------------------------------------------------
 
-def _ensure_gray(map_fragment):
+def group_columns(nodes):
+    columns = []
+    for x in sorted(n.x for n in nodes):
+        if not any(abs(x - cx) <= PX_TOLERANCE for cx in columns):
+            columns.append(x)
+
+    for n in nodes:
+        n.col = min(range(len(columns)), key=lambda i: abs(n.x - columns[i]))
+
+
+def group_rows(nodes):
+    rows = []
+    for y in sorted(n.y for n in nodes):
+        if not any(abs(y - ry) <= PX_TOLERANCE for ry in rows):
+            rows.append(y)
+
+    for n in nodes:
+        n.row = min(range(len(rows)), key=lambda i: abs(n.y - rows[i]))
+
+
+# ------------------------------------------------------------
+# Icon loading & geometry
+# ------------------------------------------------------------
+
+def load_icon_map():
+    base_paths = [get_path(["Images", "Encounter"]), get_path(["Images", "Modifier_1920"])]
+    icons = {}
+    for base in base_paths:
+        for file in os.listdir(base):
+            if not file.lower().endswith(".png"):
+                continue
+            key = os.path.splitext(file)[0][:2].upper()
+            icons[key] = cv2.imread(os.path.join(base, file), cv2.IMREAD_UNCHANGED)
+
+    return icons
+
+
+def node_edge_point(node, icons, direction):
+    icon = icons.get(node.type)
+    if icon is None:
+        return node.x, node.y
+
+    w = int(icon.shape[1] * Settings.get_scale())
+    dx = (w // 2) * direction
+    return int(node.x + dx), int(node.y) + int(CORRIDOR_OFFSET * Settings.get_scale())
+
+
+def ensure_gray(map_fragment):
     if isinstance(map_fragment, str):
         img = cv2.imread(map_fragment, cv2.IMREAD_COLOR)
         if img is None:
-            raise ValueError(f"Failed to read image from path: {map_fragment}")
+            raise ValueError(f"Failed to read image: {map_fragment}")
     elif isinstance(map_fragment, Image):
-        img = np.array(map_fragment)
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+        img = cv2.cvtColor(np.array(map_fragment), cv2.COLOR_RGB2BGR)
     else:
         img = map_fragment
 
@@ -36,119 +81,89 @@ def _ensure_gray(map_fragment):
 
 
 # ------------------------------------------------------------
-# Node grouping
+# Corridor
 # ------------------------------------------------------------
 
-def _group_columns(nodes):
-    xs = sorted(n.x for n in nodes)
-    columns = []
+def extract_corridor(map_gray, n1, n2, icons):
+    x1, y1 = node_edge_point(n1, icons, +1)
+    x2, y2 = node_edge_point(n2, icons, -1)
 
-    for x in xs:
-        if not any(abs(c - x) <= PX_TOLERANCE for c in columns):
-            columns.append(x)
-
-    columns.sort()
-
-    col_assign = {}
-    for n in nodes:
-        best_col = None
-        best_dist = float("inf")
-        for ci, cx in enumerate(columns):
-            d = abs(n.x - cx)
-            if d < best_dist:
-                best_dist = d
-                best_col = ci
-        col_assign[n] = best_col
-
-    for n in nodes:
-        n.col = col_assign[n]
-
-    return columns, col_assign
-
-
-def _group_rows(nodes):
-    ys = sorted(n.y for n in nodes)
-    bands = []
-
-    for y in ys:
-        if not any(abs(b - y) <= PX_TOLERANCE for b in bands):
-            bands.append(y)
-
-    bands.sort()
-
-    for n in nodes:
-        best_row = None
-        best_dist = float("inf")
-        for ri, ry in enumerate(bands):
-            d = abs(n.y - ry)
-            if d < best_dist:
-                best_row = ri
-                best_dist = d
-        n.row = best_row
-
-    return nodes
-
-
-# ------------------------------------------------------------
-# Corridor extraction and orientation
-# ------------------------------------------------------------
-
-def _corridor_patch(map_gray, n1, n2):
-    mx = int((n1.x + n2.x) * 0.5)
-    my = int((n1.y + n2.y) * 0.5) + CORRIDOR_OFFSET
-    r = CORRIDOR_HALF
-    rectangle_mult = RECTANGLE_MULT * Settings.template_scale / Settings.screenshot_scale
-
-    y1 = max(0, my - r)
-    y2 = min(map_gray.shape[0], my + r)
-    x1 = max(0, int(mx - r * rectangle_mult))
-    x2 = min(map_gray.shape[1], int(mx + r * rectangle_mult))
-
-    return map_gray[y1:y2, x1:x2], mx, my
-
-
-def _keep_longest_line(patch_bin):
-    patch_bin = (patch_bin > 0).astype(np.uint8)
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(patch_bin, connectivity=8)
-    if num_labels <= 1:
-        return np.zeros_like(patch_bin)
-
-    largest_label = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
-    cleaned = (labels == largest_label).astype(np.uint8)
-    return cleaned
-
-
-def _corridor_orientation(patch_bin):
-    patch_bin = _keep_longest_line(patch_bin)
-    ys, xs = np.where(patch_bin == 1)
-    if xs.size < 3:
+    dx, dy = x2 - x1, y2 - y1
+    length = float(np.hypot(dx, dy))
+    if length < 5:
         return None
 
-    try:
-        a, _ = np.polyfit(xs, ys, 1)
-    except Exception:
+    angle = np.degrees(np.arctan2(dy, dx))
+    cx, cy = int((x1 + x2) * 0.5), int((y1 + y2) * 0.5)
+
+    rot = cv2.getRotationMatrix2D((cx, cy), angle, 1.0)
+    rotated = cv2.warpAffine(
+        map_gray,
+        rot,
+        (map_gray.shape[1], map_gray.shape[0]),
+        flags=cv2.INTER_LINEAR
+    )
+
+    half_h = CORRIDOR_HALF
+    x1r, x2r = int(cx - length * 0.5), int(cx + length * 0.5)
+    y1r, y2r = int(cy - half_h), int(cy + half_h)
+
+    patch = rotated[y1r:y2r, x1r:x2r]
+    if patch.size == 0:
         return None
 
-    angle = np.degrees(np.arctan(a))
-    if abs(angle) <= ORIENTATION_ANGLE_DEG:
-        return "same"
-    return "down" if a > 0 else "up"
+    debug_geom = (x1, y1, x2, y2, half_h)
+    return patch, length, debug_geom
 
 
-# ------------------------------------------------------------
-# Edge crossing detection
-# ------------------------------------------------------------
+def extract_line_components(bin_patch):
+    components = []
+    num, labels, _, _ = cv2.connectedComponentsWithStats(bin_patch, connectivity=8)
 
-def _segments_intersect(x1, y1, x2, y2, x3, y3, x4, y4):
-    def orient(ax, ay, bx, by, cx, cy):
-        return (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+    for lbl in range(1, num):
+        ys, xs = np.where(labels == lbl)
+        if xs.size < 5:
+            continue
 
-    o1 = orient(x1, y1, x2, y2, x3, y3)
-    o2 = orient(x1, y1, x2, y2, x4, y4)
-    o3 = orient(x3, y3, x4, y4, x1, y1)
-    o4 = orient(x3, y3, x4, y4, x2, y2)
+        pts = np.column_stack((xs, ys)).astype(np.float32)
+        mean = pts.mean(axis=0)
+        pts -= mean
 
-    return (o1 * o2 < 0) and (o3 * o4 < 0)
+        cov = np.cov(pts, rowvar=False)
+        eigvals, eigvecs = np.linalg.eig(cov)
+        axis = eigvecs[:, np.argmax(eigvals)]
+
+        angle = np.degrees(np.arctan2(axis[1], axis[0]))
+        proj = pts @ axis
+        length = proj.max() - proj.min()
+
+        components.append((length, angle))
+
+    return components
+
+
+def merge_longest_lines(components):
+    if not components:
+        return 0.0
+
+    components.sort(key=lambda x: x[0], reverse=True)
+    if len(components) == 1:
+        return components[0][0]
+
+    (l1, a1), (l2, a2) = components[:2]
+    da = abs((a1 - a2 + 180) % 360 - 180)
+
+    return l1 + l2 if da <= ANGLE_MERGE_DEG else l1
+
+
+def segments_intersect(a, b, c, d):
+    def orient(p, q, r):
+        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+
+    return (
+            orient(a, b, c) * orient(a, b, d) < 0 and
+            orient(c, d, a) * orient(c, d, b) < 0
+    )
 
 
 # ------------------------------------------------------------
@@ -156,7 +171,8 @@ def _segments_intersect(x1, y1, x2, y2, x3, y3, x4, y4):
 # ------------------------------------------------------------
 
 def detect_connections(map_fragment, templates, nodes=None, screenshot_index=0):
-    map_img, map_gray = _ensure_gray(map_fragment)
+    _, map_gray = ensure_gray(map_fragment)
+    icons = load_icon_map()
 
     if nodes is None:
         from detect_nodes import detect_nodes
@@ -164,194 +180,96 @@ def detect_connections(map_fragment, templates, nodes=None, screenshot_index=0):
             map_fragment,
             templates,
             screenshot_index=screenshot_index,
-            create_preview=False,
             screenshot_scale=Settings.screenshot_scale,
-            threshold=Settings.threshold)
+            threshold=Settings.threshold
+        )
 
-    columns, _ = _group_columns(nodes)
-    nodes = _group_rows(nodes)
-    nodes.sort(key=lambda n: (n.col, n.row, n.y))
+    group_columns(nodes)
+    group_rows(nodes)
+    nodes.sort(key=lambda n: (n.col, n.row))
 
-    col_buckets = {}
+    columns = {}
     for n in nodes:
-        col_buckets.setdefault(n.col, []).append(n)
+        columns.setdefault(n.col, []).append(n)
 
     edges_raw = []
     corridor_debug = []
 
     for n in nodes:
-        next_col = n.col + 1
-        if next_col not in col_buckets:
+        if n.col + 1 not in columns:
             continue
 
-        for m in col_buckets[next_col]:
-            patch, mx, my = _corridor_patch(map_gray, n, m)
-            if patch.size == 0:
+        for m in columns[n.col + 1]:
+            result = extract_corridor(map_gray, n, m, icons)
+            if result is None:
                 continue
 
-            patch_bin = (patch >= THRESHOLD).astype(np.uint8)
-            white_ratio = float(np.mean(patch_bin == 1))
+            patch, corridor_len, geom = result
+            bin_patch = (patch >= THRESHOLD).astype(np.uint8)
 
-            if white_ratio < CONNECTION_WHITE_RATIO:
-                corridor_debug.append((mx, my, False))
-                continue
+            components = extract_line_components(bin_patch)
+            eff_len = merge_longest_lines(components)
+            fill = eff_len / corridor_len
 
-            orientation = _corridor_orientation(patch_bin)
-            if orientation is None:
-                corridor_debug.append((mx, my, False))
-                continue
-
-            dy = m.y - n.y
-            if abs(dy) <= PX_TOLERANCE:
-                expected = "same"
-            elif dy > 0:
-                expected = "down"
-            else:
-                expected = "up"
-
-            accepted = (orientation == expected)
-            corridor_debug.append((mx, my, accepted))
+            accepted = fill >= MIN_CORRIDOR_FILL
+            corridor_debug.append((geom, accepted))
 
             if accepted:
-                row_jump = abs(n.row - m.row)
-                edges_raw.append((n, m, row_jump, white_ratio))
+                edges_raw.append((n, m, abs(n.row - m.row), fill))
 
-    # ------------------------------------------------------------
-    # Crossing cleanup
-    # ------------------------------------------------------------
-
-    edges_final = edges_raw.copy()
+    edges = edges_raw[:]
     changed = True
 
     while changed:
         changed = False
-        to_remove = None
+        for i in range(len(edges)):
+            for j in range(i + 1, len(edges)):
+                n1, m1, j1, w1 = edges[i]
+                n2, m2, j2, w2 = edges[j]
 
-        for i in range(len(edges_final)):
-            n1, m1, j1, w1 = edges_final[i]
-
-            for j in range(i + 1, len(edges_final)):
-                n2, m2, j2, w2 = edges_final[j]
-
-                if n1.col != n2.col or m1.col != m2.col:
+                if n1.col != n2.col:
                     continue
 
-                if not _segments_intersect(
-                        n1.x, n1.y, m1.x, m1.y,
-                        n2.x, n2.y, m2.x, m2.y):
+                if not segments_intersect(
+                        (n1.x, n1.y), (m1.x, m1.y),
+                        (n2.x, n2.y), (m2.x, m2.y)
+                ):
                     continue
 
-                # Smaller vertical jump
-                if j1 != j2:
-                    to_remove = i if j1 > j2 else j
-                # Stronger corridor signal
-                elif w1 != w2:
-                    to_remove = i if w1 < w2 else j
-                else:
-                    to_remove = j
-
+                remove = i if (j1 > j2 or (j1 == j2 and w1 < w2)) else j
+                edges.pop(remove)
                 changed = True
                 break
-
             if changed:
                 break
 
-        if changed:
-            edges_final.pop(to_remove)
-
-    edges = [(n.id, m.id) for n, m, _, _ in edges_final]
-    return nodes, edges, corridor_debug
-
-
-# ------------------------------------------------------------
-# Preview rendering
-# ------------------------------------------------------------
-
-def render_preview(map_name, nodes, edges, corridor_debug):
-    base = cv2.imread(map_name, cv2.IMREAD_COLOR)
-    overlay = (base.astype(np.float32) * 0.1).astype(np.uint8)
-
-    node_by_id = {n.id: n for n in nodes}
-
-    for mx, my, accepted in corridor_debug:
-        offset = 1 if accepted else -1
-        r = CORRIDOR_HALF
-        rectangle_mult = RECTANGLE_MULT * Settings.template_scale / Settings.screenshot_scale
-        x1 = mx - int(r * rectangle_mult) + offset
-        y1 = my - r + offset
-        x2 = mx + int(r * rectangle_mult) + offset
-        y2 = my + r + offset
-
-        color = (0, 255, 0) if accepted else (0, 0, 255)
-        cv2.rectangle(overlay, (x1, y1), (x2, y2), color, 2)
-
-    for id1, id2 in edges:
-        if id1 in node_by_id and id2 in node_by_id:
-            n = node_by_id[id1]
-            m = node_by_id[id2]
-            cv2.line(overlay, (n.x, n.y), (m.x, m.y), (255, 255, 255), 2)
-
-    result = cv2.addWeighted(base, 0.2, overlay, 0.8, 0)
-
-    type_to_file = {}
-    for file in os.listdir(get_path(["Images", "Encounter"])):
-        if file.lower().endswith(".png"):
-            name = os.path.splitext(file)[0].lower()
-            type_to_file[name[:2].upper()] = os.path.join(get_path(["Images", "Encounter"]), file)
-
-    for n in nodes:
-        if n.type not in type_to_file:
-            continue
-
-        icon = cv2.imread(type_to_file[n.type], cv2.IMREAD_UNCHANGED)
-        if icon is None:
-            continue
-
-        scale = Settings.template_scale
-        if scale != 1.0:
-            new_w = int(icon.shape[1] * scale)
-            new_h = int(icon.shape[0] * scale)
-            if new_w <= 0 or new_h <= 0:
-                continue
-            icon = cv2.resize(icon, (new_w, new_h), interpolation=cv2.INTER_AREA)
-
-        if icon.shape[2] == 4:
-            b, g, r, a = cv2.split(icon)
-            icon_rgb = cv2.merge([b, g, r])
-            mask = a.astype(bool)
-        else:
-            icon_rgb = icon
-            mask = None
-
-        h, w = icon_rgb.shape[:2]
-        x1 = n.x - w // 2
-        y1 = n.y - h // 2
-
-        if x1 < 0 or y1 < 0 or x1 + w > result.shape[1] or y1 + h > result.shape[0]:
-            continue
-
-        roi = result[y1:y1 + h, x1:x1 + w]
-
-        if mask is not None:
-            roi[mask] = icon_rgb[mask]
-        else:
-            roi[:] = icon_rgb
-
-    cv2.imwrite(get_path(f"{map_name.split('.')[0]}_connections_preview.png"), result)
+    return nodes, [(n.id, m.id) for n, m, _, _ in edges], corridor_debug
 
 
 if __name__ == "__main__":
-    map_folder = get_path("Last_scan_result")
+    from calibrator import perform_calibration_exact  # needed only here for quick testing
+    from unified_preview import UnifiedPreview
+
+    map_folder = get_path(["Test_scans", "Last_scan_result_1080_pathCoveredByTunnel"])
     # maps = ["map_frag_02.png", ]
     maps = os.listdir(map_folder)
     templates = TemplateLibrary()
-    templates.scale_templates(Settings.template_scale)
+    preview = UnifiedPreview(None)
+    preview.enable_connections_preview()
+    preview.enable_trim_overlay()
     for i, map_name in enumerate(maps):
         name, ext = map_name.split('.')
         if name.endswith("preview") or name.startswith("merged") or not ext.endswith("png"):
+            i -= 1
             continue
         map_path = os.path.join(map_folder, map_name)
+        if i == 0:
+            perform_calibration_exact(screenshot=map_path, log=lambda msg: print(msg))
+            templates.scale_templates(Settings.template_scale)
         nodes, edges, corridor_debug = detect_connections(map_path, templates, screenshot_index=i)
-        render_preview(map_path, nodes, edges, corridor_debug)
+        preview.base_img = ensure_gray(map_path)[0]
+        preview.set_nodes(nodes)
+        preview.set_connections(edges, corridor_debug)
+        preview.save(get_path([map_folder, f"{name}_connections_preview.png"]))
         print(f"{map_name} done")
     print("Done.")

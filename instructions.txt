@@ -18,6 +18,7 @@ Instructions:
 	Confirm that every node has appropriate label. Default setting should be good in most cases.
 	If labels are missing, try lowering threshold, press recalibrate and check again. If there are too many labels, raise it.
     If that does not work, try modifying template scale value. It is calculated to match game window's size, so it should not be tweaked too far from initial value.
+Check Help tab for more instructions, Overlays to draw preview in different way, or Folders to load map fragment image from chosen folder.
 
 
 Automatic scan: This will move the mouse programmatically and do all work for you.
@@ -39,7 +40,7 @@ Instructions:
 	Make empty folder.
 	Open the game, show chaos minimap in the default position.
 	Take screenshot of the game window (not fullscreen), save it as png. (For example win+shift+s, or any other tool)
-	Locate rightmost node, drag it into leftmost node position, so previous and current screenshots share one column of nodes.
+	Locate rightmost node in capture area (shown in Calibrator), drag it into leftmost node position, so previous and current screenshots share one column of nodes.
 	Repeat until boss is visible.
 	Once you screenshotted whole map, select this folder in script and choose Offline Scanner.
 As script is only processing saved screenshots, this option does not require admin mode.
@@ -59,7 +60,25 @@ Instructions:
     Wait for it to finish, it should not take long as it started when first screenshot was made.
 
 
-Main flow of the script is more or less done, but there is no error handling.
+You can customize the behavior of this script in Settings panel:
+    Request admin on startup
+    Check updates (only link notice, no auto update / download)
+    Enable keyboard shortcuts
+    Darkmode
+
+You may also customize what is drawn in Calibrator preview:
+    Mark detected nodes with text label
+    Mark detected nodes with icon, cut in half for visibility
+    Highlight paths between nodes
+    Paint exclusion areas on screenshot
+    Dim background to make script marks easier to spot
+
+Exclusion areas are marked by diagonal yellow and blue lines.
+    Yellow is not processed at all, script does not see anything located there.
+    Blue is processed in a special way. Nodes located there are discarded, as they may be recognized incorrectly or not recognized at all. Modifiers are processed in a normal way.
+
+
+Main flow of the script is more or less done, but the error handling does not cover every possible way the script may break.
 If any subprocess breaks (like detect_nodes flagging Hugo face as Waypoint with 98% certainty), it may or may not tell you that it broke, you must notice and restart it by yourself.
 If you see the script misbehaving in a strange way, consider making bug report. Attach Last_scan_result and log_file.log, so I can try replicating it.
 If you have any feedback, feature request or bug report, you can contact me on discord, @sander_sa, or post a github issue.

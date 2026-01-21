@@ -1,7 +1,7 @@
+# settings.py
 import json
 from datetime import datetime
 from pathlib import Path
-import sys
 
 from path_converter import get_path
 
@@ -12,17 +12,26 @@ class Settings:
 
     # template params
     template_scale: float = 1.0
-    screenshot_scale: float = 0.0 # 0 as uncalibrated flag, normally 1 or 0.5
-    threshold: float = 0.98
+    screenshot_scale: float = 0.0  # 0 as uncalibrated flag, normally 1 or 0.5
+    threshold: float = 0.975
+
+    # preview draw flags
+    preview_dim_background: bool = True
+    preview_draw_corridors: bool = True
+    preview_draw_nodes_text: bool = True
+    preview_draw_node_icons: bool = False
+    preview_draw_fringe_marks: bool = True
+    preview_draw_trim_overlay: bool = True
 
     # whatever else
-    testmode: bool = not getattr(sys, 'frozen', False)  # GPT: evaluates to True only when running from a packaged EXE.
+    testmode: bool = False
+    request_admin: bool = False
     darkmode: bool = True
     auto_import_score: bool = True
     autoupdate: bool = True
     last_update_check: datetime | None = None
     remote_version: str | None = None
-    local_version: str | None = "v0.4.2" # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow
+    local_version: str | None = "v0.4.3"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow
     target_app_name: str = "Chaos Zero Nightmare"
     keyboard_input: bool = False
     keyboard_input_autoscanner: str = "s+1"
@@ -82,6 +91,13 @@ class Settings:
     @classmethod
     def calibrated(cls):
         return cls.screenshot_scale > 0
+
+    @classmethod
+    def get_scale(cls):
+        if cls.screenshot_scale != 0:
+            return cls.template_scale / cls.screenshot_scale
+        else:
+            return cls.template_scale
 
 
 # autoload on import

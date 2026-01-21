@@ -66,7 +66,7 @@ def switch_window_win32gui(step):
         target_window = GAME_WINDOW if step == 0 else SCRIPT_WINDOW
         title = win32gui.GetWindowText(win32gui.GetForegroundWindow())
         if not target_window.lower() in title.lower():
-            raise IOError("Window switched to unexcepted place, script stopped")
+            raise IOError("Window switched to unexpected place, script stopped")
     time.sleep(0.2)
 
 

@@ -1,3 +1,4 @@
+# gui_settings.py
 import tkinter as tk
 import ttkbootstrap as tb
 
@@ -69,8 +70,10 @@ class SettingsPanel(tb.Toplevel):
         row = 0
         add_explanation("Any change requires script restart to take effect")
         add_field("Target app name", "target_app_name")
+        add_bool("Request admin on startup", "request_admin")
         add_bool("Dark mode", "darkmode")
         add_bool("Auto import score table", "auto_import_score")
+        add_bool("Testmode", "testmode")
 
         add_separator()
         add_bool("Detect keyboard", "keyboard_input")

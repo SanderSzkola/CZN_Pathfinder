@@ -1,3 +1,4 @@
+# score_table.py
 import json
 import os.path
 from typing import Dict
@@ -13,7 +14,7 @@ class ScoreTable:
             NOOR: int = -7,
             EL: int = 2,
             ELOR: int = 2,
-            RE: int = 0,
+            RE: int = -10,
             RESH: int = 4,
             EV: int = 3,
             EVTU: int = 30,
@@ -44,7 +45,7 @@ class ScoreTable:
             NO=data.get("NO", -7),
             EL=data.get("EL", 2),
             EV=data.get("EV", 3),
-            RE=data.get("RE", 0),
+            RE=data.get("RE", -10),
             RESH=data.get("RESH", 4),
             NOOR=data.get("NOOR", -7),
             ELOR=data.get("ELOR", 2),

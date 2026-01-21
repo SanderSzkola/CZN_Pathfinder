@@ -124,31 +124,6 @@ def check_node_output_quality(nodes):
     return non_empty_columns, non_normals
 
 
-def worker_connections(
-    queue: Queue,
-    finalizer: Finalizer,
-    templates,
-    print_grid: bool = False,
-    log=lambda msg: None):
-
-    while True:
-        item = queue.get()
-        if item is None:
-            queue.task_done()
-            break
-
-        img, nodes = item
-        try:
-            nodes_conn, edges_conn, meta = detect_connections(img, templates, nodes)
-            finalizer.add_fragment(nodes_conn, edges_conn, print_grid)
-        except Exception as e:
-            log("[conn-worker] FATAL error while processing fragment")
-            raise
-
-        finally:
-            queue.task_done()
-
-
 class DetectResult:
     def __init__(self):
         self.lock = threading.Lock()
@@ -165,7 +140,11 @@ class ExceptionThread(threading.Thread):
             self.exc_info = sys.exc_info()
 
 
-def worker_nodes(detect_q: Queue, result: DetectResult, templates, screenshot_scale, threshold):
+def worker_nodes(detect_q: Queue,
+                 result: DetectResult,
+                 templates,
+                 screenshot_scale,
+                 threshold):
     while True:
         item = detect_q.get()
         if item is None:
@@ -178,6 +157,29 @@ def worker_nodes(detect_q: Queue, result: DetectResult, templates, screenshot_sc
             result.nodes = nodes
 
         detect_q.task_done()
+
+
+def worker_connections(
+        queue: Queue,
+        finalizer: Finalizer,
+        templates,
+        print_grid: bool = False,
+        log=lambda msg: None):
+    while True:
+        item = queue.get()
+        if item is None:
+            return
+
+        img, nodes = item
+        try:
+            nodes_conn, edges_conn, meta = detect_connections(img, templates, nodes)
+            finalizer.add_fragment(nodes_conn, edges_conn, print_grid)
+        except Exception as e:
+            print(
+                f"[conn-worker] FATAL error while processing fragment:\n{e}")  # gui log already prints it, no need to log twice
+            raise
+        finally:
+            queue.task_done()
 
 
 def prepare_clean_folder(base_name: str, log):
@@ -237,8 +239,8 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
     if save_folder is not None:
         os.makedirs(save_folder, exist_ok=True)
 
+    duplicates = 0
     while step <= max_steps:
-        duplicates = 0
         img, game_window_corner_offset = screenshot(save_folder, step)
         detect_q.put((step, img))
         # skip movement if end MAY BE here, but not confirmed yet
@@ -260,16 +262,19 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
         if non_normals <= 2 and len(nodes) <= 4:
             switch_window(1)
             raise IOError(
-                f"step_{step}: {len(nodes)}n/{non_normals}o nodes detected, too low. Is your map fully visible? Did you perform calibration?")
+                f"step_{step}: {len(nodes)}n / {non_normals}o nodes detected, too low. Is your map fully visible? Did you perform calibration?")
 
         if step <= max_steps:
-            log(f"Step {step}, expected 5~10; {len(nodes)}n / {non_normals}o nodes detected")
+            log(f"Step {step}, expected 3~6; {len(nodes)}n / {non_normals}o nodes detected")
         else:
             log(f"Step {step}, something is definitely wrong, consider making bug report")
             raise IOError("Auto scanner failed")
         should_end = False
         if check_end(nodes, last_nodes):
             should_end = True
+        if conn_worker.exc_info:  # stop queue when error
+            exc_type, exc_value, exc_tb = conn_worker.exc_info
+            raise exc_value.with_traceback(exc_tb)
         # anti duplicate check
         is_duplicate = False
         if check_duplicates(nodes, last_nodes):
@@ -292,6 +297,9 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
 
         do_drag_move(nodes[-1], nodes[0], game_window_corner_offset)
         last_nodes = nodes
+        if conn_worker.exc_info:  # stop queue when error
+            exc_type, exc_value, exc_tb = conn_worker.exc_info
+            raise exc_value.with_traceback(exc_tb)
 
     # Finish workers
     work_q.join()
@@ -364,7 +372,7 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
             raise IOError(f"Step {step}: Nothing detected, is map visible?")
         non_empty_columns, non_normals = check_node_output_quality(nodes)
         if non_normals <= 2 and len(nodes) <= 4:
-            raise IOError(f"Step {step}: {len(nodes)}n/{non_normals}o nodes detected, too low")
+            raise IOError(f"Step {step}: {len(nodes)}n / {non_normals}o nodes detected, too low")
         log(f"Step {step} from screenshot {s}: {len(nodes)}n / {non_normals}o nodes detected")
 
         should_end = check_end(nodes, last_nodes)
@@ -376,6 +384,10 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
                 step += 1
                 continue
 
+        if conn_worker.exc_info:  # stop queue when error
+            exc_type, exc_value, exc_tb = conn_worker.exc_info
+            raise exc_value.with_traceback(exc_tb)
+
         if not is_duplicate:
             work_q.put((img, nodes))
         last_nodes = nodes
@@ -385,11 +397,14 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
             break
         if len(nodes) >= 2:
             mock_move_screen(nodes[-1], nodes[0])
+        if conn_worker.exc_info:  # stop queue when error
+            exc_type, exc_value, exc_tb = conn_worker.exc_info
+            raise exc_value.with_traceback(exc_tb)
 
     work_q.join()
     work_q.put(None)
     conn_worker.join(timeout=1.0)
-    if conn_worker.exc_info:
+    if conn_worker.exc_info:  # check again after queue is done
         exc_type, exc_value, exc_tb = conn_worker.exc_info
         raise exc_value.with_traceback(exc_tb)
 
@@ -470,10 +485,10 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
 
         if non_normals <= 2 and len(nodes) <= 4:
             listener.stop()
-            raise IOError(f"Step {step}: {len(nodes)}n/{non_normals}o nodes detected, too low. Is map fully visible? "
+            raise IOError(f"Step {step}: {len(nodes)}n / {non_normals}o nodes detected, too low. Is map fully visible? "
                           f"Have you performed calibration?")
 
-        log(f"Step {step}, expected 5~10; {len(nodes)}n/{non_normals}o nodes detected")
+        log(f"Step {step}, expected 3~6; {len(nodes)}n / {non_normals}o nodes detected")
 
         should_end = check_end(nodes, last_nodes)
         is_duplicate = False

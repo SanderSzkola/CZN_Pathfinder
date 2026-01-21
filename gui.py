@@ -1,11 +1,16 @@
+# gui.py
+import ctypes
+import sys
 import os
+import subprocess
+import argparse
 import threading
 import time
 import tkinter as tk
 from tkinter import filedialog
 import ttkbootstrap as tb
-
 import cv2
+from pathlib import Path
 
 if not hasattr(cv2, "__version__"):  # random GPT-approved dependency error fix
     cv2.__version__ = "4"
@@ -15,7 +20,7 @@ import webbrowser
 import re
 
 from pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, get_game_screenshot, run_pathfinder
-from grabber import get_screen_res, KeyboardListener
+from grabber import get_screen_res, KeyboardListener, switch_window
 from calibrator import check_calibration_done
 from drawer import draw_map, load_icon
 from score_table import ScoreTable
@@ -24,6 +29,32 @@ from gui_calibrator import CalibrationPanel
 from settings import Settings
 from version_checker import check_for_update
 from gui_settings import SettingsPanel
+
+
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+
+parser = argparse.ArgumentParser(add_help=False)
+parser.add_argument('--elevate', action='store_true', help='Run as admin')
+args, unknown = parser.parse_known_args()
+if (args.elevate or Settings.request_admin) and not is_admin():
+    executable = sys.executable
+    if "python.exe" in executable:
+        executable = executable.replace("python.exe", "pythonw.exe")
+        if not os.path.exists(executable):
+            executable = sys.executable
+    cmd_args = subprocess.list2cmdline(sys.argv[1:])
+    script_path = f'"{os.path.abspath(sys.argv[0])}"'
+    if getattr(sys, 'frozen', False):
+        final_arguments = cmd_args
+    else:
+        final_arguments = f"{script_path} {cmd_args}"
+    ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, final_arguments, None, 1)
+    sys.exit()
 
 
 class PipelineGUI:
@@ -372,6 +403,7 @@ class PipelineGUI:
             self.display_image(img)
         except Exception as e:
             self.log(f"Pipeline error: {e}")
+            switch_window(1)
             if Settings.testmode:
                 raise
         finally:
@@ -410,6 +442,7 @@ class PipelineGUI:
             self.display_image(img)
         except Exception as e:
             self.log(f"Pipeline error: {e}")
+            switch_window(1)
             if Settings.testmode:
                 raise
         finally:
@@ -494,18 +527,41 @@ class PipelineGUI:
 
         threading.Thread(target=task, daemon=True).start()
 
+    def _get_valid_calibration_folder(self):
+        folder = Path(get_path(["Last_scan_result"]))
+        if not folder.exists() or not folder.is_dir():
+            return None
+
+        try:
+            files = CalibrationPanel.scan_folder(folder)
+            return folder if files else None
+        except Exception:
+            return None
+
     def start_calibrator(self):
         if not self.ask_continue_dialog("calibrator"):
             self.log("Calibrator task cancelled")
             return
+
         scr = get_game_screenshot(self.log)
+        has_game_image = scr is not None and getattr(scr, "size", (0, 0))[0] > 0
+        folder = self._get_valid_calibration_folder()
+
+        if not has_game_image and not folder is not None:
+            self.log("Calibration aborted: no game screenshot and no valid image folder found")
+            return
+
+        if not has_game_image and folder is not None and not Settings.testmode:
+            if not self.ask_continue_dialog("calibrator_no_game"):
+                self.log("Calibrator task cancelled")
+                return
+
         CalibrationPanel(
             parent=self.root,
             low_res=self.low_res,
             log=self.log,
-            scr=scr,
-            folder=get_path(["Test_scans","Last_scan_result_1440"])
-            # folder = get_path(["Last_scan_result"])
+            scr=scr if has_game_image else None,
+            folder=folder
         )
 
     # ======================================================================
@@ -578,6 +634,12 @@ class PipelineGUI:
                 "Make sure alt-tab leads to the game, the game has minimap opened and in a position that shows different\n"
                 "types of nodes and modifiers, the more the better. Starting position is BAD, move it to the right a bit.\n\n"
                 "If the script failed to switch window, alt-tab to game and back, then start again."
+            )
+        elif variant == "calibrator_no_game":
+            text = (
+                "Game screenshot capture failed.\n\n"
+                "To try again, choose Cancel, alt-tab to game and back, then press Calibrator.\n"
+                "To load Last_scan_result folder instead, choose Continue."
             )
         else:
             text = "Not implemented"

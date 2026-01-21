@@ -1,3 +1,4 @@
+# detect_nodes.py
 import os
 from datetime import datetime
 import cv2
@@ -17,7 +18,7 @@ TRIM_TOP_PX = 120
 TRIM_RIGHT_PX = 120
 TRIM_LEFT_PX = 120
 COLOR_MAX_DIFF = 50
-FRINGE_SAFETY_MARGIN = 60 + TRIM_RIGHT_PX  # this close to map edge means it still should be marked, but discarded after preview
+FRINGE_SAFETY_MARGIN = 120 + TRIM_RIGHT_PX  # this close to map edge means it still should be marked, but discarded after preview
 SCORE_TABLE = ScoreTable().table  # MUST CONTAIN EVERY VALID COMBINATION OF NODE+MODIFIER
 
 
@@ -138,81 +139,12 @@ def _assign_modifiers(nodes, modifier_hits, screenshot_scale):
                 pass
 
 
-def _preview(map_img, nodes, map_fragment, save_file):
-    preview = map_img.copy()
-    div = Settings.screenshot_scale if Settings.screenshot_scale != 0 else 1
-    scale = Settings.template_scale / div
-    for node in nodes:
-        x_offset = 40
-        y_offset = 15
-        text_x = node.x - x_offset
-        text_y = node.y + y_offset
-        cv2.putText(
-            preview,
-            node.label(),
-            (text_x, text_y),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.5 * scale,
-            (0, 0, 0),
-            int(7 * scale),
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            preview,
-            node.label(),
-            (text_x, text_y),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            1.5 * scale,
-            (80, 240, 0),
-            int(4 * scale),
-            cv2.LINE_AA,
-        )
-        # nodes too close to fringe, not in excluded margin but to be discarded anyway
-        if node.is_fringe:
-            cv2.line(preview, (text_x, text_y - 40), (text_x + 90, text_y), (0, 0, 0), 8)
-            cv2.line(preview, (text_x, text_y), (text_x + 90, text_y - 40), (0, 0, 0), 8)
-            cv2.line(preview, (text_x, text_y - 40), (text_x + 90, text_y), (0, 90, 190), 6)
-            cv2.line(preview, (text_x, text_y), (text_x + 90, text_y - 40), (0, 90, 190), 6)
-
-    # crossed non-scan area
-    h, w = preview.shape[:2]
-    overlay = np.zeros((h, w, 4), dtype=np.uint8)
-    step = 40
-    color = (0, 192, 256, 80)
-
-    for x in range(-h, w + h, step):
-        cv2.line(overlay, (x, 0), (x + h, h), color, 9, cv2.LINE_AA)
-
-    # mask out only the trimmed area
-    mask = np.zeros((h, w), dtype=np.uint8)
-    mask[0:int(TRIM_TOP_PX * scale), :] = 255
-    mask[int(TRIM_TOP_PX * scale):h, 0:int(TRIM_LEFT_PX * scale)] = 255
-    mask[int(TRIM_TOP_PX * scale):h, w - int(TRIM_RIGHT_PX * scale):w] = 255
-
-    overlay[:, :, 3] = overlay[:, :, 3] * (mask // 255)
-    bg = cv2.cvtColor(preview, cv2.COLOR_BGR2BGRA)
-    out = bg.copy()
-    alpha = overlay[:, :, 3:4] / 255.0
-    out[:, :, :3] = (1.0 - alpha) * bg[:, :, :3] + alpha * overlay[:, :, :3]
-    preview = cv2.cvtColor(out, cv2.COLOR_BGRA2BGR)
-
-    if save_file:
-        if isinstance(map_fragment, str):
-            base = get_path(map_fragment.split(".")[:-1])
-            cv2.imwrite(f"{base}_nodes_preview.png", preview)
-        else:
-            now = datetime.now().strftime("%H%M%S")
-            cv2.imwrite(get_path(f"nodes_preview_{now}.png"), preview)
-    return preview
-
-
-def _detect_nodes(screenshot_str_or_img,
-                  templates: TemplateLibrary,
-                  screenshot_index=0,
-                  create_preview=False,
-                  save=False,
-                  threshold=0.98,
-                  screenshot_scale=1.0):
+def detect_nodes(screenshot_str_or_img,
+                 templates: TemplateLibrary,
+                 screenshot_index=0,
+                 threshold=0.98,
+                 screenshot_scale=1.0,
+                 filter_fringe=True):
     screenshot = _load_map_image(screenshot_str_or_img)
     if Settings.testmode:
         print(
@@ -258,66 +190,45 @@ def _detect_nodes(screenshot_str_or_img,
 
     top_offset = int(TRIM_TOP_PX)
     left_offset = int(TRIM_LEFT_PX)
-    div = Settings.screenshot_scale if Settings.screenshot_scale != 0 else 1
-    fringe_safety_margin = int(FRINGE_SAFETY_MARGIN * Settings.template_scale / div)
+    fringe_safety_margin = int(FRINGE_SAFETY_MARGIN * Settings.get_scale())
     for node in nodes:
         node.x = int(node.x / screenshot_scale) + left_offset
         node.y = int(node.y / screenshot_scale) + top_offset
-        if node.x <= fringe_safety_margin or node.x >= w - fringe_safety_margin:
+        if node.x <= fringe_safety_margin / 4 or node.x >= w - fringe_safety_margin:
             node.is_fringe = True
 
     nodes.sort(key=lambda n: n.x)
     # random waypoint fix is back :(
     if len(nodes) > 2 and nodes[-1].type == "WA" and nodes[-2].type != "WA" and abs(nodes[-1].x - nodes[-2].x) > 10:
         nodes = nodes[:-1]
-    preview = _preview(screenshot, nodes, screenshot_str_or_img, save) if create_preview else None
-    nodes_filtered = [n for n in nodes if not n.is_fringe]
-    return nodes_filtered, preview
-
-
-def detect_nodes(screenshot_str_or_img,
-                 templates: TemplateLibrary,
-                 screenshot_index=0,
-                 create_preview=False,
-                 threshold=0.98,
-                 screenshot_scale=1.0):
-    nodes, _ = _detect_nodes(screenshot_str_or_img, templates, screenshot_index, create_preview, create_preview,
-                             threshold, screenshot_scale)
+    if filter_fringe:
+        nodes = [n for n in nodes if not n.is_fringe]
     return nodes
 
 
-def detect_nodes_with_preview(screenshot_str_or_img,
-                              templates: TemplateLibrary,
-                              screenshot_index=0,
-                              create_preview=True,
-                              threshold=0.98,
-                              screenshot_scale=1.0):
-    nodes, preview = _detect_nodes(screenshot_str_or_img, templates, screenshot_index, create_preview, False,
-                                   threshold, screenshot_scale)
-    return nodes, preview
-
-
 if __name__ == "__main__":
+    from calibrator import perform_calibration_exact  # needed only here for quick testing
+    from unified_preview import UnifiedPreview
+
+    map_folder = get_path(["Test_scans", "Last_scan_result_1080_pathCoveredByTunnel"])
+    # maps = ["map_frag_02.png", ]
+    maps = os.listdir(map_folder)
     templates = TemplateLibrary()
-    folder = get_path("Last_scan_result")
-    # folder = get_path(["Test_scans", "Map_small_res_1"])
-
-    # SINGLE
-    path = os.path.join(folder, "map_frag_03.png")
-    nodes = detect_nodes(path, templates, create_preview=True, screenshot_scale=Settings.screenshot_scale,
-                         threshold=Settings.threshold)
-    for n in nodes:
-        print(n)
-    print(f"Total nodes: {len(nodes)}")
-
-    # FOLDER
-    # path = os.path.join(folder, "map_frag_4.png")
-    # screenshot_scale, threshold, calibration_status = validate_calibration(templates, path, log=lambda msg: print(msg))
-    # for f in os.listdir(folder):
-    #     if f.split('.')[0].endswith("preview") or f.startswith("merged"):
-    #         continue
-    #     if f.split('.')[1] != "png":
-    #         continue
-    #     path = os.path.join(folder, f)
-    #     nodes = detect_nodes(path, templates, create_preview=True, screenshot_scale=screenshot_scale, threshold=threshold)
-    #     print(f"{f} done, {len(nodes)} obj detected")
+    preview = UnifiedPreview(None)
+    preview.enable_nodes_preview()
+    preview.enable_trim_overlay()
+    for i, map_name in enumerate(maps):
+        name, ext = map_name.split('.')
+        if name.endswith("preview") or name.startswith("merged") or not ext.endswith("png"):
+            i -= 1
+            continue
+        map_path = os.path.join(map_folder, map_name)
+        if i == 0:
+            perform_calibration_exact(screenshot=map_path, log=lambda msg: print(msg))
+            templates.scale_templates(Settings.template_scale)
+        nodes = detect_nodes(map_path, templates, filter_fringe=False)
+        preview.base_img = _load_map_image(map_path)
+        preview.set_nodes(nodes)
+        preview.save(get_path([map_folder, f"{name}_nodes_preview.png"]))
+        print(f"{map_name} done")
+    print("Done.")
