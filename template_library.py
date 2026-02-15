@@ -29,12 +29,12 @@ class TemplateLibrary:
             if file.lower().endswith(".png"):
                 name = os.path.splitext(file)[0]
                 path = os.path.join(directory, file)
-                templates[name] = TemplateLibrary.load_template(path)
+                templates[name] = TemplateLibrary._load_template(path)
 
         return templates
 
     @staticmethod
-    def load_template(path):
+    def _load_template(path):
         img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
         if img is None:
             raise FileNotFoundError(path)
@@ -43,8 +43,8 @@ class TemplateLibrary:
 
         if has_alpha:
             b, g, r, a = cv2.split(img)
-            rgb = cv2.merge([b, g, r])
-            gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
+            bgr = cv2.merge([b, g, r])
+            gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
             mask = (a > 0).astype(np.uint8) * 255
 
             ys, xs = np.where(mask > 0)
@@ -52,19 +52,19 @@ class TemplateLibrary:
             x0, x1 = xs.min(), xs.max()
 
             gray = gray[y0:y1 + 1, x0:x1 + 1]
-            rgb = rgb[y0:y1 + 1, x0:x1 + 1]
+            bgr = bgr[y0:y1 + 1, x0:x1 + 1]
             mask = mask[y0:y1 + 1, x0:x1 + 1]
             mask_idx = np.where(mask == 255)
 
         else:
-            rgb = img[:, :, :3]
-            gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
+            bgr = img[:, :, :3]
+            gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
             mask = np.ones_like(gray, dtype=np.uint8) * 255
             mask_idx = np.where(mask == 255)
 
         return (gray,  # fast template search image baseline
                 mask,  # alpha channel, transparent or opaque, used in modifiers
-                rgb,  # color, slower, used only in color_verify()
+                bgr,  # color, slower, used only in color_verify()
                 mask_idx)  # pixel coordinates where mask==255, for faster color_verify()
 
     def scale_templates(self, scale: float):
@@ -77,7 +77,7 @@ class TemplateLibrary:
         self.modifier_templates_scaled.clear()
 
         def scale_one(t):
-            gray, mask, rgb, mask_idx = t
+            gray, mask, bgr, mask_idx = t
             h, w = gray.shape
             new_w = int(w * scale)
             new_h = int(h * scale)
@@ -85,12 +85,12 @@ class TemplateLibrary:
                 return None
 
             gray_s = cv2.resize(gray, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-            rgb_s = cv2.resize(rgb, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+            bgr_s = cv2.resize(bgr, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
             mask_s = cv2.resize(mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST)  # alpha, either transparent or not, no linear scaling
             mask_s[mask_s > 0] = 255
 
             mask_idx_s = np.where(mask_s == 255)
-            return gray_s, mask_s, rgb_s, mask_idx_s
+            return gray_s, mask_s, bgr_s, mask_idx_s
 
         for k, v in self.node_templates.items():
             s = scale_one(v)
