@@ -31,7 +31,7 @@ class Settings:
     autoupdate: bool = True
     last_update_check: datetime | None = None
     remote_version: str | None = None
-    local_version: str | None = "v0.4.3"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow
+    local_version: str | None = "v0.4.4-rc1"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow; -rc1
     target_app_name: str = "Chaos Zero Nightmare"
     keyboard_input: bool = False
     keyboard_input_autoscanner: str = "s+1"

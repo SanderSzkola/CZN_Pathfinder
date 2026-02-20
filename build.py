@@ -21,7 +21,7 @@ expected_items = [
     "Images/Modifier_1920",
     "Images/Encounter_minimal_1600",
     "Images/Modifier_1600",
-    "Images/background_img.png",
+    "Images/Map_background",
     "Images/filler_map.png",
     "LICENSE",
     "ManualScreenshotVisualGuide.png",

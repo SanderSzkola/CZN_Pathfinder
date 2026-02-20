@@ -73,7 +73,7 @@ class PipelineGUI:
             self.left_panel_w = 1190
             self.left_panel_h = 490
 
-        self.root.title("CZN Pathfinder")
+        self.root.title(f"CZN Pathfinder {Settings.local_version}")
         self.root.iconbitmap("Images/Icon.ico")
         self.root.geometry(f"{self.window_w}x{self.window_h}+10+10")
 
