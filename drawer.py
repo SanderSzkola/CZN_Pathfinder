@@ -14,7 +14,8 @@ ICON_SCALE = 0.35
 MODIFIER_Y_OFFSET = -4
 MIN_COLS = 17
 MIN_ROWS = 8  # 5 from game map + 2 for counters + 1 for top / bottom padding
-_BG_CACHE: List[np.ndarray] | None = None
+_BG_CACHE = None
+_LAST_IMAGE = None
 
 
 def load_map(path: str):
@@ -311,11 +312,18 @@ def draw_map(
     pad = GRID // 2
     fg = canvas[pad:-pad]
 
-    bg = make_tiled_background(
-        get_path(["Images", "Map_background"]),
-        height - GRID,
-        width
-    )
+    global _LAST_IMAGE
+    if (_LAST_IMAGE is None
+            or _LAST_IMAGE.shape[0] != height - GRID
+            or _LAST_IMAGE.shape[1] != width):
+        bg = make_tiled_background(
+            get_path(["Images", "Map_background"]),
+            height - GRID,
+            width
+        )
+        _LAST_IMAGE = bg.copy()
+    else:
+        bg = _LAST_IMAGE.copy()
 
     bar_h = GRID * 2  # grey bar on bottom
     bar_y0 = bg.shape[0] - bar_h
