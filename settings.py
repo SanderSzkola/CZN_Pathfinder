@@ -89,10 +89,6 @@ class Settings:
             json.dump(data, f, indent=2)
 
     @classmethod
-    def calibrated(cls):
-        return cls.screenshot_scale > 0
-
-    @classmethod
     def get_scale(cls):
         if cls.screenshot_scale != 0:
             return cls.template_scale / cls.screenshot_scale

@@ -21,7 +21,6 @@ expected_items = [
     "Images/Modifier_1920",
     "Images/Encounter_minimal_1600",
     "Images/Modifier_1600",
-    "Images/Map_background",
     "Images/filler_map.png",
     "LICENSE",
     "ManualScreenshotVisualGuide.png",
@@ -38,7 +37,6 @@ release_ignore = [
     "*.xcf",
     "requirements.txt",
     "README.md",
-    "Images/background_img_blank.png",
     "Images/gui_image.png",
     "Images/Demo.gif",
 
@@ -48,6 +46,13 @@ DIST_DIR = Path("dist")
 BUILD_DIR = Path("build")
 FINAL_OUTPUT_DIR = Path("Exe_build_folder")
 
+
+def insert_custom_backgrounds(expected):
+    path = Path("Images/Map_background")
+    for image in os.listdir(path):
+        if image.endswith("_g.png"):
+            path_t = path / image
+            expected.append(path_t)
 
 def load_gitignore():
     path = Path(".gitignore")
@@ -152,10 +157,6 @@ def prepare():
 
 
 def expand_expected_items(items):
-    """
-    Expand all expected items into a file list (posix-style relative paths)
-    relative to the current working directory.
-    """
     expanded = []
     root = Path(".")
 
@@ -168,8 +169,17 @@ def expand_expected_items(items):
             expanded.append(p.relative_to(root).as_posix())
         else:
             for sub in p.rglob("*"):
-                if sub.is_file():
-                    expanded.append(sub.relative_to(root).as_posix())
+                if not sub.is_file():
+                    continue
+
+                rel = sub.relative_to(root).as_posix()
+
+                # !Images/Map_background/*_g.png
+                if rel.startswith("Images/Map_background/"):
+                    if sub.suffix == ".png" and sub.name.endswith("_g.png"):
+                        continue
+
+                expanded.append(rel)
 
     expanded.sort()
     return expanded
@@ -229,6 +239,7 @@ def create_zip():
 
 
 def main():
+    insert_custom_backgrounds(expected_items)
     check_ready()
     clean_previous_builds()
     build_executable()

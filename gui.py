@@ -379,7 +379,12 @@ class PipelineGUI:
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
                 return
 
-        if not check_calibration_done(self.log):
+        if not check_calibration_done():
+            self.log("Please perform calibration first.")
+            return
+
+        if not is_admin():
+            self.show_warning_dialog("no_admin")
             return
 
         if not from_key:
@@ -418,7 +423,12 @@ class PipelineGUI:
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
                 return
 
-        if not check_calibration_done(self.log):
+        if not check_calibration_done():
+            self.log("Please perform calibration first.")
+            return
+
+        if not is_admin():
+            self.show_warning_dialog("no_admin")
             return
 
         if not from_key:
@@ -465,7 +475,8 @@ class PipelineGUI:
             self._prepare_demo()
             self.log("Preparing demo parameters")
         else:
-            if not check_calibration_done(self.log):
+            if not check_calibration_done():
+                self.log("Please perform calibration first.")
                 return
 
         self._scanner_running = True
@@ -605,11 +616,15 @@ class PipelineGUI:
     # ======================================================================
     # Dialogs
     # ======================================================================
-    def ask_continue_dialog(self, variant):
+    def _base_dialog(self, title):
         win = tb.Toplevel(self.root)
-        win.title("Confirm Action")
+        win.title(title)
         win.grab_set()
         win.transient(self.root)
+        return win
+
+    def ask_continue_dialog(self, variant):
+        win = self._base_dialog("Confirm Action")
 
         if variant == "auto":
             text = (
@@ -652,7 +667,7 @@ class PipelineGUI:
             result["value"] = True
             win.destroy()
 
-        def cancel():
+        def cancel(_=None):
             win.destroy()
 
         btn_frame = tb.Frame(win)
@@ -664,11 +679,39 @@ class PipelineGUI:
 
         btn_ok.focus_set()
         win.bind("<Return>", confirm)
-        win.bind("<Escape>", lambda _: cancel())
+        win.bind("<Escape>", cancel)
 
         self._center_popup(win)
         self.root.wait_window(win)
         return result["value"]
+
+    def show_warning_dialog(self, variant):
+        win = self._base_dialog("Warning")
+
+        if variant == "no_admin":
+            text = (
+                "The scanner needs admin elevation to work properly.\n"
+                "Please enable 'Request admin on startup' option in settings, then restart the script.\n"
+                "Or run script as admin by any other way, for example right click - run as admin.\n\n"
+                "Want to run it without admin? Offline scanner does not neet it, it just reads images from folder."
+            )
+        else:
+            text = "Not implemented"
+
+        tb.Label(win, text=text).pack(padx=20, pady=15)
+
+        def close(_=None):
+            win.destroy()
+
+        btn = tb.Button(win, text="OK", width=12, command=close)
+        btn.pack(pady=10)
+
+        btn.focus_set()
+        win.bind("<Return>", close)
+        win.bind("<Escape>", close)
+
+        self._center_popup(win)
+        self.root.wait_window(win)
 
     def _center_popup(self, win):
         self.root.update_idletasks()
@@ -680,7 +723,7 @@ class PipelineGUI:
     # Periodic UI Update
     # ======================================================================
     def _blink_loop(self):
-        if Settings.calibrated():
+        if check_calibration_done():
             self.recalibrate_button.config(bootstyle="primary")
             return
         interval = 700
