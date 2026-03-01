@@ -21,3 +21,7 @@ __pycache__/
 /ScoreTable.json
 /calibration_result.json
 /Example_scan_result/merged*
+
+# Map background images
+Images/Map_background/*.png
+!Images/Map_background/*_g.png
