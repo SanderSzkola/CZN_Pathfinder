@@ -77,7 +77,14 @@ class PipelineGUI:
         self.window_h = max(self.left_panel_h, self.right_panel_h)
         self.root.title(f"CZN Pathfinder {Settings.local_version}")
         self.root.iconbitmap("Images/Icon.ico")
-        self.root.geometry(f"{self.window_w}x{self.window_h}+10+10")
+        # self.root.geometry(f"{self.window_w}x{self.window_h}+10+10")
+
+        # temp resizing nonsense
+        window_w = Settings.temp_window_w if Settings.temp_window_w != -1 else self.window_w
+        window_h = Settings.temp_window_h if Settings.temp_window_h != -1 else self.window_h
+        window_x = Settings.temp_offset_x if Settings.temp_offset_x != -1 else 10
+        window_y = Settings.temp_offset_y if Settings.temp_offset_y != -1 else 10
+        self.root.geometry(f"{window_w}x{window_h}+{window_x}+{window_y}")
 
         self.selected_folder = None
         self.last_map = None

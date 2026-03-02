@@ -38,6 +38,12 @@ class Settings:
     keyboard_input_halfautoscanner: str = "s+2"
     map_gui_image_scale: int = 100  # as %
 
+    # temp
+    temp_window_w = -1
+    temp_window_h = -1
+    temp_offset_x = -1
+    temp_offset_y = -1
+
     @classmethod
     def _ensure_path(cls) -> None:
         if cls._path is None:

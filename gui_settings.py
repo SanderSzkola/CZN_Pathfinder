@@ -91,6 +91,16 @@ class SettingsPanel(tb.Toplevel):
         add_field("Local version", "local_version", True)
         add_field("GitHub version", "remote_version", True)
 
+        add_separator()
+        add_explanation("A special section just for you :D \n"
+                        "Will be removed in next update unless I find a way to integrate it in a better way\n"
+                        "Not validated in any way so expect hard crash if you insert some nonsense there\n"
+                        "Default values: 1600 490 10 10; -1 means read default")
+        add_field("temp_window_w", "temp_window_w")
+        add_field("temp_window_h", "temp_window_h")
+        add_field("temp_offset_x", "temp_offset_x")
+        add_field("temp_offset_y", "temp_offset_y")
+
     def _build_buttons(self, parent):
         frame = tb.Frame(parent)
         frame.grid(row=999, column=0, columnspan=2, sticky="e", pady=(10, 0))
