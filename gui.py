@@ -61,18 +61,20 @@ class PipelineGUI:
     def __init__(self, root, low_res=False):
         self.root = root
         self.low_res = low_res
+        self.map_scale = Settings.map_gui_image_scale / 100  # as %
         if self.low_res:
-            self.window_w = 1280
-            self.window_h = 490
-            self.left_panel_w = 880
-            self.left_panel_h = 490
-            self.image_h = int(self.left_panel_h * self.left_panel_w / 1190)
+            self.left_panel_w = int(880 * self.map_scale)
+            self.left_panel_h = int(490 * self.map_scale)
+            self.right_panel_w = 410
+            self.right_panel_h = 420
         else:
-            self.window_w = 1600
-            self.window_h = 490
-            self.left_panel_w = 1190
-            self.left_panel_h = 490
+            self.left_panel_w = int(1190 * self.map_scale)
+            self.left_panel_h = int(490 * self.map_scale)
+            self.right_panel_w = 410
+            self.right_panel_h = 420
 
+        self.window_w = self.left_panel_w + self.right_panel_w
+        self.window_h = max(self.left_panel_h, self.right_panel_h)
         self.root.title(f"CZN Pathfinder {Settings.local_version}")
         self.root.iconbitmap("Images/Icon.ico")
         self.root.geometry(f"{self.window_w}x{self.window_h}+10+10")
@@ -120,7 +122,7 @@ class PipelineGUI:
         self.image_label.pack(fill="both", expand=True)
 
     def _build_right_panel(self, parent):
-        panel = tb.Frame(parent, width=410, height=420)
+        panel = tb.Frame(parent, width=self.right_panel_w, height=self.right_panel_h)
         panel.pack(side="left", fill="both")
         panel.pack_propagate(False)
 
@@ -311,9 +313,10 @@ class PipelineGUI:
     def display_image(self, obj):
         try:
             im = self._to_image(obj)
-            if self.low_res:
-                im = im.resize((self.left_panel_w, self.image_h),
-                               Image.Resampling.BILINEAR)
+            w, h = im.size
+            new_w = int(w * self.map_scale)
+            new_h = int(h * self.map_scale)
+            im = im.resize((new_w, new_h), Image.Resampling.BILINEAR)
 
             self.last_image = ImageTk.PhotoImage(im)
             self.image_label.config(image=self.last_image)

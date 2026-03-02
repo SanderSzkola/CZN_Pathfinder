@@ -36,6 +36,7 @@ class Settings:
     keyboard_input: bool = False
     keyboard_input_autoscanner: str = "s+1"
     keyboard_input_halfautoscanner: str = "s+2"
+    map_gui_image_scale: int = 100  # as %
 
     @classmethod
     def _ensure_path(cls) -> None:

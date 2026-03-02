@@ -70,6 +70,7 @@ class SettingsPanel(tb.Toplevel):
         row = 0
         add_explanation("Any change requires script restart to take effect")
         add_field("Target app name", "target_app_name")
+        add_field("Map image size % (20-100)", "map_gui_image_scale")
         add_bool("Request admin on startup", "request_admin")
         add_bool("Dark mode", "darkmode")
         add_bool("Auto import score table", "auto_import_score")
@@ -106,6 +107,11 @@ class SettingsPanel(tb.Toplevel):
                 val = val.strip()
                 if val == "":
                     val = None
+            if attr == "map_gui_image_scale":
+                if int(val) > 100:
+                    val = 100
+                elif int(val) < 20:
+                    val = 20
             setattr(Settings, attr, val)
 
         Settings.save()
