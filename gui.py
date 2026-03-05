@@ -61,7 +61,8 @@ class PipelineGUI:
     def __init__(self, root, low_res=False):
         self.root = root
         self.low_res = low_res
-        self.map_scale = Settings.map_gui_image_scale / 100  # as %
+        self.map_scale = Settings.ui_map_image_scale / 100  # as %
+
         if self.low_res:
             self.left_panel_w = int(880 * self.map_scale)
             self.left_panel_h = int(490 * self.map_scale)
@@ -77,14 +78,14 @@ class PipelineGUI:
         self.window_h = max(self.left_panel_h, self.right_panel_h)
         self.root.title(f"CZN Pathfinder {Settings.local_version}")
         self.root.iconbitmap("Images/Icon.ico")
-        # self.root.geometry(f"{self.window_w}x{self.window_h}+10+10")
-
-        # temp resizing nonsense
-        window_w = Settings.temp_window_w if Settings.temp_window_w != -1 else self.window_w
-        window_h = Settings.temp_window_h if Settings.temp_window_h != -1 else self.window_h
-        window_x = Settings.temp_offset_x if Settings.temp_offset_x != -1 else 10
-        window_y = Settings.temp_offset_y if Settings.temp_offset_y != -1 else 10
+        window_w = Settings.ui_window_w if Settings.ui_window_w != -1 else self.window_w
+        window_h = Settings.ui_window_h if Settings.ui_window_h != -1 else self.window_h
+        window_x = Settings.ui_window_offset_x if Settings.ui_window_offset_x != -1 else 10
+        window_y = Settings.ui_window_offset_y if Settings.ui_window_offset_y != -1 else 10
         self.root.geometry(f"{window_w}x{window_h}+{window_x}+{window_y}")
+        self.root.update()
+        self.root.attributes('-topmost', Settings.ui_window_always_on_top)
+        self.root.update()
 
         self.selected_folder = None
         self.last_map = None

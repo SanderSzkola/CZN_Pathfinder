@@ -23,26 +23,27 @@ class Settings:
     preview_draw_fringe_marks: bool = True
     preview_draw_trim_overlay: bool = True
 
+    # ui
+    darkmode: bool = True
+    ui_map_image_scale: int = 100  # as %
+    ui_window_w: int = -1
+    ui_window_h: int = -1
+    ui_window_offset_x: int = -1
+    ui_window_offset_y: int = -1
+    ui_window_always_on_top: bool = False
+
     # whatever else
     testmode: bool = False
     request_admin: bool = False
-    darkmode: bool = True
     auto_import_score: bool = True
     autoupdate: bool = True
     last_update_check: datetime | None = None
     remote_version: str | None = None
-    local_version: str | None = "v0.4.4-rc1"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow; -rc1
+    local_version: str | None = "v0.4.4"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow; -rc1
     target_app_name: str = "Chaos Zero Nightmare"
     keyboard_input: bool = False
     keyboard_input_autoscanner: str = "s+1"
     keyboard_input_halfautoscanner: str = "s+2"
-    map_gui_image_scale: int = 100  # as %
-
-    # temp
-    temp_window_w = -1
-    temp_window_h = -1
-    temp_offset_x = -1
-    temp_offset_y = -1
 
     @classmethod
     def _ensure_path(cls) -> None:
