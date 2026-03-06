@@ -124,6 +124,10 @@ class PipelineGUI:
         scaled_w = self._scale_to_ui_size(self.left_panel_w)
         scaled_h = self._scale_to_ui_size(self.left_panel_h)
 
+        # first startup check, place mini at half-length of display
+        if Settings.ui_window_offset_x_mini == -1:
+            Settings.ui_window_offset_x_mini = int(self.root.winfo_screenwidth() / 2)
+
         if self._is_mini:
             self.window_w = scaled_w
             self.window_h = scaled_h

@@ -28,7 +28,7 @@ class Settings:
     ui_map_image_scale_normal: int = 100  # as %
     ui_map_image_scale_mini: int = 30
     ui_window_offset_x: int = 0
-    ui_window_offset_x_mini: int = 0
+    ui_window_offset_x_mini: int = -1  # to be overwritten by half-length of display at first startup
     ui_window_offset_y: int = 0
     ui_window_offset_y_mini: int = 0
     ui_window_always_on_top: bool = False
