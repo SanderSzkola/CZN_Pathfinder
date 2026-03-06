@@ -31,7 +31,7 @@ class SettingsPanel(tb.Toplevel):
         self._build_general_tab(tab_general)
 
         tab_temp = tb.Frame(notebook)
-        notebook.add(tab_temp, text="Geometry / WIP")
+        notebook.add(tab_temp, text="Geometry")
         self._build_temp_tab(tab_temp)
 
     def _make_var(self, attr):
@@ -101,17 +101,16 @@ class SettingsPanel(tb.Toplevel):
         row = 0
         row = self._add_explanation(parent, row, "Any change requires script restart to take effect")
         row = self._add_explanation(parent, row,
-                                    "Experimental feature responsible for window position and size\n"
-                                    "Not tested yet. Not validated. Incorrect input may crash the application\n"
-                                    "Defaults: 1600 490 10 10 ; -1 means read default")
+                                    "Those settings control how ui looks and behaves.\n"
+                                    "Offset means how far the script window should be moved, relative to \n"
+                                    "top left corner of display")
 
-        row = self._add_field(parent, row, "Window width", "ui_window_w")
-        row = self._add_field(parent, row, "Window height", "ui_window_h")
         row = self._add_field(parent, row, "Horizontal offset", "ui_window_offset_x")
+        row = self._add_field(parent, row, "Horizontal offset in mini mode", "ui_window_offset_x_mini")
         row = self._add_field(parent, row, "Vertical offset", "ui_window_offset_y")
-
-        row = self._add_separator(parent, row)
-        row = self._add_field(parent, row, "Map image size % (20-100)", "ui_map_image_scale")
+        row = self._add_field(parent, row, "Vertical offset in mini mode", "ui_window_offset_y_mini")
+        row = self._add_field(parent, row, "Map image size % (20-100)", "ui_map_image_scale_normal")
+        row = self._add_field(parent, row, "Minimap image size % (20-100)", "ui_map_image_scale_mini")
         row = self._add_bool(parent, row, "Keep script window always on top", "ui_window_always_on_top")
 
     def _build_buttons(self, parent):

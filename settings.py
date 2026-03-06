@@ -25,11 +25,12 @@ class Settings:
 
     # ui
     darkmode: bool = True
-    ui_map_image_scale: int = 100  # as %
-    ui_window_w: int = -1
-    ui_window_h: int = -1
-    ui_window_offset_x: int = -1
-    ui_window_offset_y: int = -1
+    ui_map_image_scale_normal: int = 100  # as %
+    ui_map_image_scale_mini: int = 30
+    ui_window_offset_x: int = 0
+    ui_window_offset_x_mini: int = 0
+    ui_window_offset_y: int = 0
+    ui_window_offset_y_mini: int = 0
     ui_window_always_on_top: bool = False
 
     # whatever else

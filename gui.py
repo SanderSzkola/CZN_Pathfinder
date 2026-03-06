@@ -12,7 +12,7 @@ import ttkbootstrap as tb
 import cv2
 from pathlib import Path
 
-if not hasattr(cv2, "__version__"):  # random GPT-approved dependency error fix
+if not hasattr(cv2, "__version__"):  # random GPT-approved dependency error fix todo: check if i still need it?
     cv2.__version__ = "4"
 import numpy as np
 from PIL import Image, ImageTk
@@ -61,30 +61,26 @@ class PipelineGUI:
     def __init__(self, root, low_res=False):
         self.root = root
         self.low_res = low_res
-        self.map_scale = Settings.ui_map_image_scale / 100  # as %
+        self.map_scale_normal = Settings.ui_map_image_scale_normal / 100  # as %
+        self.map_scale_mini = Settings.ui_map_image_scale_mini / 100  # as %
+        self._is_mini = False
 
         if self.low_res:
-            self.left_panel_w = int(880 * self.map_scale)
-            self.left_panel_h = int(490 * self.map_scale)
+            self.left_panel_w = 880
+            self.left_panel_h = 490
             self.right_panel_w = 410
             self.right_panel_h = 420
         else:
-            self.left_panel_w = int(1190 * self.map_scale)
-            self.left_panel_h = int(490 * self.map_scale)
+            self.left_panel_w = 1190
+            self.left_panel_h = 490
             self.right_panel_w = 410
             self.right_panel_h = 420
 
-        self.window_w = self.left_panel_w + self.right_panel_w
-        self.window_h = max(self.left_panel_h, self.right_panel_h)
+        self._update_geometry()
         self.root.title(f"CZN Pathfinder {Settings.local_version}")
         self.root.iconbitmap("Images/Icon.ico")
-        window_w = Settings.ui_window_w if Settings.ui_window_w != -1 else self.window_w
-        window_h = Settings.ui_window_h if Settings.ui_window_h != -1 else self.window_h
-        window_x = Settings.ui_window_offset_x if Settings.ui_window_offset_x != -1 else 10
-        window_y = Settings.ui_window_offset_y if Settings.ui_window_offset_y != -1 else 10
-        self.root.geometry(f"{window_w}x{window_h}+{window_x}+{window_y}")
-        self.root.update()
         self.root.attributes('-topmost', Settings.ui_window_always_on_top)
+        self.root.resizable(False, False)
         self.root.update()
 
         self.selected_folder = None
@@ -98,6 +94,7 @@ class PipelineGUI:
         self._blink_state = False
         self._scanner_running = False
         self._demo_params_copy = []
+        self._last_pil = None
 
         self._build_ui()
         self._initiate_keyboard_listener()
@@ -110,6 +107,39 @@ class PipelineGUI:
     # ======================================================================
     # UI Construction
     # ======================================================================
+    def _scale_to_ui_size(self, val):
+        s = self.map_scale_mini if self._is_mini else self.map_scale_normal
+        return int(val * s)
+
+    def _update_geometry(self, change: bool = False):
+        if change:
+            # if leaving mini mode, capture current position
+            if self._is_mini:
+                self.root.update_idletasks()
+                Settings.ui_window_offset_x_mini = self.root.winfo_x()
+                Settings.ui_window_offset_y_mini = self.root.winfo_y()
+                Settings.save()
+            self._is_mini = not self._is_mini
+
+        scaled_w = self._scale_to_ui_size(self.left_panel_w)
+        scaled_h = self._scale_to_ui_size(self.left_panel_h)
+
+        if self._is_mini:
+            self.window_w = scaled_w
+            self.window_h = scaled_h
+            window_x = Settings.ui_window_offset_x_mini if Settings.ui_window_offset_x_mini >= 0 else 0
+            window_y = Settings.ui_window_offset_y_mini if Settings.ui_window_offset_y_mini >= 0 else 0
+        else:
+            self.window_w = scaled_w + self.right_panel_w
+            self.window_h = max(scaled_h, self.right_panel_h)
+            window_x = Settings.ui_window_offset_x if Settings.ui_window_offset_x >= 0 else 0
+            window_y = Settings.ui_window_offset_y if Settings.ui_window_offset_y >= 0 else 0
+
+        self.root.geometry(f"{self.window_w}x{self.window_h}+{window_x}+{window_y}")
+        self.root.update()
+        if hasattr(self, "_last_pil") and self._last_pil is not None:
+            self.display_image(self._last_pil)
+
     def _build_ui(self):
         main_frame = tb.Frame(self.root)
         main_frame.pack(fill="both", expand=True)
@@ -120,14 +150,15 @@ class PipelineGUI:
     def _build_left_image_panel(self, parent):
         panel = tb.Frame(
             parent,
-            width=self.left_panel_w,
-            height=self.left_panel_h,
+            width=self._scale_to_ui_size(self.left_panel_w),
+            height=self._scale_to_ui_size(self.left_panel_h),
         )
         panel.pack(side="left", fill="both")
         panel.pack_propagate(False)
 
         self.image_label = tb.Label(panel)
         self.image_label.pack(fill="both", expand=True)
+        self.image_label.bind("<Double-Button-1>", lambda e: self._update_geometry(change=True))
 
     def _build_right_panel(self, parent):
         panel = tb.Frame(parent, width=self.right_panel_w, height=self.right_panel_h)
@@ -321,9 +352,10 @@ class PipelineGUI:
     def display_image(self, obj):
         try:
             im = self._to_image(obj)
+            self._last_pil = im
             w, h = im.size
-            new_w = int(w * self.map_scale)
-            new_h = int(h * self.map_scale)
+            new_w = self._scale_to_ui_size(w)
+            new_h = self._scale_to_ui_size(h)
             im = im.resize((new_w, new_h), Image.Resampling.BILINEAR)
 
             self.last_image = ImageTk.PhotoImage(im)
@@ -359,7 +391,8 @@ class PipelineGUI:
     def _load_initial_background(self):
         img = Image.open(get_path(["Images", "filler_map.png"]))
         if self.low_res:
-            img = img.resize((self.left_panel_w, self.left_panel_h),
+            img = img.resize((self._scale_to_ui_size(self.right_panel_w),
+                              self._scale_to_ui_size(self.right_panel_h)),
                              Image.Resampling.BILINEAR)
         self.display_image(img)
 
@@ -569,7 +602,7 @@ class PipelineGUI:
         has_game_image = scr is not None and getattr(scr, "size", (0, 0))[0] > 0
         folder = self._get_valid_calibration_folder()
 
-        if not has_game_image and not folder is not None:
+        if not has_game_image and folder is None:
             self.log("Calibration aborted: no game screenshot and no valid image folder found")
             return
 
@@ -704,7 +737,7 @@ class PipelineGUI:
                 "The scanner needs admin elevation to work properly.\n"
                 "Please enable 'Request admin on startup' option in settings, then restart the script.\n"
                 "Or run script as admin by any other way, for example right click - run as admin.\n\n"
-                "Want to run it without admin? Offline scanner does not neet it, it just reads images from folder."
+                "Want to run it without admin? Offline scanner does not need it, it just reads images from folder."
             )
         else:
             text = "Not implemented"
