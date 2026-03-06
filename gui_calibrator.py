@@ -444,22 +444,21 @@ class CalibrationPanel(tb.Toplevel):
 
         help_text = (
             "General workflow:\n"
-            "1. Take a screenshot or select an image folder.\n"
+            "1. Open calibration panel, optionally select saved folder and image.\n"
             "2. Lower THRESHOLD a few times until all nodes are labeled.\n"
             "3. If some node refuses to be labeled, try changing TEMPLATE SCALE.\n"
             "4. Confirm that every existing path between labeled nodes is highlighted.\n"
             "\n"
             "Goal:\n"
-            "Every node and modifier should be detected and correctly labeled.\n"
+            "Every node and modifier inside central, non-crossed zone should be detected and correctly labeled.\n"
             "\n"
             "Tips:\n"
             "- Template scale is resolution-dependent; initial values are usually close.\n"
-            "- If nodes are missing, lower the threshold.\n"
+            "- If nodes are missing, lower the threshold. Lowering it too much may affect performance. \n"
             "- If extra modifiers appear, increase the threshold.\n"
-            "- The first column of a map (that glow beam) may have wrongly detected modifiers, ignore them.\n"
             "- Yellow crossed area is excluded from detection due to game's ui elements potentially overlapping with nodes.\n"
-            "- Blue crossed area is a safety margin, nodes located there are hard to read. They may or may not be "
-            "recognized by the script, so they all are discarded, marked by X.\n"
+            "- Blue crossed area is a safety margin, nodes located there are hard to read, so they are discarded, marked by X."
+            " Modifiers are processed normally.\n"
             "\n"
             "Legend:\n"
             "NO - normal fight\n"
@@ -468,7 +467,7 @@ class CalibrationPanel(tb.Toplevel):
             "RE - rest\n"
             "SH - shop\n"
             "OR - chaos orb / aura monster / harder monster\n"
-            "TU - dimensional tunnel\n"
+            "TU - dimensional tunnel / seasonal event\n"
         )
 
         tb.Label(

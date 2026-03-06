@@ -78,6 +78,12 @@ Exclusion areas are marked by diagonal yellow and blue lines.
     Blue is processed in a special way. Nodes located there are discarded, as they may be recognized incorrectly or not recognized at all. Modifiers are processed in a normal way.
 
 
+Mini mode: script window may be minified by double-clicking map image, which together with 'always on top' option allows to always see map in a non-obstructive way.
+    You can customise the size and position of mini mode window in settings.
+    When you exit mini mode, the position of window will be saved for next use.
+    Together with keyboard shortcuts, this allows for fast and seamless use of script, without the need to alt-tab between script and game windows.
+
+
 Main flow of the script is more or less done, but the error handling does not cover every possible way the script may break.
 If any subprocess breaks (like detect_nodes flagging Hugo face as Waypoint with 98% certainty), it may or may not tell you that it broke, you must notice and restart it by yourself.
 If you see the script misbehaving in a strange way, consider making bug report. Attach Last_scan_result and log_file.log, so I can try replicating it.

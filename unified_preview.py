@@ -24,6 +24,7 @@ class UnifiedPreview:
         self.draw_fringe_marks = False
         self.draw_node_icons = False
         self.draw_trim_overlay = False
+        self.draw_mod_assign_range = False
 
         self.nodes = []
         self.edges = []
@@ -266,6 +267,34 @@ class UnifiedPreview:
 
         return img
 
+    def _draw_mod_assign_range(self, img):
+        radius = int(130 * self.scale)
+        thickness_bg = int(4 * self.scale)
+        thickness_fg = int(2 * self.scale)
+
+        for n in self.nodes:
+            cx, cy = int(n.x), int(n.y)
+
+            cv2.circle(
+                img,
+                (cx, cy),
+                radius,
+                (0, 0, 0),
+                thickness_bg,
+                cv2.LINE_AA,
+            )
+
+            cv2.circle(
+                img,
+                (cx, cy),
+                radius,
+                (255, 200, 0),
+                thickness_fg,
+                cv2.LINE_AA,
+            )
+
+        return img
+
     def render(self):
         img = self.base_img.copy()
 
@@ -286,6 +315,9 @@ class UnifiedPreview:
 
         if self.draw_fringe_marks:
             img = self._draw_fringe_marks(img)
+
+        if self.draw_mod_assign_range:
+            img = self._draw_mod_assign_range(img)
 
         return img
 

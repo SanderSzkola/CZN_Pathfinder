@@ -23,15 +23,24 @@ class Settings:
     preview_draw_fringe_marks: bool = True
     preview_draw_trim_overlay: bool = True
 
+    # ui
+    darkmode: bool = True
+    ui_map_image_scale_normal: int = 100  # as %
+    ui_map_image_scale_mini: int = 30
+    ui_window_offset_x: int = 0
+    ui_window_offset_x_mini: int = -1  # to be overwritten by half-length of display at first startup
+    ui_window_offset_y: int = 0
+    ui_window_offset_y_mini: int = 0
+    ui_window_always_on_top: bool = False
+
     # whatever else
     testmode: bool = False
     request_admin: bool = False
-    darkmode: bool = True
     auto_import_score: bool = True
     autoupdate: bool = True
     last_update_check: datetime | None = None
     remote_version: str | None = None
-    local_version: str | None = "v0.4.3"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow
+    local_version: str | None = "v0.4.4"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow; -rc1
     target_app_name: str = "Chaos Zero Nightmare"
     keyboard_input: bool = False
     keyboard_input_autoscanner: str = "s+1"
@@ -87,10 +96,6 @@ class Settings:
 
         with cls._path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
-
-    @classmethod
-    def calibrated(cls):
-        return cls.screenshot_scale > 0
 
     @classmethod
     def get_scale(cls):

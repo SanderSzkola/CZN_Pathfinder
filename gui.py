@@ -12,7 +12,7 @@ import ttkbootstrap as tb
 import cv2
 from pathlib import Path
 
-if not hasattr(cv2, "__version__"):  # random GPT-approved dependency error fix
+if not hasattr(cv2, "__version__"):  # random GPT-approved dependency error fix todo: check if i still need it?
     cv2.__version__ = "4"
 import numpy as np
 from PIL import Image, ImageTk
@@ -61,21 +61,27 @@ class PipelineGUI:
     def __init__(self, root, low_res=False):
         self.root = root
         self.low_res = low_res
+        self.map_scale_normal = Settings.ui_map_image_scale_normal / 100  # as %
+        self.map_scale_mini = Settings.ui_map_image_scale_mini / 100  # as %
+        self._is_mini = False
+
         if self.low_res:
-            self.window_w = 1280
-            self.window_h = 490
             self.left_panel_w = 880
             self.left_panel_h = 490
-            self.image_h = int(self.left_panel_h * self.left_panel_w / 1190)
+            self.right_panel_w = 410
+            self.right_panel_h = 420
         else:
-            self.window_w = 1600
-            self.window_h = 490
             self.left_panel_w = 1190
             self.left_panel_h = 490
+            self.right_panel_w = 410
+            self.right_panel_h = 420
 
-        self.root.title("CZN Pathfinder")
+        self._update_geometry()
+        self.root.title(f"CZN Pathfinder {Settings.local_version}")
         self.root.iconbitmap("Images/Icon.ico")
-        self.root.geometry(f"{self.window_w}x{self.window_h}+10+10")
+        self.root.attributes('-topmost', Settings.ui_window_always_on_top)
+        self.root.resizable(False, False)
+        self.root.update()
 
         self.selected_folder = None
         self.last_map = None
@@ -88,6 +94,7 @@ class PipelineGUI:
         self._blink_state = False
         self._scanner_running = False
         self._demo_params_copy = []
+        self._last_pil = None
 
         self._build_ui()
         self._initiate_keyboard_listener()
@@ -100,6 +107,43 @@ class PipelineGUI:
     # ======================================================================
     # UI Construction
     # ======================================================================
+    def _scale_to_ui_size(self, val):
+        s = self.map_scale_mini if self._is_mini else self.map_scale_normal
+        return int(val * s)
+
+    def _update_geometry(self, change: bool = False):
+        if change:
+            # if leaving mini mode, capture current position
+            if self._is_mini:
+                self.root.update_idletasks()
+                Settings.ui_window_offset_x_mini = self.root.winfo_x()
+                Settings.ui_window_offset_y_mini = self.root.winfo_y()
+                Settings.save()
+            self._is_mini = not self._is_mini
+
+        scaled_w = self._scale_to_ui_size(self.left_panel_w)
+        scaled_h = self._scale_to_ui_size(self.left_panel_h)
+
+        # first startup check, place mini at half-length of display
+        if Settings.ui_window_offset_x_mini == -1:
+            Settings.ui_window_offset_x_mini = int(self.root.winfo_screenwidth() / 2)
+
+        if self._is_mini:
+            self.window_w = scaled_w
+            self.window_h = scaled_h
+            window_x = Settings.ui_window_offset_x_mini if Settings.ui_window_offset_x_mini >= 0 else 0
+            window_y = Settings.ui_window_offset_y_mini if Settings.ui_window_offset_y_mini >= 0 else 0
+        else:
+            self.window_w = scaled_w + self.right_panel_w
+            self.window_h = max(scaled_h, self.right_panel_h)
+            window_x = Settings.ui_window_offset_x if Settings.ui_window_offset_x >= 0 else 0
+            window_y = Settings.ui_window_offset_y if Settings.ui_window_offset_y >= 0 else 0
+
+        self.root.geometry(f"{self.window_w}x{self.window_h}+{window_x}+{window_y}")
+        self.root.update()
+        if hasattr(self, "_last_pil") and self._last_pil is not None:
+            self.display_image(self._last_pil)
+
     def _build_ui(self):
         main_frame = tb.Frame(self.root)
         main_frame.pack(fill="both", expand=True)
@@ -110,17 +154,18 @@ class PipelineGUI:
     def _build_left_image_panel(self, parent):
         panel = tb.Frame(
             parent,
-            width=self.left_panel_w,
-            height=self.left_panel_h,
+            width=self._scale_to_ui_size(self.left_panel_w),
+            height=self._scale_to_ui_size(self.left_panel_h),
         )
         panel.pack(side="left", fill="both")
         panel.pack_propagate(False)
 
         self.image_label = tb.Label(panel)
         self.image_label.pack(fill="both", expand=True)
+        self.image_label.bind("<Double-Button-1>", lambda e: self._update_geometry(change=True))
 
     def _build_right_panel(self, parent):
-        panel = tb.Frame(parent, width=410, height=420)
+        panel = tb.Frame(parent, width=self.right_panel_w, height=self.right_panel_h)
         panel.pack(side="left", fill="both")
         panel.pack_propagate(False)
 
@@ -311,9 +356,11 @@ class PipelineGUI:
     def display_image(self, obj):
         try:
             im = self._to_image(obj)
-            if self.low_res:
-                im = im.resize((self.left_panel_w, self.image_h),
-                               Image.Resampling.BILINEAR)
+            self._last_pil = im
+            w, h = im.size
+            new_w = self._scale_to_ui_size(w)
+            new_h = self._scale_to_ui_size(h)
+            im = im.resize((new_w, new_h), Image.Resampling.BILINEAR)
 
             self.last_image = ImageTk.PhotoImage(im)
             self.image_label.config(image=self.last_image)
@@ -348,7 +395,8 @@ class PipelineGUI:
     def _load_initial_background(self):
         img = Image.open(get_path(["Images", "filler_map.png"]))
         if self.low_res:
-            img = img.resize((self.left_panel_w, self.left_panel_h),
+            img = img.resize((self._scale_to_ui_size(self.right_panel_w),
+                              self._scale_to_ui_size(self.right_panel_h)),
                              Image.Resampling.BILINEAR)
         self.display_image(img)
 
@@ -379,7 +427,12 @@ class PipelineGUI:
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
                 return
 
-        if not check_calibration_done(self.log):
+        if not check_calibration_done():
+            self.log("Please perform calibration first.")
+            return
+
+        if not is_admin():
+            self.show_warning_dialog("no_admin")
             return
 
         if not from_key:
@@ -418,7 +471,12 @@ class PipelineGUI:
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
                 return
 
-        if not check_calibration_done(self.log):
+        if not check_calibration_done():
+            self.log("Please perform calibration first.")
+            return
+
+        if not is_admin():
+            self.show_warning_dialog("no_admin")
             return
 
         if not from_key:
@@ -465,7 +523,8 @@ class PipelineGUI:
             self._prepare_demo()
             self.log("Preparing demo parameters")
         else:
-            if not check_calibration_done(self.log):
+            if not check_calibration_done():
+                self.log("Please perform calibration first.")
                 return
 
         self._scanner_running = True
@@ -547,7 +606,7 @@ class PipelineGUI:
         has_game_image = scr is not None and getattr(scr, "size", (0, 0))[0] > 0
         folder = self._get_valid_calibration_folder()
 
-        if not has_game_image and not folder is not None:
+        if not has_game_image and folder is None:
             self.log("Calibration aborted: no game screenshot and no valid image folder found")
             return
 
@@ -605,11 +664,15 @@ class PipelineGUI:
     # ======================================================================
     # Dialogs
     # ======================================================================
-    def ask_continue_dialog(self, variant):
+    def _base_dialog(self, title):
         win = tb.Toplevel(self.root)
-        win.title("Confirm Action")
+        win.title(title)
         win.grab_set()
         win.transient(self.root)
+        return win
+
+    def ask_continue_dialog(self, variant):
+        win = self._base_dialog("Confirm Action")
 
         if variant == "auto":
             text = (
@@ -652,7 +715,7 @@ class PipelineGUI:
             result["value"] = True
             win.destroy()
 
-        def cancel():
+        def cancel(_=None):
             win.destroy()
 
         btn_frame = tb.Frame(win)
@@ -664,11 +727,39 @@ class PipelineGUI:
 
         btn_ok.focus_set()
         win.bind("<Return>", confirm)
-        win.bind("<Escape>", lambda _: cancel())
+        win.bind("<Escape>", cancel)
 
         self._center_popup(win)
         self.root.wait_window(win)
         return result["value"]
+
+    def show_warning_dialog(self, variant):
+        win = self._base_dialog("Warning")
+
+        if variant == "no_admin":
+            text = (
+                "The scanner needs admin elevation to work properly.\n"
+                "Please enable 'Request admin on startup' option in settings, then restart the script.\n"
+                "Or run script as admin by any other way, for example right click - run as admin.\n\n"
+                "Want to run it without admin? Offline scanner does not need it, it just reads images from folder."
+            )
+        else:
+            text = "Not implemented"
+
+        tb.Label(win, text=text).pack(padx=20, pady=15)
+
+        def close(_=None):
+            win.destroy()
+
+        btn = tb.Button(win, text="OK", width=12, command=close)
+        btn.pack(pady=10)
+
+        btn.focus_set()
+        win.bind("<Return>", close)
+        win.bind("<Escape>", close)
+
+        self._center_popup(win)
+        self.root.wait_window(win)
 
     def _center_popup(self, win):
         self.root.update_idletasks()
@@ -680,7 +771,7 @@ class PipelineGUI:
     # Periodic UI Update
     # ======================================================================
     def _blink_loop(self):
-        if Settings.calibrated():
+        if check_calibration_done():
             self.recalibrate_button.config(bootstyle="primary")
             return
         interval = 700

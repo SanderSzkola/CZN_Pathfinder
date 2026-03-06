@@ -5,6 +5,7 @@ from typing import List, Optional, Union
 
 import cv2
 import numpy as np
+import random
 
 from path_converter import get_path
 
@@ -13,6 +14,8 @@ ICON_SCALE = 0.35
 MODIFIER_Y_OFFSET = -4
 MIN_COLS = 17
 MIN_ROWS = 8  # 5 from game map + 2 for counters + 1 for top / bottom padding
+_BG_CACHE = None
+_LAST_IMAGE = None
 
 
 def load_map(path: str):
@@ -64,37 +67,6 @@ def paste_icon(dst: np.ndarray, icon: np.ndarray, px: int, py: int):
         roi[:, :, 3] = 255
 
 
-def make_tiled_background(path: str, height: int, width: int):
-    base = cv2.imread(path, cv2.IMREAD_UNCHANGED)
-    if base is None:
-        raise ValueError(f"Cannot load background image: {path}")
-
-    if base.shape[2] == 3:
-        b, g, r = cv2.split(base)
-        a = np.full((base.shape[0], base.shape[1]), 255, dtype=np.uint8)
-        base = cv2.merge([b, g, r, a])
-
-    v_mirror = cv2.flip(base, 0)
-    tb = np.concatenate((base, v_mirror), axis=0)
-
-    h_mirror = cv2.flip(tb, 1)
-    quad = np.concatenate((tb, h_mirror), axis=1)
-
-    qh, qw = quad.shape[:2]
-    out = np.zeros((height, width, 4), dtype=np.uint8)
-
-    for yy in range(0, height, qh):
-        for xx in range(0, width, qw):
-            ys = max(yy, 0)
-            xs = max(xx, 0)
-            ye = min(yy + qh, height)
-            xe = min(xx + qw, width)
-
-            out[ys:ye, xs:xe] = quad[ys - yy:ye - yy, xs - xx:xe - xx]
-
-    return out
-
-
 def _scale_icon(icon: np.ndarray):
     ih, iw = icon.shape[:2]
     w = max(1, int(iw * ICON_SCALE))
@@ -106,6 +78,84 @@ def _collect_path_edges(path: List[str]):
     forward = {(path[i], path[i + 1]) for i in range(len(path) - 1)}
     backward = {(b, a) for (a, b) in forward}
     return forward | backward
+
+
+def _load_background_tiles(folder: str) -> List[np.ndarray]:
+    global _BG_CACHE
+    if _BG_CACHE is not None:
+        return _BG_CACHE
+
+    tiles: List[np.ndarray] = []
+
+    for fname in os.listdir(folder):
+        if not fname.lower().endswith("_g.png"):
+            continue
+
+        path = os.path.join(folder, fname)
+        img = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+        if img is None:
+            continue
+
+        if img.shape[2] == 3:
+            b, g, r = cv2.split(img)
+            a = np.full((img.shape[0], img.shape[1]), 255, dtype=np.uint8)
+            img = cv2.merge([b, g, r, a])
+
+        tiles.append(img)
+
+    if not tiles:
+        raise ValueError(f"No background images found in {folder}")
+
+    _BG_CACHE = tiles
+    return tiles
+
+
+def make_tiled_background(
+        folder: str,
+        target_h: int,
+        target_w: int,
+        rotate: bool = True,
+):
+    tiles = _load_background_tiles(folder)
+    th, tw = tiles[0].shape[:2]
+
+    cols = (target_w + tw - 1) // tw
+    rows = (target_h + th - 1) // th
+    n_types = len(tiles)
+
+    # generate pattern, A B | C D
+    grid = [[-1] * cols for _ in range(rows)]
+    for y in range(rows):
+        for x in range(cols):
+            forbidden = {
+                grid[ny][nx]
+                for ny in range(max(0, y - 1), min(rows, y + 2))
+                for nx in range(max(0, x - 1), min(cols, x + 2))
+                if grid[ny][nx] != -1
+            }
+            choices = [i for i in range(n_types) if i not in forbidden]
+            if not choices:
+                raise RuntimeError("Background pattern generation failed")
+            grid[y][x] = random.choice(choices)
+    img_grid = [[tiles[i] for i in row] for row in grid]
+
+    # optionally rotate, A B' | C'' D'''
+    if rotate:
+        for y in range(rows):
+            for x in range(cols):
+                if y % 2 == 0 and x % 2 == 1:  # B'
+                    img_grid[y][x] = cv2.flip(img_grid[y][x], 1)
+                elif y % 2 == 1 and x % 2 == 0:  # C''
+                    img_grid[y][x] = cv2.flip(img_grid[y][x], 0)
+                elif y % 2 == 1 and x % 2 == 1:  # D'''
+                    img_grid[y][x] = cv2.flip(img_grid[y][x], -1)
+
+    out = np.zeros((rows * th, cols * tw, 4), dtype=np.uint8)
+    for y in range(rows):
+        for x in range(cols):
+            out[y * th:(y + 1) * th, x * tw:(x + 1) * tw] = img_grid[y][x]
+
+    return out[:target_h, :target_w].copy()
 
 
 def draw_map(
@@ -262,8 +312,18 @@ def draw_map(
     pad = GRID // 2
     fg = canvas[pad:-pad]
 
-    bg_path = get_path(["Images", "background_img.png"])
-    bg = make_tiled_background(bg_path, height - GRID, width)
+    global _LAST_IMAGE
+    if (_LAST_IMAGE is None
+            or _LAST_IMAGE.shape[0] != height - GRID
+            or _LAST_IMAGE.shape[1] != width):
+        bg = make_tiled_background(
+            get_path(["Images", "Map_background"]),
+            height - GRID,
+            width
+        )
+        _LAST_IMAGE = bg.copy()
+    else:
+        bg = _LAST_IMAGE.copy()
 
     bar_h = GRID * 2  # grey bar on bottom
     bar_y0 = bg.shape[0] - bar_h

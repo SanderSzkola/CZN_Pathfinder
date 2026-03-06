@@ -4,12 +4,8 @@ from template_library import TemplateLibrary, TEMPLATE_RES
 from settings import Settings
 
 
-def check_calibration_done(log=lambda msg: None):
-    if not Settings.calibrated():
-        log("Please perform calibration first.")
-        return False
-    return True
-
+def check_calibration_done():
+    return Settings.screenshot_scale > 0
 
 def perform_calibration_exact(screenshot, nodes=None, log=lambda msg: None, template_scale=None,
                               threshold=None):
