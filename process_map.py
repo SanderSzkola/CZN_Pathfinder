@@ -110,6 +110,7 @@ def try_merge(global_nodes, frag_nodes, frag_edges):
     global_anchor_col = max(c for (c, r) in global_nodes)
     frag_anchor_col = min(n.col for n in frag_nodes)
 
+    # todo: rewrite overlap block to count ALL nodes in a COLUMN, not some matches somewhere
     for dh in HORIZONTAL_OFFSETS:
         conflict = False
         overlap = 0  # not sure if still needed

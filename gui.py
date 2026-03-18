@@ -829,10 +829,20 @@ class PipelineGUI:
 # ======================================================================
 # Main
 # ======================================================================
+def app_do_not_scale():
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except:
+            pass
 
 if __name__ == "__main__":
+    app_do_not_scale()
     theme = "darkly" if Settings.darkmode else "flatly"
     root = tb.Window(themename=theme)
+    root.tk.call('tk', 'scaling', 1.25) # todo: check tkinter autoscaling magic somewhere, windows 125% ui scale
     low_res = get_screen_res()[0] < 1600
     gui = PipelineGUI(root, low_res=low_res)
 
