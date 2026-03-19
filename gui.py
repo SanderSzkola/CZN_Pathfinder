@@ -247,10 +247,10 @@ class PipelineGUI:
 
         items = list(self.score_table.table.items())
 
-        for i, (key, val) in enumerate(items):
-            if i % 2 == 0:
+        for key, val in items:
+            if len(key) == 2:  # nodes
                 self._create_score_row(col_left, key, val)
-            else:
+            else:  # modifiers
                 self._create_score_row(col_right, key, val)
 
     def _create_score_row(self, parent, key, value):
@@ -282,7 +282,7 @@ class PipelineGUI:
         var = tb.IntVar(value=value)
         self.score_vars[key] = var
         self.score_labels[key] = value_label
-        bigger_scale = key == "EVTU"  # dimensional tunnel gets more points
+        bigger_scale = key == "EVTU" or key == "EVME" # todo: maybe add some flag to scoretable, before this gets out of hand
         tk.Scale(
             row,
             from_=-10 if not bigger_scale else -50,
@@ -829,10 +829,20 @@ class PipelineGUI:
 # ======================================================================
 # Main
 # ======================================================================
+def app_do_not_scale():
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except:
+            pass
 
 if __name__ == "__main__":
+    app_do_not_scale()
     theme = "darkly" if Settings.darkmode else "flatly"
     root = tb.Window(themename=theme)
+    root.tk.call('tk', 'scaling', 1.25) # todo: check tkinter autoscaling magic somewhere, windows 125% ui scale
     low_res = get_screen_res()[0] < 1600
     gui = PipelineGUI(root, low_res=low_res)
 
