@@ -158,6 +158,68 @@ def make_tiled_background(
     return out[:target_h, :target_w].copy()
 
 
+def draw_encounter_row(
+        canvas: np.ndarray,
+        items,
+        col_positions,
+        y_grid: int,
+        encounter_dir: str,
+        modifier_dir: str,
+        encounter_ranges: dict,
+        font,
+        scale: float,
+        thick: int,
+):
+    for (key, count), col in zip(items, col_positions):
+        x_grid = col * GRID
+
+        enc_key = key[:2]
+        mod_key = key[2:] or None
+
+        enc_icon = load_icon(encounter_dir, enc_key)
+        if enc_icon is not None:
+            enc_scaled, ew, eh = _scale_icon(enc_icon)
+        else:
+            ew = eh = 0
+            enc_scaled = None
+
+        px = x_grid - ew // 2
+        py = y_grid - eh // 2
+
+        if enc_scaled is not None:
+            paste_icon(canvas, enc_scaled, px, py)
+        else:
+            cv2.rectangle(canvas,
+                          (x_grid - 10, y_grid - 10),
+                          (x_grid + 10, y_grid + 10),
+                          (0, 0, 0, 255), 2)
+
+        if mod_key:
+            mod_icon = load_icon(modifier_dir, mod_key)
+            if mod_icon is not None:
+                mod_scaled, mw, mh = _scale_icon(mod_icon)
+                mod_px = x_grid + (ew // 2) - mw
+                mod_py = y_grid - mh + MODIFIER_Y_OFFSET
+                paste_icon(canvas, mod_scaled, mod_px, mod_py)
+
+        # text
+        tx = x_grid + ew // 2 + 4
+        ty = y_grid + eh // 4 + 2
+
+        count_str = str(count)
+        min_v, max_v = encounter_ranges[key]
+        range_str = f"[{min_v},{max_v}]"
+
+        cv2.putText(canvas, count_str, (tx, ty),
+                    font, scale, (50, 200, 0, 255), thick, cv2.LINE_AA)
+
+        w_count = cv2.getTextSize(count_str, font, scale, thick)[0][0]
+        x2 = tx + w_count + 4
+
+        cv2.putText(canvas, range_str, (x2, ty),
+                    font, scale, (0, 0, 0, 255), thick, cv2.LINE_AA)
+
+
 def draw_map(
         map_data: Union[str, dict],
         best_path: Optional[List[str]] = None,
@@ -247,66 +309,48 @@ def draw_map(
     # encounter counts
     if encounter_counts:
         row_extra = (max_row - min_row + 2)
-        y_grid = row_extra * GRID
+        y_base = row_extra * GRID
+        y_mod = (row_extra + 1) * GRID
         font = cv2.FONT_HERSHEY_PLAIN
         scale = 1.5
         thick = 2
 
-        items = list(encounter_counts.items())
-        col_positions = [i * 2 + 1 for i in range(len(items))]
+        base_items = []
+        modifier_items = []
 
-        for (key, count), col in zip(items, col_positions):
-            x_grid = col * GRID
-            enc_key = key[:2]
-            mod_key = key[2:] or None
-
-            enc_icon = load_icon(encounter_dir, enc_key)
-            if enc_icon is not None:
-                enc_scaled, ew, eh = _scale_icon(enc_icon)
+        for key, count in encounter_counts.items():
+            if len(key) == 2:
+                base_items.append((key, count))
             else:
-                ew = eh = 0
-                enc_scaled = None
+                modifier_items.append((key, count))
+        base_cols = [i * 2 + 1 for i in range(len(base_items))]
+        mod_cols = [i * 2 + 1 for i in range(len(modifier_items))]
 
-            px = x_grid - ew // 2
-            py = y_grid - eh // 2
+        draw_encounter_row(
+            canvas,
+            base_items,
+            base_cols,
+            y_base,
+            encounter_dir,
+            modifier_dir,
+            encounter_ranges,
+            font,
+            scale,
+            thick
+        )
 
-            if enc_scaled is not None:
-                paste_icon(canvas, enc_scaled, px, py)
-            else:
-                cv2.rectangle(canvas,
-                              (x_grid - 10, y_grid - 10),
-                              (x_grid + 10, y_grid + 10),
-                              (0, 0, 0, 255), 2)
-
-            if mod_key:
-                mod_icon = load_icon(modifier_dir, mod_key)
-                if mod_icon is not None:
-                    mod_scaled, mw, mh = _scale_icon(mod_icon)
-                    mod_px = x_grid + (ew // 2) - mw
-                    mod_py = y_grid - mh + MODIFIER_Y_OFFSET
-                    paste_icon(canvas, mod_scaled, mod_px, mod_py)
-
-            # write text
-            tx = x_grid + ew // 2 + 4
-            ty = y_grid + eh // 4 + 2
-            count_str = str(count)
-            min_v, max_v = encounter_ranges[key]
-            range_str = f"[{min_v},{max_v}]"
-
-            cv2.putText(canvas, count_str, (tx, ty),
-                        font, scale, (50, 200, 0, 255), thick, cv2.LINE_AA)
-            w_count = cv2.getTextSize(count_str, font, scale, thick)[0][0]
-            x2 = tx + w_count + 4
-            cv2.putText(canvas, range_str, (x2, ty),
-                        font, scale, (0, 0, 0, 255), thick, cv2.LINE_AA)
-
-        # filler text
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        scale = 0.7
-        filler_text = "[Extra space for new nodes / modifiers]"
-        w_count = cv2.getTextSize(filler_text, font, scale, thick)[0][0]
-        cv2.putText(canvas, filler_text, (width - w_count - 30, (row_extra + 1) * GRID),
-                    font, scale, (0, 0, 0, 255), 1, cv2.LINE_AA)
+        draw_encounter_row(
+            canvas,
+            modifier_items,
+            mod_cols,
+            y_mod,
+            encounter_dir,
+            modifier_dir,
+            encounter_ranges,
+            font,
+            scale,
+            thick
+        )
 
     # compose with background
     pad = GRID // 2

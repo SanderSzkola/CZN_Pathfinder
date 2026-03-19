@@ -18,6 +18,7 @@ class ScoreTable:
             RESH: int = 4,
             EV: int = 3,
             EVTU: int = 30,
+            EVME: int = 30,
     ):
         self.table: Dict[str, int] = {
             "NO": NO,
@@ -28,6 +29,7 @@ class ScoreTable:
             "RESH": RESH,
             "EV": EV,
             "EVTU": EVTU,
+            "EVME": EVME,
         }
 
     @staticmethod
@@ -49,7 +51,8 @@ class ScoreTable:
             RESH=data.get("RESH", 4),
             NOOR=data.get("NOOR", -7),
             ELOR=data.get("ELOR", 2),
-            EVTU=data.get("EVTU", 30)
+            EVTU=data.get("EVTU", 30),
+            EVME=data.get("EVME", 30)
         )
 
     @staticmethod
