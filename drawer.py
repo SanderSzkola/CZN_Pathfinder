@@ -171,8 +171,10 @@ def draw_encounter_row(
         thick: int,
 ):
     for (key, count), col in zip(items, col_positions):
-        x_grid = col * GRID
+        if key == "filler":
+            continue
 
+        x_grid = col * GRID
         enc_key = key[:2]
         mod_key = key[2:] or None
 
@@ -309,48 +311,62 @@ def draw_map(
     # encounter counts
     if encounter_counts:
         row_extra = (max_row - min_row + 2)
-        y_base = row_extra * GRID
-        y_mod = (row_extra + 1) * GRID
+        y_start = row_extra * GRID
         font = cv2.FONT_HERSHEY_PLAIN
         scale = 1.5
         thick = 2
 
         base_items = []
-        modifier_items = []
-
+        modifier_map = {}
         for key, count in encounter_counts.items():
             if len(key) == 2:
                 base_items.append((key, count))
             else:
-                modifier_items.append((key, count))
-        base_cols = [i * 2 + 1 for i in range(len(base_items))]
-        mod_cols = [i * 2 + 1 for i in range(len(modifier_items))]
+                base = key[:2]
+                modifier_map.setdefault(base, []).append((key, count))
 
-        draw_encounter_row(
-            canvas,
-            base_items,
-            base_cols,
-            y_base,
-            encounter_dir,
-            modifier_dir,
-            encounter_ranges,
-            font,
-            scale,
-            thick
-        )
+        rows = []
+        row0 = []
+        max_extra_mods = 0
 
-        draw_encounter_row(
-            canvas,
-            modifier_items,
-            mod_cols,
-            y_mod,
-            encounter_dir,
-            modifier_dir,
-            encounter_ranges,
-            font,
-            scale,
-            thick
-        )
+        for base_key, base_count in base_items:
+            mods = modifier_map.get(base_key, [])
+            row0.append((base_key, base_count))
+            if mods:
+                row0.append(mods[0])
+                max_extra_mods = max(max_extra_mods, len(mods) - 1)
+            else:
+                row0.append(("filler", 0))
+        rows.append(row0)
+
+        # additional rows for extra modifiers
+        for i in range(max_extra_mods):
+            row = []
+            for base_key, _ in base_items:
+                mods = modifier_map.get(base_key, [])
+                row.append(("filler", 0))  # node column always gets filler in extra rows
+                if len(mods) > i + 1:
+                    row.append(mods[i + 1])
+                else:
+                    row.append(("filler", 0))
+            rows.append(row)
+
+        # draw
+        logical_len = len(row0)
+        cols = [i * 2 + 1 for i in range(logical_len)]  # text takes extra space, whole thing takes about 2 grid slots
+        for r_idx, row in enumerate(rows):
+            draw_encounter_row(
+                canvas,
+                row,
+                cols,
+                y_start + r_idx * GRID,
+                encounter_dir,
+                modifier_dir,
+                encounter_ranges,
+                font,
+                scale,
+                thick
+            )
 
     # compose with background
     pad = GRID // 2
