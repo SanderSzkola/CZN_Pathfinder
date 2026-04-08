@@ -6,31 +6,25 @@ from path_converter import get_path
 
 DEFAULT_PATH = "ScoreTable.json"
 
+DEFAULT_VALUES: Dict[str, int] = {
+    "NO": -7,
+    "NOOR": -7,
+    "NOPE": 10,
+    "EL": 2,
+    "ELOR": 2,
+    "ELPE": 10,
+    "EV": 3,
+    "EVTU": 30,
+    "EVME": 30,
+    "RE": -10,
+    "RESH": 4,
+}
+
 
 class ScoreTable:
-    def __init__(
-            self,
-            NO: int = -7,
-            NOOR: int = -7,
-            EL: int = 2,
-            ELOR: int = 2,
-            RE: int = -10,
-            RESH: int = 4,
-            EV: int = 3,
-            EVTU: int = 30,
-            EVME: int = 30,
-    ):
-        self.table: Dict[str, int] = {
-            "NO": NO,
-            "NOOR": NOOR,
-            "EL": EL,
-            "ELOR": ELOR,
-            "RE": RE,
-            "RESH": RESH,
-            "EV": EV,
-            "EVTU": EVTU,
-            "EVME": EVME,
-        }
+    def __init__(self, **overrides: int):
+        self.table: Dict[str, int] = DEFAULT_VALUES.copy()
+        self.table.update(overrides)
 
     @staticmethod
     def export(scoretable: "ScoreTable", filename: str = DEFAULT_PATH) -> None:
@@ -41,19 +35,13 @@ class ScoreTable:
     @staticmethod
     def import_(filename: str = DEFAULT_PATH) -> "ScoreTable":
         filename = get_path(filename)
+        if not os.path.exists(filename):
+            return ScoreTable()
+
         with open(filename, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return ScoreTable(
-            NO=data.get("NO", -7),
-            EL=data.get("EL", 2),
-            EV=data.get("EV", 3),
-            RE=data.get("RE", -10),
-            RESH=data.get("RESH", 4),
-            NOOR=data.get("NOOR", -7),
-            ELOR=data.get("ELOR", 2),
-            EVTU=data.get("EVTU", 30),
-            EVME=data.get("EVME", 30)
-        )
+
+        return ScoreTable(**data)
 
     @staticmethod
     def check_file_exists(filename: str = DEFAULT_PATH) -> bool:
