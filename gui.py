@@ -240,18 +240,47 @@ class PipelineGUI:
         columns_frame = tb.Frame(panel)
         columns_frame.pack(fill="x")
 
-        col_left = tb.Frame(columns_frame)
-        col_right = tb.Frame(columns_frame)
-        col_left.pack(side="left", fill="y", padx=5)
-        col_right.pack(side="right", fill="y", padx=5)
-
         items = list(self.score_table.table.items())
-
+        nodes = []
+        mods = []
         for key, val in items:
-            if len(key) == 2:  # nodes
-                self._create_score_row(col_left, key, val)
-            else:  # modifiers
-                self._create_score_row(col_right, key, val)
+            if len(key) == 2:
+                nodes.append((key, val))
+            else:
+                mods.append((key, val))
+
+        mod_idx = 0
+        mod_len = len(mods)
+
+        for node_key, node_val in nodes:
+            row_frame = tb.Frame(columns_frame)
+            row_frame.pack(fill="x")
+            row_frame.columnconfigure(0, weight=1, uniform="col")
+            row_frame.columnconfigure(1, weight=1, uniform="col")
+            left = tb.Frame(row_frame)
+            right = tb.Frame(row_frame)
+            left.grid(row=0, column=0, sticky="ew")
+            right.grid(row=0, column=1, sticky="ew")
+            self._create_score_row(left, node_key, node_val)
+            mod_key, mod_val = mods[mod_idx]
+            self._create_score_row(right, mod_key, mod_val)
+            mod_idx += 1
+
+            while mod_idx < mod_len and mods[mod_idx][0].startswith(node_key):
+                row_frame = tb.Frame(columns_frame)
+                row_frame.pack(fill="x")
+                row_frame.columnconfigure(0, weight=1, uniform="col")
+                row_frame.columnconfigure(1, weight=1, uniform="col")
+                left = tb.Frame(row_frame)
+                right = tb.Frame(row_frame)
+                left.grid(row=0, column=0, sticky="ew")
+                right.grid(row=0, column=1, sticky="ew")
+                # filler on nodes side so mods are still kinda aligned
+                filler = tb.Frame(left)
+                filler.pack(fill="both", expand=True)
+                mod_key, mod_val = mods[mod_idx]
+                self._create_score_row(right, mod_key, mod_val)
+                mod_idx += 1
 
     def _create_score_row(self, parent, key, value):
         def _on_scale_change(val, k=key, label_widget=None):
@@ -262,7 +291,7 @@ class PipelineGUI:
         enc_folder = get_path(["Images", "Encounter_minimal_1600"])
         mod_folder = get_path(["Images", "Modifier_1600"])
         row = tb.Frame(parent)
-        row.pack(fill="x")
+        row.pack(fill="x", expand=True)
         if len(key) == 2:
             img = load_icon(enc_folder, key)
         else:
