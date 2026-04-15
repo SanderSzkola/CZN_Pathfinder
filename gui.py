@@ -24,6 +24,7 @@ from grabber import get_screen_res, KeyboardListener, switch_window
 from calibrator import check_calibration_done
 from drawer import draw_map, load_icon
 from score_table import ScoreTable
+from score_config import SEASONS
 from path_converter import get_path
 from gui_calibrator import CalibrationPanel
 from settings import Settings
@@ -89,6 +90,7 @@ class PipelineGUI:
         self.last_path = None
         self.log_file_path = get_path("log_file.log")
         self.score_table = ScoreTable()
+        self.score_mode = tk.StringVar(value=self.score_table.active_season)
         self._delayed_pathfinder_id = None
         self._icons = {}
         self._blink_state = False
@@ -171,7 +173,11 @@ class PipelineGUI:
 
         self._build_log_display(panel)
         self._build_button_rows(panel)
-        self._build_score_table(panel)
+
+        # keep ref so it can be rebuilt
+        self.score_table_container = tb.Frame(panel)
+        self.score_table_container.pack(fill="both", expand=True)
+        self._build_score_table(self.score_table_container)
 
     def _build_log_display(self, parent):
         frame = tb.Frame(parent)
@@ -230,17 +236,46 @@ class PipelineGUI:
          .pack(side="left", padx=3))
 
     def _build_score_table(self, parent):
-        panel = tb.Frame(parent)
-        panel.pack(fill="both")
+        # cleanup so it can be rebuilt
+        for child in self.score_table_container.winfo_children():
+            child.destroy()
+        self.score_vars = {}
+        self.score_labels = {}
+        self._icons = {}
 
-        tb.Label(panel, text="Score Table", anchor="w").pack()
+        # real build
+        panel = tb.Frame(parent)
+        panel.pack(fill="both", expand=True)
+        header_row = tb.Frame(panel)
+        header_row.pack(fill="x")
+        tb.Label(header_row, text="Score Table", anchor="w").pack(side="top")
+
+        tb.Radiobutton(
+            header_row,
+            text="Season 1-2",
+            variable=self.score_mode,
+            value="s12",
+            command=self._on_score_mode_change
+        ).pack(side="left", padx=5)
+        tb.Radiobutton(
+            header_row,
+            text="Season 3",
+            variable=self.score_mode,
+            value="s3",
+            command=self._on_score_mode_change
+        ).pack(side="left", padx=5)
 
         self.score_vars = {}
         self.score_labels = {}
         columns_frame = tb.Frame(panel)
         columns_frame.pack(fill="x")
 
-        items = list(self.score_table.table.items())
+        active_keys = SEASONS[self.score_mode.get()].active_scores
+        items = [
+            (k, v)
+            for k, v in self.score_table.table.items()
+            if k in active_keys
+        ]
         nodes = []
         mods = []
         for key, val in items:
@@ -262,9 +297,13 @@ class PipelineGUI:
             left.grid(row=0, column=0, sticky="ew")
             right.grid(row=0, column=1, sticky="ew")
             self._create_score_row(left, node_key, node_val)
-            mod_key, mod_val = mods[mod_idx]
-            self._create_score_row(right, mod_key, mod_val)
-            mod_idx += 1
+            if mod_idx < mod_len:
+                mod_key, mod_val = mods[mod_idx]
+                self._create_score_row(right, mod_key, mod_val)
+                mod_idx += 1
+            else:
+                filler = tb.Frame(right)
+                filler.pack(fill="both", expand=True)
 
             while mod_idx < mod_len and mods[mod_idx][0].startswith(node_key):
                 row_frame = tb.Frame(columns_frame)
@@ -306,16 +345,15 @@ class PipelineGUI:
         self._icons[key] = icon
         tb.Label(row, text=key, image=icon, anchor="w").pack(side="left", padx=1)
 
-        value_label = tb.Label(row, text=str(value))  # value over slider
+        value_label = tb.Label(row, text=str(value.value))  # value over slider
         value_label.pack(side="top", anchor="n", padx=1)
-        var = tb.IntVar(value=value)
+        var = tb.IntVar(value=value.value)
         self.score_vars[key] = var
         self.score_labels[key] = value_label
-        bigger_scale = key == "EVTU" or key == "EVME" # todo: maybe add some flag to scoretable, before this gets out of hand
         tk.Scale(
             row,
-            from_=-10 if not bigger_scale else -50,
-            to=10 if not bigger_scale else 50,
+            from_=-10 if not value.big_scale else -50,
+            to=10 if not value.big_scale else 50,
             orient="horizontal",
             length=150,
             variable=var,
@@ -323,7 +361,7 @@ class PipelineGUI:
             borderwidth=1,
             highlightthickness=0,
             sliderlength=10,
-            resolution=1 if not bigger_scale else 5,
+            resolution=1 if not value.big_scale else 5,
         ).pack(side="left", padx=1)
 
     # ======================================================================
@@ -656,7 +694,7 @@ class PipelineGUI:
     # Score Table Operations
     # ======================================================================
     def update_score_value(self, key):
-        self.score_table.table[key] = self.score_vars[key].get()
+        self.score_table.table[key].value = self.score_vars[key].get()
 
         if self.last_map is not None:
             if self._delayed_pathfinder_id is not None:
@@ -670,8 +708,8 @@ class PipelineGUI:
 
             for key, val in st.table.items():
                 if key in self.score_vars:
-                    self.score_vars[key].set(val)
-                    self.score_labels[key].config(text=str(int(float(val))))
+                    self.score_vars[key].set(val.value)
+                    self.score_labels[key].config(text=str(val.value))
 
             self.log("ScoreTable imported")
 
@@ -689,6 +727,18 @@ class PipelineGUI:
             self.log("ScoreTable exported")
         except Exception as e:
             self.log(f"Export error: {e}")
+
+    def _on_score_mode_change(self):
+        self.score_table.active_season = self.score_mode.get()
+        self.log(f"Score mode changed to: {self.score_table.active_season}")
+        # rebuild UI completely
+        self._build_score_table(self.score_table_container)
+
+        # optional: rerun pathfinder
+        if self.last_map is not None:
+            if self._delayed_pathfinder_id is not None:
+                self.root.after_cancel(self._delayed_pathfinder_id)
+            self._delayed_pathfinder_id = self.root.after(200, self.rerun_pathfinder)
 
     # ======================================================================
     # Dialogs
@@ -867,11 +917,12 @@ def app_do_not_scale():
         except:
             pass
 
+
 if __name__ == "__main__":
     app_do_not_scale()
     theme = "darkly" if Settings.darkmode else "flatly"
     root = tb.Window(themename=theme)
-    root.tk.call('tk', 'scaling', 1.25) # todo: check tkinter autoscaling magic somewhere, windows 125% ui scale
+    root.tk.call('tk', 'scaling', 1.25)  # todo: check tkinter autoscaling magic somewhere, windows 125% ui scale
     low_res = get_screen_res()[0] < 1600
     gui = PipelineGUI(root, low_res=low_res)
 

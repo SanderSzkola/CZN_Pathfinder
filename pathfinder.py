@@ -1,9 +1,10 @@
 # pathfinder.py
 import json
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Union
 from score_table import ScoreTable
 from path_converter import get_path
 from node import Node
+from score_config import SEASONS
 
 
 def load_map(path: str):
@@ -38,31 +39,30 @@ def build_forward_graph(nodes: Dict[str, Node], edges: List[Tuple[str, str]]):
 def score_node(node: Node, score_table: ScoreTable):
     ntype = node.type
     modifier = node.modifier
-    complex_modifier = f"{ntype}{modifier}" if modifier else None
     table = score_table.table
-    if modifier and complex_modifier in table:
-        return table[complex_modifier]
-    if modifier and modifier in table:
-        return table[modifier]
-    if ntype and ntype in table:
-        return table[ntype]
+
+    if modifier:
+        complex_key = f"{ntype}{modifier}"
+        if complex_key in table:
+            return table[complex_key].value
+    if ntype in table:
+        return table[ntype].value
+
     return 0
 
 
-def dfs_best_path(nodes: Dict[str, Node],
-                  graph: Dict[str, List[str]],
-                  score_table: ScoreTable):
+def dfs_best_path(nodes, graph, score_table):
     start_nodes = [nid for nid, nd in nodes.items() if nd.col == 0]
-    best_path = None
+    best_path: Optional[List[str]] = None
     best_score = float("-inf")
     encounter_ranges = {key: [99, -99] for key in score_table.table}
     current_counts = {key: 0 for key in score_table.table}
     enc_trash_list = []
 
-    def dfs(current: str, path: List[str], score: int):
+    def dfs(current, path, score):
         nonlocal best_path, best_score
 
-        key = (nodes[current]).label()
+        key = nodes[current].label()
         if key not in encounter_ranges:
             enc_trash_list.append(key)
             encounter_ranges[key] = [0, 0]
@@ -72,8 +72,12 @@ def dfs_best_path(nodes: Dict[str, Node],
 
         if not next_nodes:
             for k, v in current_counts.items():
-                if v < encounter_ranges[k][0]: encounter_ranges[k][0] = v
-                if v > encounter_ranges[k][1]: encounter_ranges[k][1] = v
+                if k in encounter_ranges:
+                    if v < encounter_ranges[k][0]:
+                        encounter_ranges[k][0] = v
+                    if v > encounter_ranges[k][1]:
+                        encounter_ranges[k][1] = v
+
             if score > best_score:
                 best_path = path.copy()
                 best_score = score
@@ -81,22 +85,20 @@ def dfs_best_path(nodes: Dict[str, Node],
             return
 
         for nxt in next_nodes:
-            nd = nodes[nxt]
-            dfs(nxt, path + [nxt], score + score_node(nd, score_table))
+            dfs(nxt, path + [nxt], score + score_node(nodes[nxt], score_table))
         current_counts[key] -= 1
 
     for start_id in start_nodes:
-        start_score = score_node(nodes[start_id], score_table)
-        dfs(start_id, [start_id], start_score)
+        dfs(start_id, [start_id], score_node(nodes[start_id], score_table))
 
     for t in enc_trash_list:
-        encounter_ranges.pop(t)
+        encounter_ranges.pop(t, None)
 
     return best_path, int(best_score), encounter_ranges
 
 
-def count_encounters(path: List[str], nodes: Dict[str, Node]):
-    counts: Dict[str, int] = {}
+def count_encounters(path, nodes):
+    counts = {}
 
     for nid in path:
         key = nodes[nid].label()
@@ -109,7 +111,7 @@ def count_encounters(path: List[str], nodes: Dict[str, Node]):
 
 
 def run_pathfinder(
-        map_data: dict | str,
+        map_data: Union[dict, str],
         score_table: Optional[ScoreTable] = None):
     """
     Compute the best path for given map data or from file.
@@ -120,10 +122,10 @@ def run_pathfinder(
         score_table = ScoreTable()
 
     save_json = False
-    if type(map_data) is str:
+    if isinstance(map_data, str):
         nodes, edges = load_map(map_data)
         save_json = True
-    else:  # assume dict was passed
+    else:
         nodes = {d["id"]: Node.from_dict(d) for d in map_data["nodes"]}
         edges = [(a, b) for a, b in map_data["edges"]]
 
@@ -134,6 +136,17 @@ def run_pathfinder(
         raise RuntimeError("No valid path found.")
 
     encounter_counts = count_encounters(best_path, nodes)
+
+    # filter out non-season mods
+    active_keys = SEASONS[score_table.active_season].active_scores
+    encounter_ranges = {
+        k: v for k, v in encounter_ranges.items()
+        if k in active_keys
+    }
+    encounter_counts = {
+        k: v for k, v in encounter_counts.items()
+        if k in active_keys
+    }
 
     if save_json:
         with open(map_data, "r") as f:
@@ -149,8 +162,8 @@ if __name__ == "__main__":
     best_path, encounter_ranges, encounter_counts = run_pathfinder(get_path(["Example_scan_result", "merged_map.json"]))
     print("Best path:", best_path)
     print("Encounter ranges | min-max across all possible paths:")
-    for e in encounter_ranges.keys():
+    for e in encounter_ranges:
         print(f"{e}: {encounter_ranges.get(e)}")
     print("Encounter counts | nodes contained in current best path:")
-    for e in encounter_counts.keys():
+    for e in encounter_counts:
         print(f"{e}: {encounter_counts.get(e)}")
