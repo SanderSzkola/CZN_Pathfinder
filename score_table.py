@@ -1,7 +1,8 @@
 # score_table.py
 import json
-import os.path
 from typing import Dict
+from pathlib import Path
+
 from path_converter import get_path
 from score_config import ScoreItem, DEFAULT_VALUES
 
@@ -9,38 +10,60 @@ DEFAULT_PATH = "ScoreTable.json"
 
 
 class ScoreTable:
-    def __init__(self, **overrides: ScoreItem):
-        self.table: Dict[str, ScoreItem] = DEFAULT_VALUES.copy()
-        self.table.update(overrides)
-        self.active_season = "s3"
+    _path: Path | None = None
+    _loaded: bool = False
 
-    @staticmethod
-    def export(scoretable: "ScoreTable", filename: str = DEFAULT_PATH) -> None:
-        filename = get_path(filename)
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(scoretable.to_dict(), f, indent=2)
+    table: Dict[str, ScoreItem] = DEFAULT_VALUES.copy()
+    active_season: str = "s3"
 
-    @staticmethod
-    def import_(filename: str = DEFAULT_PATH) -> "ScoreTable":
-        filename = get_path(filename)
-        if not os.path.exists(filename):
-            return ScoreTable()
+    @classmethod
+    def _ensure_path(cls):
+        if cls._path is None:
+            cls._path = Path(get_path(DEFAULT_PATH))
 
-        with open(filename, "r", encoding="utf-8") as f:
+    @classmethod
+    def load(cls):
+        if cls._loaded:
+            return
+
+        cls._ensure_path()
+        if not cls._path.exists():
+            cls.save()
+            cls._loaded = True
+            return
+
+        with cls._path.open("r", encoding="utf-8") as f:
             data = json.load(f)
 
-        parsed = ScoreTable.from_dict(data)
-        st = ScoreTable()
-        st.table = parsed
-        return st
+        cls.table = cls.from_dict(data.get("table", {}))
+        if not cls.table:
+            cls.table = DEFAULT_VALUES.copy()
+        cls.active_season = data.get("active_season", "s3")
+        cls._loaded = True
 
-    def to_dict(self):
+    @classmethod
+    def save(cls):
+        cls._ensure_path()
+
+        data = {
+            "table": cls.to_dict(),
+            "active_season": cls.active_season,
+        }
+
+        cls._path.parent.mkdir(parents=True, exist_ok=True)
+
+        with cls._path.open("w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+
+    @classmethod
+    def to_dict(cls):
         return {
             k: {
                 "value": v.value,
                 "big_scale": v.big_scale,
+                "enabled": v.enabled,
             }
-            for k, v in self.table.items()
+            for k, v in cls.table.items()
         }
 
     @staticmethod
@@ -49,11 +72,10 @@ class ScoreTable:
             k: ScoreItem(
                 value=v["value"],
                 big_scale=v.get("big_scale", False),
+                enabled=v.get("enabled", True),
             )
             for k, v in data.items()
         }
 
-    @staticmethod
-    def check_file_exists(filename: str = DEFAULT_PATH) -> bool:
-        filename = get_path(filename)
-        return os.path.exists(filename)
+
+ScoreTable.load()

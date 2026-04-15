@@ -6,6 +6,7 @@ from dataclasses import dataclass
 class ScoreItem:
     value: int
     big_scale: bool = False
+    enabled: bool = True
 
 
 class Season:

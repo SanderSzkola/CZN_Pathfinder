@@ -57,7 +57,6 @@ class Settings:
             return
 
         cls._ensure_path()
-
         if not cls._path.exists():
             cls.save()
             cls._loaded = True
@@ -71,10 +70,8 @@ class Settings:
                 continue
             if key == "local_version":
                 continue
-
             if key == "last_update_check" and value is not None:
                 value = datetime.fromisoformat(value)
-
             setattr(cls, key, value)
 
         cls._loaded = True

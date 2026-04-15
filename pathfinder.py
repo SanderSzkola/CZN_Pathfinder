@@ -36,10 +36,10 @@ def build_forward_graph(nodes: Dict[str, Node], edges: List[Tuple[str, str]]):
     return graph
 
 
-def score_node(node: Node, score_table: ScoreTable):
+def score_node(node: Node):
     ntype = node.type
     modifier = node.modifier
-    table = score_table.table
+    table = ScoreTable.table
 
     if modifier:
         complex_key = f"{ntype}{modifier}"
@@ -51,12 +51,12 @@ def score_node(node: Node, score_table: ScoreTable):
     return 0
 
 
-def dfs_best_path(nodes, graph, score_table):
+def dfs_best_path(nodes, graph):
     start_nodes = [nid for nid, nd in nodes.items() if nd.col == 0]
     best_path: Optional[List[str]] = None
     best_score = float("-inf")
-    encounter_ranges = {key: [99, -99] for key in score_table.table}
-    current_counts = {key: 0 for key in score_table.table}
+    encounter_ranges = {key: [99, -99] for key in ScoreTable.table}
+    current_counts = {key: 0 for key in ScoreTable.table}
     enc_trash_list = []
 
     def dfs(current, path, score):
@@ -85,11 +85,11 @@ def dfs_best_path(nodes, graph, score_table):
             return
 
         for nxt in next_nodes:
-            dfs(nxt, path + [nxt], score + score_node(nodes[nxt], score_table))
+            dfs(nxt, path + [nxt], score + score_node(nodes[nxt]))
         current_counts[key] -= 1
 
     for start_id in start_nodes:
-        dfs(start_id, [start_id], score_node(nodes[start_id], score_table))
+        dfs(start_id, [start_id], score_node(nodes[start_id]))
 
     for t in enc_trash_list:
         encounter_ranges.pop(t, None)
@@ -110,17 +110,11 @@ def count_encounters(path, nodes):
     return ordered_counts
 
 
-def run_pathfinder(
-        map_data: Union[dict, str],
-        score_table: Optional[ScoreTable] = None):
+def run_pathfinder(map_data: Union[dict, str]):
     """
     Compute the best path for given map data or from file.
     Returns best_path, encounter_ranges, encounter_counts.
     """
-
-    if score_table is None:
-        score_table = ScoreTable()
-
     save_json = False
     if isinstance(map_data, str):
         nodes, edges = load_map(map_data)
@@ -130,7 +124,7 @@ def run_pathfinder(
         edges = [(a, b) for a, b in map_data["edges"]]
 
     graph = build_forward_graph(nodes, edges)
-    best_path, best_value, encounter_ranges = dfs_best_path(nodes, graph, score_table)
+    best_path, best_value, encounter_ranges = dfs_best_path(nodes, graph)
 
     if best_path is None:
         raise RuntimeError("No valid path found.")
@@ -138,7 +132,7 @@ def run_pathfinder(
     encounter_counts = count_encounters(best_path, nodes)
 
     # filter out non-season mods
-    active_keys = SEASONS[score_table.active_season].active_scores
+    active_keys = SEASONS[ScoreTable.active_season].active_scores
     encounter_ranges = {
         k: v for k, v in encounter_ranges.items()
         if k in active_keys

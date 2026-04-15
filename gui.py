@@ -89,8 +89,7 @@ class PipelineGUI:
         self.last_image = None
         self.last_path = None
         self.log_file_path = get_path("log_file.log")
-        self.score_table = ScoreTable()
-        self.score_mode = tk.StringVar(value=self.score_table.active_season)
+        self.score_mode = tk.StringVar(value=ScoreTable.active_season)
         self._delayed_pathfinder_id = None
         self._icons = {}
         self._blink_state = False
@@ -102,7 +101,7 @@ class PipelineGUI:
         self._initiate_keyboard_listener()
         self._load_initial_background()
         self._blink_loop()
-        if Settings.auto_import_score and ScoreTable.check_file_exists():
+        if Settings.auto_import_score:
             self.import_score_table()
         self._check_update()
 
@@ -273,7 +272,7 @@ class PipelineGUI:
         active_keys = SEASONS[self.score_mode.get()].active_scores
         items = [
             (k, v)
-            for k, v in self.score_table.table.items()
+            for k, v in ScoreTable.table.items()
             if k in active_keys
         ]
         nodes = []
@@ -516,7 +515,6 @@ class PipelineGUI:
             m, path, img = run_auto_pipeline(
                 save_folder=self.selected_folder,
                 log=self.log,
-                score_table=self.score_table
             )
             self.last_map = m
             self.last_path = path
@@ -560,7 +558,6 @@ class PipelineGUI:
             m, path, img = run_halfauto_pipeline(
                 save_folder=self.selected_folder,
                 log=self.log,
-                score_table=self.score_table
             )
             self.last_map = m
             self.last_path = path
@@ -602,7 +599,6 @@ class PipelineGUI:
             m, path, img = run_offline_pipeline(
                 save_folder=self.selected_folder,
                 log=self.log,
-                score_table=self.score_table
             )
             self.last_map = m
             self.last_path = path
@@ -641,7 +637,7 @@ class PipelineGUI:
 
         def task():
             try:
-                path, encounter_ranges, encounter_counts = run_pathfinder(self.last_map, self.score_table)
+                path, encounter_ranges, encounter_counts = run_pathfinder(self.last_map)
                 self.last_path = path
                 img = draw_map(self.last_map,
                                path,
@@ -694,7 +690,7 @@ class PipelineGUI:
     # Score Table Operations
     # ======================================================================
     def update_score_value(self, key):
-        self.score_table.table[key].value = self.score_vars[key].get()
+        ScoreTable.table[key].value = self.score_vars[key].get()
 
         if self.last_map is not None:
             if self._delayed_pathfinder_id is not None:
@@ -703,10 +699,9 @@ class PipelineGUI:
 
     def import_score_table(self):
         try:
-            st = ScoreTable.import_()
-            self.score_table = st
+            ScoreTable.load()
 
-            for key, val in st.table.items():
+            for key, val in ScoreTable.table.items():
                 if key in self.score_vars:
                     self.score_vars[key].set(val.value)
                     self.score_labels[key].config(text=str(val.value))
@@ -723,14 +718,14 @@ class PipelineGUI:
 
     def export_score_table(self):
         try:
-            ScoreTable.export(self.score_table)
+            ScoreTable.save()
             self.log("ScoreTable exported")
         except Exception as e:
             self.log(f"Export error: {e}")
 
     def _on_score_mode_change(self):
-        self.score_table.active_season = self.score_mode.get()
-        self.log(f"Score mode changed to: {self.score_table.active_season}")
+        ScoreTable.active_season = self.score_mode.get()
+        self.log(f"Score mode changed to: {ScoreTable.active_season}")
         # rebuild UI completely
         self._build_score_table(self.score_table_container)
 
