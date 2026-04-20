@@ -30,7 +30,7 @@ DEFAULT_VALUES = {
 }
 
 SEASONS = {
-    "s12": Season("s12", [
+    "s12": Season("Season 1-2", [
         "NO",
         "NOOR",
         "EL",
@@ -41,7 +41,7 @@ SEASONS = {
         "EVTU",
         "EVME",
     ]),
-    "s3": Season("s3", [
+    "s3": Season("Season 3", [
         "NO",
         "NOPE",
         "EL",
@@ -49,5 +49,18 @@ SEASONS = {
         "RE",
         "RESH",
         "EV",
+    ]),
+    "s*": Season("All", [
+        "NO",
+        "NOOR",
+        "NOPE",
+        "EL",
+        "ELOR",
+        "ELPE",
+        "RE",
+        "RESH",
+        "EV",
+        "EVTU",
+        "EVME",
     ]),
 }

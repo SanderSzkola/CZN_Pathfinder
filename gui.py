@@ -249,119 +249,160 @@ class PipelineGUI:
         header_row.pack(fill="x")
         tb.Label(header_row, text="Score Table", anchor="w").pack(side="top")
 
-        tb.Radiobutton(
-            header_row,
-            text="Season 1-2",
-            variable=self.score_mode,
-            value="s12",
-            command=self._on_score_mode_change
-        ).pack(side="left", padx=5)
-        tb.Radiobutton(
-            header_row,
-            text="Season 3",
-            variable=self.score_mode,
-            value="s3",
-            command=self._on_score_mode_change
-        ).pack(side="left", padx=5)
+        # season radio
+        for season_key, season in SEASONS.items():
+            tb.Radiobutton(
+                header_row,
+                text=season.name,
+                variable=self.score_mode,
+                value=season_key,
+                command=self._on_score_mode_change
+            ).pack(side="left", padx=5)
 
-        self.score_vars = {}
-        self.score_labels = {}
+        # splitting logic
         columns_frame = tb.Frame(panel)
         columns_frame.pack(fill="x")
-
         active_keys = SEASONS[self.score_mode.get()].active_scores
         items = [
             (k, v)
             for k, v in ScoreTable.table.items()
-            if k in active_keys
+            if k in active_keys and v.enabled
         ]
-        nodes = []
-        mods = []
-        for key, val in items:
-            if len(key) == 2:
-                nodes.append((key, val))
+        nodes = [(k, [(k, v)]) for k, v in items if len(k) == 2]
+        mods_raw = [(k, v) for k, v in items if len(k) > 2]
+        mod_groups = {}
+        for k, v in mods_raw:
+            group_key = k[2:]
+            mod_groups.setdefault(group_key, []).append((k, v))
+        mods = list(mod_groups.items())  # (group_key, entries)
+
+        # alignment
+        aligned_nodes = []
+        aligned_mods = []
+        remaining_mods = mods.copy()
+
+        # direct node - mod match
+        def mod_matches_node(entries, node_key):
+            return any(mk.startswith(node_key) for mk, _ in entries)
+
+        for node_key, node_entries in nodes:
+            aligned_nodes.append((node_key, node_entries))
+            match_idx = None
+            for i, (group_key, entries) in enumerate(remaining_mods):
+                if mod_matches_node(entries, node_key):
+                    match_idx = i
+                    break
+            if match_idx is not None:
+                aligned_mods.append(remaining_mods.pop(match_idx))
             else:
-                mods.append((key, val))
+                aligned_mods.append(None)
 
-        mod_idx = 0
-        mod_len = len(mods)
+        # leftover mods, insert at the end of correct node - mod sequence
+        for group_key, entries in remaining_mods:
+            prev_match = False
+            insert_at = None
+            for index, node in enumerate(aligned_nodes):
+                curr_match = mod_matches_node(entries, node[0])
+                if prev_match and not curr_match:
+                    insert_at = index
+                    break
+                prev_match = curr_match
 
-        for node_key, node_val in nodes:
-            row_frame = tb.Frame(columns_frame)
-            row_frame.pack(fill="x")
-            row_frame.columnconfigure(0, weight=1, uniform="col")
-            row_frame.columnconfigure(1, weight=1, uniform="col")
-            left = tb.Frame(row_frame)
-            right = tb.Frame(row_frame)
+            if insert_at is None and prev_match:
+                insert_at = len(aligned_nodes)
+            if insert_at is not None:
+                aligned_nodes.insert(insert_at, None)
+                aligned_mods.insert(insert_at, (group_key, entries))
+
+        # render
+        for node_item, mod_item in zip(aligned_nodes, aligned_mods):
+            row = tb.Frame(columns_frame)
+            row.pack(fill="x")
+            row.columnconfigure(0, weight=1, uniform="col")
+            row.columnconfigure(1, weight=1, uniform="col")
+            left = tb.Frame(row)
+            right = tb.Frame(row)
             left.grid(row=0, column=0, sticky="ew")
             right.grid(row=0, column=1, sticky="ew")
-            self._create_score_row(left, node_key, node_val)
-            if mod_idx < mod_len:
-                mod_key, mod_val = mods[mod_idx]
-                self._create_score_row(right, mod_key, mod_val)
-                mod_idx += 1
-            else:
-                filler = tb.Frame(right)
-                filler.pack(fill="both", expand=True)
 
-            while mod_idx < mod_len and mods[mod_idx][0].startswith(node_key):
-                row_frame = tb.Frame(columns_frame)
-                row_frame.pack(fill="x")
-                row_frame.columnconfigure(0, weight=1, uniform="col")
-                row_frame.columnconfigure(1, weight=1, uniform="col")
-                left = tb.Frame(row_frame)
-                right = tb.Frame(row_frame)
-                left.grid(row=0, column=0, sticky="ew")
-                right.grid(row=0, column=1, sticky="ew")
-                # filler on nodes side so mods are still kinda aligned
-                filler = tb.Frame(left)
-                filler.pack(fill="both", expand=True)
-                mod_key, mod_val = mods[mod_idx]
-                self._create_score_row(right, mod_key, mod_val)
-                mod_idx += 1
+            if node_item:
+                self._create_score_row(left, *node_item)
+            if mod_item:
+                self._create_score_row(right, *mod_item)
 
-    def _create_score_row(self, parent, key, value):
-        def _on_scale_change(val, k=key, label_widget=None):
-            if label_widget is not None:
-                label_widget.config(text=str(int(float(val))))
-            self.update_score_value(k)
+    def _create_score_row(self, parent, display_key, entries):
+        keys = [k for k, _ in entries]
+        value = entries[0][1]
+        row = tb.Frame(parent)
+        row.pack(fill="x", expand=True)
 
         enc_folder = get_path(["Images", "Encounter_minimal_1600"])
         mod_folder = get_path(["Images", "Modifier_1600"])
-        row = tb.Frame(parent)
-        row.pack(fill="x", expand=True)
-        if len(key) == 2:
-            img = load_icon(enc_folder, key)
-        else:
-            img = load_icon(mod_folder, key[2:])
-        if img.shape[2] == 4:
-            img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
-        else:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
+        icon = self.create_icon(keys, enc_folder, mod_folder)
+        self._icons[display_key] = icon
 
-        pil = Image.fromarray(img)
-        icon = ImageTk.PhotoImage(pil)
-        self._icons[key] = icon
-        tb.Label(row, text=key, image=icon, anchor="w").pack(side="left", padx=1)
-
+        tb.Label(row, text=display_key, image=icon, anchor="w").pack(side="left", padx=1)
         value_label = tb.Label(row, text=str(value.value))  # value over slider
         value_label.pack(side="top", anchor="n", padx=1)
         var = tb.IntVar(value=value.value)
-        self.score_vars[key] = var
-        self.score_labels[key] = value_label
+        for k in keys:
+            self.score_vars[k] = var
+            self.score_labels[k] = value_label
+
+        def on_change(val):
+            v = int(float(val))
+            value_label.config(text=str(v))
+            for k in keys:
+                self.score_vars[k].set(v)
+                self.update_score_value(k)
+
         tk.Scale(
             row,
-            from_=-10 if not value.big_scale else -50,
-            to=10 if not value.big_scale else 50,
+            from_=-50 if value.big_scale else -10,
+            to=50 if value.big_scale else 10,
+            resolution=5 if value.big_scale else 1,
             orient="horizontal",
             length=150,
             variable=var,
-            command=lambda v, lb=value_label, k=key: _on_scale_change(v, k, lb),
+            command=on_change,
             borderwidth=1,
             highlightthickness=0,
             sliderlength=10,
-            resolution=1 if not value.big_scale else 5,
         ).pack(side="left", padx=1)
+
+    def create_icon(self, keys, enc_folder, mod_folder):
+        def _to_rgba(img):
+            if img.shape[2] == 4:
+                return cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
+            return cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
+
+        # node, just return
+        if len(keys) == 1 and len(keys[0]) == 2:
+            img = load_icon(enc_folder, keys[0])
+            img = _to_rgba(img)
+            return ImageTk.PhotoImage(Image.fromarray(img))
+
+        # mod - base mod image and up to 2 small applicable node images on the left
+        mod_img = load_icon(mod_folder, keys[0][2:])
+        mod_img = _to_rgba(mod_img)
+        pil_mod = Image.fromarray(mod_img)
+        w, h = pil_mod.size
+
+        canvas = Image.new("RGBA", (int(1.5 * w), h), (0, 0, 0, 0))
+        canvas.paste(pil_mod, (canvas.width - w, 0), pil_mod)
+
+        max_nodes = 2
+        node_area_h = h // max_nodes
+        node_size = (w // 2, node_area_h)
+        for i, nk in enumerate(keys[:max_nodes]):
+            node_img = load_icon(enc_folder, nk[:2])
+            node_img = _to_rgba(node_img)
+            pil_node = Image.fromarray(node_img)
+            pil_node = pil_node.resize(node_size, Image.Resampling.BILINEAR)
+            y = i * node_area_h
+            canvas.paste(pil_node, (0, y), pil_node)
+
+        return ImageTk.PhotoImage(canvas)
 
     # ======================================================================
     # Logging

@@ -76,6 +76,3 @@ class ScoreTable:
             )
             for k, v in data.items()
         }
-
-
-ScoreTable.load()
