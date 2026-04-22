@@ -16,9 +16,9 @@ Detects nodes on provided screenshot based on templates from TemplateLibrary
 SCORE_TABLE = ScoreTable().table  # MUST CONTAIN EVERY VALID COMBINATION OF NODE+MODIFIER
 # trim params
 TRIM_TOP_PX = 120
-TRIM_RIGHT_PX = 120
-TRIM_LEFT_PX = 120
-FRINGE_SAFETY_MARGIN = 120 + TRIM_RIGHT_PX  # this close to map edge means it still should be marked, but discarded after preview
+TRIM_RIGHT_PX = 150
+TRIM_LEFT_PX = 150
+FRINGE_SAFETY_MARGIN = 100 + TRIM_RIGHT_PX  # this close to map edge means it still should be marked, but discarded after preview
 # color verify params
 ALL_CHANNELS_COLOR_MAX_DIFF = 50
 SINGLE_COLOR_MAX_DIFF = 10

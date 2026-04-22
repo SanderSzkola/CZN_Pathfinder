@@ -4,13 +4,9 @@ import numpy as np
 
 from settings import Settings
 from detect_connections import load_icon_map
-from detect_nodes import FRINGE_SAFETY_MARGIN
+from detect_nodes import FRINGE_SAFETY_MARGIN, TRIM_RIGHT_PX, TRIM_TOP_PX, TRIM_LEFT_PX
 
 CORRIDOR_ALPHA = 0.07
-TRIM_TOP_PX = 120
-TRIM_RIGHT_PX = 120
-TRIM_LEFT_PX = 120
-
 
 class UnifiedPreview:
     def __init__(self, base_img):
