@@ -12,7 +12,7 @@ PX_TOLERANCE = 16
 CORRIDOR_HALF = 6
 CORRIDOR_OFFSET = 14
 THRESHOLD = 128
-MIN_CORRIDOR_FILL = 0.50
+MIN_CORRIDOR_FILL = 0.50  # or 0.30 for 1280x720 res
 ANGLE_MERGE_DEG = 10
 
 
@@ -194,6 +194,9 @@ def detect_connections(map_fragment, templates, nodes=None, screenshot_index=0):
 
     edges_raw = []
     corridor_debug = []
+    min_corridor_fill = MIN_CORRIDOR_FILL
+    if Settings.screenshot_scale == 1 and Settings.template_scale <= 0.7:
+        min_corridor_fill = 0.30  # 1280x720 have way too big icons, covers half of the path
 
     for n in nodes:
         if n.col + 1 not in columns:
@@ -211,7 +214,7 @@ def detect_connections(map_fragment, templates, nodes=None, screenshot_index=0):
             eff_len = merge_longest_lines(components)
             fill = eff_len / corridor_len
 
-            accepted = fill >= MIN_CORRIDOR_FILL
+            accepted = fill >= min_corridor_fill
             corridor_debug.append((geom, accepted))
 
             if accepted:
