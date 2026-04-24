@@ -65,17 +65,15 @@ class PipelineGUI:
         self.map_scale_normal = Settings.ui_map_image_scale_normal / 100  # as %
         self.map_scale_mini = Settings.ui_map_image_scale_mini / 100  # as %
         self._is_mini = False
+        self.left_panel_w = 1190
+        self.left_panel_h = 490
+        self.right_panel_w = 410
+        self.right_panel_h = 490
 
         if self.low_res:
-            self.left_panel_w = 880
-            self.left_panel_h = 490
-            self.right_panel_w = 410
-            self.right_panel_h = 420
-        else:
-            self.left_panel_w = 1190
-            self.left_panel_h = 490
-            self.right_panel_w = 410
-            self.right_panel_h = 420
+            big_left_panel_w = self.left_panel_w
+            self.left_panel_w = 1270 - self.right_panel_w  # 1280x720
+            self.left_panel_h = int(self.left_panel_w * self.left_panel_h / big_left_panel_w)
 
         self._update_geometry()
         self.root.title(f"CZN Pathfinder {Settings.local_version}")
@@ -464,9 +462,13 @@ class PipelineGUI:
         try:
             im = self._to_image(obj)
             self._last_pil = im
-            w, h = im.size
-            new_w = self._scale_to_ui_size(w)
-            new_h = self._scale_to_ui_size(h)
+            panel_w = self._scale_to_ui_size(self.left_panel_w)
+            panel_h = self._scale_to_ui_size(self.left_panel_h)
+            img_w, img_h = im.size
+
+            scale = min(panel_w / img_w, panel_h / img_h)
+            new_w = int(img_w * scale)
+            new_h = int(img_h * scale)
             im = im.resize((new_w, new_h), Image.Resampling.BILINEAR)
 
             self.last_image = ImageTk.PhotoImage(im)
@@ -501,10 +503,6 @@ class PipelineGUI:
 
     def _load_initial_background(self):
         img = Image.open(get_path(["Images", "filler_map.png"]))
-        if self.low_res:
-            img = img.resize((self._scale_to_ui_size(self.right_panel_w),
-                              self._scale_to_ui_size(self.right_panel_h)),
-                             Image.Resampling.BILINEAR)
         self.display_image(img)
 
     # ======================================================================

@@ -62,7 +62,7 @@ class CalibrationPanel(tb.Toplevel):
         low_res = True  # do not need much space now, leave possibility later
 
         if low_res:
-            self.window_w = 1280
+            self.window_w = 1270
             self.window_h = 600
             self.map_w = 900
             self.map_h = 600
