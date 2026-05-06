@@ -26,6 +26,7 @@ expected_items = [
     "ManualScreenshotVisualGuide.png",
     "instructions.txt",
     "Images/Icon.ico",
+    "Images/Fake_map",
 
 ]
 

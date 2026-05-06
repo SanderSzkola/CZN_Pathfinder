@@ -6,7 +6,7 @@ from PIL.Image import Image
 
 from node import Node
 from path_converter import get_path
-from template_library import TemplateLibrary
+from template_library import TemplateLibrary, TEMPLATE_NODE_PORTAL_FULL_W
 from settings import Settings
 from score_table import ScoreTable
 
@@ -18,7 +18,6 @@ SCORE_TABLE = ScoreTable().table  # MUST CONTAIN EVERY VALID COMBINATION OF NODE
 TRIM_TOP_PX = 120
 TRIM_RIGHT_PX = 150
 TRIM_LEFT_PX = 150
-FRINGE_SAFETY_MARGIN = 100 + TRIM_RIGHT_PX  # this close to map edge means it still should be marked, but discarded after preview
 # color verify params
 ALL_CHANNELS_COLOR_MAX_DIFF = 50
 SINGLE_COLOR_MAX_DIFF = 10
@@ -89,10 +88,28 @@ def _load_map_image(map_fragment):
     raise TypeError(f"map_fragment must be a path, numpy or PIL.Image, not {type(map_fragment)}")
 
 
-def _trim_map(map_img, scale):
-    top = int(TRIM_TOP_PX * scale)
-    right = int(TRIM_RIGHT_PX * scale)
-    left = int(TRIM_LEFT_PX * scale)
+def get_trim(screenshot_scale, template_scale):
+    combined_scale = template_scale / screenshot_scale
+    fringe_margin = int(TEMPLATE_NODE_PORTAL_FULL_W * 0.9 * combined_scale)
+
+    return {
+        "top_detect": int(TRIM_TOP_PX * template_scale),
+        "left_detect": int(TRIM_LEFT_PX * template_scale),
+        "right_detect": int(TRIM_RIGHT_PX * template_scale),
+
+        "top": int(TRIM_TOP_PX * combined_scale),
+        "left": int(TRIM_LEFT_PX * combined_scale),
+        "right": int(TRIM_RIGHT_PX * combined_scale),
+
+        "fringe": fringe_margin,
+        "fringe_left_soft": fringe_margin // 4,
+    }
+
+
+def _trim_map(map_img, trim):
+    top = trim["top_detect"]
+    left = trim["left_detect"]
+    right = trim["right_detect"]
 
     gray = cv2.cvtColor(map_img, cv2.COLOR_BGR2GRAY)
     gray_trim = gray[top:, left:-right]
@@ -227,7 +244,9 @@ def detect_nodes(screenshot_str_or_img,
     else:
         scaled_screenshot = screenshot
 
-    map_gray_trimmed, map_bgr_trimmed = _trim_map(scaled_screenshot, screenshot_scale)
+    template_scale = templates.last_scale
+    trim = get_trim(screenshot_scale, template_scale)
+    map_gray_trimmed, map_bgr_trimmed = _trim_map(scaled_screenshot, trim)
 
     node_candidates = _detect_templates(map_gray_trimmed, map_bgr_trimmed, templates.node_templates_scaled, threshold)
     node_candidates.sort(key=lambda c: c[3], reverse=True)
@@ -250,18 +269,17 @@ def detect_nodes(screenshot_str_or_img,
             nodes.append(Node(cx, cy, t, node_id=node_id))
 
     # detect modifiers
-    threshold -= 0.005  # mod detection fails way too often; TODO: maybe replace mod images?
     modifier_hits = _detect_templates(map_gray_trimmed, map_bgr_trimmed, templates.modifier_templates_scaled, threshold)
     _assign_modifiers(nodes, modifier_hits, screenshot_scale)
 
-    top_offset = int(TRIM_TOP_PX)
-    left_offset = int(TRIM_LEFT_PX)
-    fringe_safety_margin = int(FRINGE_SAFETY_MARGIN * Settings.get_scale())
+    h, w = map_bgr_trimmed.shape[:2]
+    top_offset = trim["top"]
+    left_offset = trim["left"]
     for node in nodes:
+        if node.x <= trim["fringe_left_soft"] * screenshot_scale or node.x >= w - trim["fringe"] * screenshot_scale:
+            node.is_fringe = True
         node.x = int(node.x / screenshot_scale) + left_offset
         node.y = int(node.y / screenshot_scale) + top_offset
-        if node.x <= fringe_safety_margin / 4 or node.x >= w - fringe_safety_margin:
-            node.is_fringe = True
 
     nodes.sort(key=lambda n: n.x)
     # random waypoint fix, probably not needed now

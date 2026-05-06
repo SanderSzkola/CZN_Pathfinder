@@ -63,4 +63,13 @@ SEASONS = {
         "EVTU",
         "EVME",
     ]),
+    "sortie": Season("Sortie", [
+        "NO",
+        "NOOR",
+        "EL",
+        "ELOR",
+        "RE",
+        "RESH",
+        "EV",
+    ]),
 }

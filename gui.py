@@ -30,6 +30,7 @@ from gui_calibrator import CalibrationPanel
 from settings import Settings
 from version_checker import check_for_update
 from gui_settings import SettingsPanel
+from fake_window_for_app_testing import open_fake_map
 
 
 def is_admin():
@@ -704,6 +705,8 @@ class PipelineGUI:
             self.log("Calibrator task cancelled")
             return
 
+        self.root.attributes('-topmost', False)
+        self.root.after(10, lambda: self.root.attributes('-topmost', Settings.ui_window_always_on_top))
         scr = get_game_screenshot(self.log)
         has_game_image = scr is not None and getattr(scr, "size", (0, 0))[0] > 0
         folder = self._get_valid_calibration_folder()
@@ -724,6 +727,14 @@ class PipelineGUI:
             scr=scr if has_game_image else None,
             folder=folder
         )
+
+    def open_fake_map_window(self):
+        try:
+            resolution = "720p" if self.low_res else "1080p"
+            open_fake_map(resolution=resolution)
+            self.log(f"Opened fake map ({resolution})")
+        except Exception as e:
+            self.log(f"Fake map error: {e}")
 
     # ======================================================================
     # Score Table Operations
@@ -911,6 +922,7 @@ class PipelineGUI:
         hotkeys = [
             ("auto", Settings.keyboard_input_autoscanner),
             ("halfauto", Settings.keyboard_input_halfautoscanner),
+            ("fake_map", Settings.keyboard_input_fake_map),
         ]
         if Settings.keyboard_input:
             try:
@@ -933,6 +945,8 @@ class PipelineGUI:
             self.start_automatic_pipeline(from_key=True)
         elif action == "halfauto":
             self.start_halfauto_pipeline(from_key=True)
+        elif action == "fake_map":
+            self.open_fake_map_window()
 
     def shutdown(self):
         if self._kb_listener:

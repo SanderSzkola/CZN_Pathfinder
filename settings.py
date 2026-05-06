@@ -33,6 +33,12 @@ class Settings:
     ui_window_offset_y_mini: int = 0
     ui_window_always_on_top: bool = False
 
+    # keyboard
+    keyboard_input: bool = False
+    keyboard_input_autoscanner: str = "s+1"
+    keyboard_input_halfautoscanner: str = "s+2"
+    keyboard_input_fake_map: str = "s+t"
+
     # whatever else
     testmode: bool = False
     request_admin: bool = False
@@ -40,11 +46,8 @@ class Settings:
     autoupdate: bool = True
     last_update_check: datetime | None = None
     remote_version: str | None = None
-    local_version: str | None = "v0.4.6"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow; -rc1
+    local_version: str | None = "v0.4.7-rc1"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow; -rc1
     target_app_name: str = "Chaos Zero Nightmare"
-    keyboard_input: bool = False
-    keyboard_input_autoscanner: str = "s+1"
-    keyboard_input_halfautoscanner: str = "s+2"
 
     @classmethod
     def _ensure_path(cls) -> None:
