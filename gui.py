@@ -264,7 +264,7 @@ class PipelineGUI:
         active_keys = SEASONS[self.score_mode.get()].active_scores
         items = [
             (k, v)
-            for k, v in ScoreTable.table.items()
+            for k, v in ScoreTable.current().items()
             if k in active_keys and v.enabled
         ]
         nodes = [(k, [(k, v)]) for k, v in items if len(k) == 2]
@@ -740,7 +740,7 @@ class PipelineGUI:
     # Score Table Operations
     # ======================================================================
     def update_score_value(self, key):
-        ScoreTable.table[key].value = self.score_vars[key].get()
+        ScoreTable.current()[key].value = self.score_vars[key].get()
 
         if self.last_map is not None:
             if self._delayed_pathfinder_id is not None:
@@ -751,7 +751,7 @@ class PipelineGUI:
         try:
             ScoreTable.load()
 
-            for key, val in ScoreTable.table.items():
+            for key, val in ScoreTable.current().items():
                 if key in self.score_vars:
                     self.score_vars[key].set(val.value)
                     self.score_labels[key].config(text=str(val.value))

@@ -8,6 +8,7 @@ import fnmatch
 import sys
 
 from settings import Settings
+from score_config import CURRENT_SEASON
 
 SOURCE_SCRIPT = "gui.py"
 EXE_NAME = "CZN Pathfinder"
@@ -247,7 +248,8 @@ def main():
     create_zip()
     clean_previous_builds()
     print("Build completed.")
-    print(f"Version {Settings.local_version}, github {Settings.remote_version}, CHECK IF THIS IS CORRECT")
+    print(f"Version {Settings.local_version}, github {Settings.remote_version}"
+          f" | season {CURRENT_SEASON} | CHECK IF THIS IS CORRECT")
 
 
 if __name__ == "__main__":

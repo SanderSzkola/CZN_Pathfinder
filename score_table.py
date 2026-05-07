@@ -1,10 +1,11 @@
 # score_table.py
 import json
-from typing import Dict
+from copy import deepcopy
 from pathlib import Path
+from typing import Dict
 
 from path_converter import get_path
-from score_config import ScoreItem, DEFAULT_VALUES
+from score_config import ScoreItem, DEFAULT_VALUES, SEASONS, CURRENT_SEASON
 
 DEFAULT_PATH = "ScoreTable.json"
 
@@ -13,8 +14,26 @@ class ScoreTable:
     _path: Path | None = None
     _loaded: bool = False
 
-    table: Dict[str, ScoreItem] = DEFAULT_VALUES.copy()
-    active_season: str = "s3"
+    tables: Dict[str, Dict[str, ScoreItem]] = {}
+    active_season: str = CURRENT_SEASON
+
+    @classmethod
+    def current(cls) -> Dict[str, ScoreItem]:
+        cls.load()
+        return cls.tables.setdefault(
+            cls.active_season,
+            cls.default_table_for(cls.active_season)
+        )
+
+    @classmethod
+    def default_table_for(cls, season_key: str) -> Dict[str, ScoreItem]:
+        active = SEASONS[season_key].active_scores
+
+        return {
+            k: deepcopy(v)
+            for k, v in DEFAULT_VALUES.items()
+            if k in active
+        }
 
     @classmethod
     def _ensure_path(cls):
@@ -28,42 +47,59 @@ class ScoreTable:
 
         cls._ensure_path()
         if not cls._path.exists():
+            cls._create_defaults()
             cls.save()
             cls._loaded = True
             return
 
         with cls._path.open("r", encoding="utf-8") as f:
             data = json.load(f)
+        cls.tables = {
+            season: cls.from_dict(table_data)
+            for season, table_data in data.get("tables", {}).items()
+        }
+        loaded_season = data.get("active_season", CURRENT_SEASON)
+        cls.active_season = loaded_season if loaded_season in SEASONS else CURRENT_SEASON
 
-        cls.table = cls.from_dict(data.get("table", {}))
-        if not cls.table:
-            cls.table = DEFAULT_VALUES.copy()
-        cls.active_season = data.get("active_season", "s3")
+        # ensure all seasons exist
+        for season_key in SEASONS:
+            cls.tables.setdefault(
+                season_key,
+                cls.default_table_for(season_key)
+            )
+
         cls._loaded = True
+
+    @classmethod
+    def _create_defaults(cls):
+        cls.tables = {
+            season_key: cls.default_table_for(season_key)
+            for season_key in SEASONS
+        }
 
     @classmethod
     def save(cls):
         cls._ensure_path()
-
         data = {
-            "table": cls.to_dict(),
             "active_season": cls.active_season,
+            "tables": {
+                season: cls.to_dict(table)
+                for season, table in cls.tables.items()
+            }
         }
-
         cls._path.parent.mkdir(parents=True, exist_ok=True)
-
         with cls._path.open("w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
-    @classmethod
-    def to_dict(cls):
+    @staticmethod
+    def to_dict(table: Dict[str, ScoreItem]) -> dict:
         return {
             k: {
                 "value": v.value,
                 "big_scale": v.big_scale,
                 "enabled": v.enabled,
             }
-            for k, v in cls.table.items()
+            for k, v in table.items()
         }
 
     @staticmethod

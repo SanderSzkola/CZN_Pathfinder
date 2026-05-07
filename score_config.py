@@ -15,6 +15,7 @@ class Season:
         self.active_scores = set(active_scores)
 
 
+CURRENT_SEASON = "s3"  # REMEMBER TO UPDATE ON NEW SEASON
 DEFAULT_VALUES = {
     "NO": ScoreItem(-7),
     "NOOR": ScoreItem(-10),

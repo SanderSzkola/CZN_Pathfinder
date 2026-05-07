@@ -13,7 +13,7 @@ from score_table import ScoreTable
 """
 Detects nodes on provided screenshot based on templates from TemplateLibrary
 """
-SCORE_TABLE = ScoreTable().table  # MUST CONTAIN EVERY VALID COMBINATION OF NODE+MODIFIER
+SCORE_TABLE = ScoreTable  # MUST CONTAIN EVERY VALID COMBINATION OF NODE+MODIFIER
 # trim params
 TRIM_TOP_PX = 120
 TRIM_RIGHT_PX = 150
@@ -214,7 +214,7 @@ def _assign_modifiers(nodes, modifier_hits, screenshot_scale):
                 best_dist = d
         if best is not None:
             if best_dist < (130 / screenshot_scale) ** 2:
-                if (best.type + mod) in SCORE_TABLE:
+                if (best.type + mod) in SCORE_TABLE.current():
                     best.modifier = mod
                     # print(f"Mod {mod} assigned to {best.type} with distance {best_dist}")
             else:

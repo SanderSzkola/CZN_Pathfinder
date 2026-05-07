@@ -39,7 +39,7 @@ def build_forward_graph(nodes: Dict[str, Node], edges: List[Tuple[str, str]]):
 def score_node(node: Node):
     ntype = node.type
     modifier = node.modifier
-    table = ScoreTable.table
+    table = ScoreTable.current()
 
     if modifier:
         complex_key = f"{ntype}{modifier}"
@@ -55,8 +55,8 @@ def dfs_best_path(nodes, graph):
     start_nodes = [nid for nid, nd in nodes.items() if nd.col == 0]
     best_path: Optional[List[str]] = None
     best_score = float("-inf")
-    encounter_ranges = {key: [99, -99] for key in ScoreTable.table}
-    current_counts = {key: 0 for key in ScoreTable.table}
+    encounter_ranges = {key: [99, -99] for key in ScoreTable.current()}
+    current_counts = {key: 0 for key in ScoreTable.current()}
     enc_trash_list = []
 
     def dfs(current, path, score):
@@ -105,7 +105,7 @@ def count_encounters(path, nodes):
         counts[key] = counts.get(key, 0) + 1
 
     ordered_counts = {}
-    for key in ScoreTable().table.keys():
+    for key in ScoreTable().current().keys():
         ordered_counts[key] = counts.get(key, 0)
     return ordered_counts
 
