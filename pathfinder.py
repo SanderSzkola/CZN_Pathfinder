@@ -37,29 +37,33 @@ def build_forward_graph(nodes: Dict[str, Node], edges: List[Tuple[str, str]]):
 
 
 def score_node(node: Node):
-    ntype = node.type
-    modifier = node.modifier
+    # if modifier, return mod score and node score as tiebreaker, otherwise return just node score
     table = ScoreTable.current()
+    node_score = table[node.type].value if node.type in table else 0
 
-    if modifier:
-        complex_key = f"{ntype}{modifier}"
+    if node.modifier:
+        complex_key = f"{node.type}{node.modifier}"
         if complex_key in table:
-            return table[complex_key].value
-    if ntype in table:
-        return table[ntype].value
+            return table[complex_key].value, node_score
 
-    return 0
+    return node_score, 0
 
 
 def dfs_best_path(nodes, graph):
     start_nodes = [nid for nid, nd in nodes.items() if nd.col == 0]
     best_path: Optional[List[str]] = None
-    best_score = float("-inf")
+    # (primary score, node score for grouped mods, -row_changes)
+    best_score = (
+        float("-inf"),
+        float("-inf"),
+        float("-inf"),
+    )
+
     encounter_ranges = {key: [99, -99] for key in ScoreTable.current()}
     current_counts = {key: 0 for key in ScoreTable.current()}
     enc_trash_list = []
 
-    def dfs(current, path, score):
+    def dfs(current, path, score, secondary_score, row_changes):
         nonlocal best_path, best_score
 
         key = nodes[current].label()
@@ -78,23 +82,42 @@ def dfs_best_path(nodes, graph):
                     if v > encounter_ranges[k][1]:
                         encounter_ranges[k][1] = v
 
-            if score > best_score:
+            candidate_score = (score, secondary_score, -row_changes)
+            if candidate_score > best_score:
                 best_path = path.copy()
-                best_score = score
+                best_score = candidate_score
+
             current_counts[key] -= 1  # this path is done, subtract last score and go up
             return
 
         for nxt in next_nodes:
-            dfs(nxt, path + [nxt], score + score_node(nodes[nxt]))
+            primary_add, secondary_add = score_node(nodes[nxt])
+            next_row_changes = row_changes
+            if nodes[nxt].row != nodes[current].row:
+                next_row_changes += 1
+            dfs(
+                nxt,
+                path + [nxt],
+                score + primary_add,
+                secondary_score + secondary_add,
+                next_row_changes,
+            )
         current_counts[key] -= 1
 
     for start_id in start_nodes:
-        dfs(start_id, [start_id], score_node(nodes[start_id]))
+        primary, secondary = score_node(nodes[start_id])
+        dfs(
+            start_id,
+            [start_id],
+            primary,
+            secondary,
+            0,
+        )
 
     for t in enc_trash_list:
         encounter_ranges.pop(t, None)
 
-    return best_path, int(best_score), encounter_ranges
+    return best_path, int(best_score[0]), encounter_ranges
 
 
 def count_encounters(path, nodes):
