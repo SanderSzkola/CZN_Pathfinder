@@ -8,12 +8,11 @@ from node import Node
 from path_converter import get_path
 from template_library import TemplateLibrary, TEMPLATE_NODE_PORTAL_FULL_W
 from settings import Settings
-from score_table import ScoreTable
+from score_table import ScoreTable  # MUST CONTAIN EVERY VALID COMBINATION OF NODE+MODIFIER
 
 """
 Detects nodes on provided screenshot based on templates from TemplateLibrary
 """
-SCORE_TABLE = ScoreTable  # MUST CONTAIN EVERY VALID COMBINATION OF NODE+MODIFIER
 # trim params
 TRIM_TOP_PX = 120
 TRIM_RIGHT_PX = 150
@@ -214,7 +213,7 @@ def _assign_modifiers(nodes, modifier_hits, screenshot_scale):
                 best_dist = d
         if best is not None:
             if best_dist < (130 / screenshot_scale) ** 2:
-                if (best.type + mod) in SCORE_TABLE.current():
+                if (best.type + mod) in ScoreTable.current():
                     best.modifier = mod
                     # print(f"Mod {mod} assigned to {best.type} with distance {best_dist}")
             else:
@@ -248,7 +247,25 @@ def detect_nodes(screenshot_str_or_img,
     trim = get_trim(screenshot_scale, template_scale)
     map_gray_trimmed, map_bgr_trimmed = _trim_map(scaled_screenshot, trim)
 
-    node_candidates = _detect_templates(map_gray_trimmed, map_bgr_trimmed, templates.node_templates_scaled, threshold)
+    # look only for active mods
+    active_nodes = set()
+    active_mods = set()
+    for key in ScoreTable.current():
+        active_nodes.add(key[:2])
+        if len(key) > 2:
+            active_mods.add(key[2:4])
+    node_templates = {
+        k: v
+        for k, v in templates.node_templates_scaled.items()
+        if k[:2].upper() in active_nodes or k[:2].upper() == "WA"
+    }
+    modifier_templates = {
+        k: v
+        for k, v in templates.modifier_templates_scaled.items()
+        if k[:2].upper() in active_mods
+    }
+
+    node_candidates = _detect_templates(map_gray_trimmed, map_bgr_trimmed, node_templates, threshold)
     node_candidates.sort(key=lambda c: c[3], reverse=True)
 
     nodes = []
@@ -269,7 +286,7 @@ def detect_nodes(screenshot_str_or_img,
             nodes.append(Node(cx, cy, t, node_id=node_id))
 
     # detect modifiers
-    modifier_hits = _detect_templates(map_gray_trimmed, map_bgr_trimmed, templates.modifier_templates_scaled, threshold)
+    modifier_hits = _detect_templates(map_gray_trimmed, map_bgr_trimmed, modifier_templates, threshold)
     _assign_modifiers(nodes, modifier_hits, screenshot_scale)
 
     h, w = map_bgr_trimmed.shape[:2]

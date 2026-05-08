@@ -741,27 +741,17 @@ class PipelineGUI:
     # ======================================================================
     def update_score_value(self, key):
         ScoreTable.current()[key].value = self.score_vars[key].get()
-
-        if self.last_map is not None:
-            if self._delayed_pathfinder_id is not None:
-                self.root.after_cancel(self._delayed_pathfinder_id)
-            self._delayed_pathfinder_id = self.root.after(500, self.rerun_pathfinder)
+        self._schedule_pathfinder_rerun()
 
     def import_score_table(self):
         try:
             ScoreTable.load()
-
             for key, val in ScoreTable.current().items():
                 if key in self.score_vars:
                     self.score_vars[key].set(val.value)
                     self.score_labels[key].config(text=str(val.value))
-
             self.log("ScoreTable imported")
-
-            if self.last_map is not None:
-                if self._delayed_pathfinder_id is not None:
-                    self.root.after_cancel(self._delayed_pathfinder_id)
-                self._delayed_pathfinder_id = self.root.after(500, self.rerun_pathfinder)
+            self._schedule_pathfinder_rerun()
 
         except Exception as e:
             self.log(f"Import error: {e}")
@@ -778,12 +768,7 @@ class PipelineGUI:
         self.log(f"Score mode changed to: {ScoreTable.active_season}")
         # rebuild UI completely
         self._build_score_table(self.score_table_container)
-
-        # optional: rerun pathfinder
-        if self.last_map is not None:
-            if self._delayed_pathfinder_id is not None:
-                self.root.after_cancel(self._delayed_pathfinder_id)
-            self._delayed_pathfinder_id = self.root.after(200, self.rerun_pathfinder)
+        self._schedule_pathfinder_rerun()
 
     # ======================================================================
     # Dialogs
@@ -907,6 +892,13 @@ class PipelineGUI:
         self._blink_state = not self._blink_state
 
         self.root.after(interval, self._blink_loop)
+
+    def _schedule_pathfinder_rerun(self, delay=300):
+        if self.last_map is None:
+            return
+        if self._delayed_pathfinder_id is not None:
+            self.root.after_cancel(self._delayed_pathfinder_id)
+        self._delayed_pathfinder_id = self.root.after(delay, self.rerun_pathfinder)
 
     def _check_update(self):
         def task():
