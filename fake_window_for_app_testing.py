@@ -6,13 +6,13 @@ from settings import Settings
 from path_converter import get_path
 
 RESOLUTION_CONFIGS = {
-    "1080p": {
-        "size": (1920, 1080),
-        "image": get_path(["Images", "Fake_map", "1080_full_map.png"]),
-    },
     "720p": {
         "size": (1280, 720),
         "image": get_path(["Images", "Fake_map", "720_full_map.png"]),
+    },
+    "1080p": {
+        "size": (1920, 1080),
+        "image": get_path(["Images", "Fake_map", "1080_full_map.png"]),
     },
     "1440p": {
         "size": (2560, 1440),
@@ -40,9 +40,9 @@ class ImageViewer:
         self.canvas.bind("<B1-Motion>", self.on_drag)
         self.canvas.bind("<ButtonPress-3>", self.on_right_click)
 
-        root.bind("4", lambda e: self.set_resolution("1080p"))  # maybe code it properly later
-        root.bind("5", lambda e: self.set_resolution("720p"))
-        root.bind("6", lambda e: self.set_resolution("1440p"))
+        root.bind(Settings.keyboard_input_fake_map_720, lambda e: self.set_resolution("720p"))
+        root.bind(Settings.keyboard_input_fake_map_1080, lambda e: self.set_resolution("1080p"))
+        root.bind(Settings.keyboard_input_fake_map_1440, lambda e: self.set_resolution("1440p"))
 
     def set_resolution(self, key):
         cfg = RESOLUTION_CONFIGS[key]

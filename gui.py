@@ -945,7 +945,7 @@ class PipelineGUI:
             self.start_automatic_pipeline(from_key=True)
         elif action == "halfauto":
             self.start_halfauto_pipeline(from_key=True)
-        elif action == "fake_map":
+        elif action == "fake_map" and Settings.testmode:
             self.open_fake_map_window()
 
     def shutdown(self):
