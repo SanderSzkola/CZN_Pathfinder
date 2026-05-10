@@ -2,8 +2,8 @@
 import tkinter as tk
 from PIL import Image, ImageTk
 
-from settings import Settings
-from path_converter import get_path
+from data.settings import Settings
+from utils.path_converter import get_path
 
 RESOLUTION_CONFIGS = {
     "720p": {

@@ -3,7 +3,7 @@ import os
 import cv2
 import numpy as np
 
-from path_converter import get_path
+from utils.path_converter import get_path
 
 TEMPLATE_RES = (1920, 1080)  # all values relative to this
 TEMPLATE_NODE_SIZE = 32  # px, square

@@ -19,18 +19,19 @@ from PIL import Image, ImageTk
 import webbrowser
 import re
 
-from pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, get_game_screenshot, run_pathfinder
-from grabber import get_screen_res, KeyboardListener, switch_window
-from calibrator import check_calibration_done
-from drawer import draw_map, load_icon
-from score_table import ScoreTable
-from score_config import SEASONS
-from path_converter import get_path
-from gui_calibrator import CalibrationPanel
-from settings import Settings
-from version_checker import check_for_update
-from gui_settings import SettingsPanel
-from fake_window_for_app_testing import open_fake_map
+from data.score_config import SEASONS
+from data.score_table import ScoreTable
+from data.settings import Settings
+from front.drawer import draw_map, load_icon
+from front.fake_window_for_app_testing import open_fake_map
+from front.grabber import get_screen_res, KeyboardListener, switch_window
+from front.gui_calibrator import CalibrationPanel
+from front.gui_settings import SettingsPanel
+from processing.calibrator import check_calibration_done
+from processing.pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, get_game_screenshot, \
+    run_pathfinder
+from utils.path_converter import get_path
+from utils.version_checker import check_for_update
 
 
 def is_admin():

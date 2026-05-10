@@ -11,8 +11,8 @@ __pycache__/
 *.exe
 /Exe_build_folder/
 /settings.json
-/template_update_helper.py
-/background_image_creator.py
+/utils/template_update_helper.py
+/utils/background_image_creator.py
 
 # Test material
 /Test_scans/

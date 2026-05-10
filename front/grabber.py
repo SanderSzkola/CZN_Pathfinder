@@ -13,7 +13,7 @@ from PIL import Image
 from queue import Queue
 from pynput import mouse, keyboard
 
-from settings import Settings
+from data.settings import Settings
 
 DEFAULT_DRAG_SQ_THRESHOLD = 100 ** 2
 

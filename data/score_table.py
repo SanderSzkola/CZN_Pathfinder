@@ -4,8 +4,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Dict
 
-from path_converter import get_path
-from score_config import ScoreItem, DEFAULT_VALUES, SEASONS, CURRENT_SEASON
+from utils.path_converter import get_path
+from data.score_config import ScoreItem, DEFAULT_VALUES, SEASONS, CURRENT_SEASON
 
 DEFAULT_PATH = "ScoreTable.json"
 

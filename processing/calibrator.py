@@ -1,7 +1,7 @@
 # calibrator.py
-from detect_nodes import detect_nodes, _load_map_image
-from template_library import TemplateLibrary, TEMPLATE_RES
-from settings import Settings
+from processing.detect_nodes import detect_nodes, _load_map_image
+from processing.template_library import TemplateLibrary, TEMPLATE_RES
+from data.settings import Settings
 
 
 def check_calibration_done():

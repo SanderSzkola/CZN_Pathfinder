@@ -6,14 +6,14 @@ import numpy as np
 from pathlib import Path
 import cv2
 
-from calibrator import perform_calibration_exact, get_initial_params
-from settings import Settings
-from path_converter import get_path
-from grabber import mock_screenshot
-from unified_preview import UnifiedPreview
-from detect_nodes import detect_nodes
-from detect_connections import detect_connections
-from template_library import TemplateLibrary
+from processing.calibrator import perform_calibration_exact, get_initial_params
+from data.settings import Settings
+from utils.path_converter import get_path
+from front.grabber import mock_screenshot
+from front.unified_preview import UnifiedPreview
+from processing.detect_nodes import detect_nodes
+from processing.detect_connections import detect_connections
+from processing.template_library import TemplateLibrary
 
 
 class CalibrationPanel(tb.Toplevel):

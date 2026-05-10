@@ -2,7 +2,7 @@
 import tkinter as tk
 import ttkbootstrap as tb
 
-from settings import Settings
+from data.settings import Settings
 
 
 class SettingsPanel(tb.Toplevel):

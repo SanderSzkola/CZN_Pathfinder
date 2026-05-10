@@ -2,9 +2,9 @@
 import cv2
 import numpy as np
 
-from settings import Settings
-from detect_connections import load_icon_map
-from detect_nodes import get_trim
+from data.settings import Settings
+from processing.detect_connections import load_icon_map
+from processing.detect_nodes import get_trim
 
 CORRIDOR_ALPHA = 0.07
 

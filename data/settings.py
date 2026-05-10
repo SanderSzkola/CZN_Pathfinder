@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from path_converter import get_path
+from utils.path_converter import get_path
 
 
 class Settings:

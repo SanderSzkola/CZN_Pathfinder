@@ -4,11 +4,11 @@ import cv2
 import numpy as np
 from PIL.Image import Image
 
-from node import Node
-from path_converter import get_path
-from template_library import TemplateLibrary, TEMPLATE_NODE_PORTAL_FULL_W
-from settings import Settings
-from score_table import ScoreTable  # MUST CONTAIN EVERY VALID COMBINATION OF NODE+MODIFIER
+from data.node import Node
+from utils.path_converter import get_path
+from processing.template_library import TemplateLibrary, TEMPLATE_NODE_PORTAL_FULL_W
+from data.settings import Settings
+from data.score_table import ScoreTable  # MUST CONTAIN EVERY VALID COMBINATION OF NODE+MODIFIER
 
 """
 Detects nodes on provided screenshot based on templates from TemplateLibrary
@@ -308,8 +308,8 @@ def detect_nodes(screenshot_str_or_img,
 
 
 if __name__ == "__main__":
-    from calibrator import perform_calibration_exact  # needed only here for quick testing
-    from unified_preview import UnifiedPreview
+    from processing.calibrator import perform_calibration_exact  # needed only here for quick testing
+    from front.unified_preview import UnifiedPreview
 
     map_folder = get_path(["Test_scans", "Last_scan_result_1080_pathCoveredByTunnel"])
     # maps = ["map_frag_02.png", ]

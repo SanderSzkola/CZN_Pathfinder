@@ -4,9 +4,9 @@ import cv2
 import numpy as np
 from PIL.Image import Image
 
-from detect_nodes import TemplateLibrary
-from path_converter import get_path
-from settings import Settings
+from processing.detect_nodes import TemplateLibrary
+from utils.path_converter import get_path
+from data.settings import Settings
 
 PX_TOLERANCE = 16
 CORRIDOR_HALF = 6
@@ -250,8 +250,8 @@ def detect_connections(map_fragment, templates, nodes=None, screenshot_index=0):
 
 
 if __name__ == "__main__":
-    from calibrator import perform_calibration_exact  # needed only here for quick testing
-    from unified_preview import UnifiedPreview
+    from processing.calibrator import perform_calibration_exact  # needed only here for quick testing
+    from front.unified_preview import UnifiedPreview
 
     map_folder = get_path(["Test_scans", "Last_scan_result_1080_pathCoveredByTunnel"])
     # maps = ["map_frag_02.png", ]

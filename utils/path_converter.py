@@ -8,7 +8,7 @@ def get_path(path_strings: str | list[str] | None = None):
     if getattr(sys, 'frozen', False):  # GPT: evaluates to True only when running from a packaged EXE.
         cur_path = Path(sys.executable).parent
     else:
-        cur_path = Path(__file__).parent
+        cur_path = Path(__file__).parent.parent
     if path_strings is None:
         return cur_path
     if type(path_strings) is str:

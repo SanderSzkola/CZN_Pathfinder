@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import random
 
-from path_converter import get_path
+from utils.path_converter import get_path
 
 GRID = 70
 ICON_SCALE = 0.35

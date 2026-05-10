@@ -1,10 +1,11 @@
 # pathfinder.py
 import json
 from typing import Dict, List, Tuple, Optional, Union
-from score_table import ScoreTable
-from path_converter import get_path
-from node import Node
-from score_config import SEASONS
+
+from data.score_table import ScoreTable
+from utils.path_converter import get_path
+from data.node import Node
+from data.score_config import SEASONS
 
 
 def load_map(path: str):
