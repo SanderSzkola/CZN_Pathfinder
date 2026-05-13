@@ -276,7 +276,8 @@ class CalibrationPanel(tb.Toplevel):
 
         tb.Label(
             grid,
-            text="Tweak TEMPLATE SCALE and THRESHOLD until every node and modifier is correctly labeled.\nInitial values are likely close to ideal ones.",
+            text="Tweak TEMPLATE SCALE and THRESHOLD until every node and modifier is correctly labeled."
+                 "\nInitial values are likely close to ideal ones.",
             wraplength=self.right_panel_width - 40,
             justify="left",
         ).grid(
@@ -475,9 +476,11 @@ class CalibrationPanel(tb.Toplevel):
             "EL - elite fight\n"
             "EV - random event\n"
             "RE - rest\n"
-            "SH - shop\n"
-            "OR - chaos orb / aura monster / harder monster\n"
-            "TU - dimensional tunnel / seasonal event\n"
+            "**SH - shop\n"
+            "**OR - chaos orb / aura monster / harder monster\n"
+            "**TU - dimensional tunnel / s1+s2 unique event\n"
+            "**ME - memory of embers / s2 unique event\n"
+            "**PE - persona / s3 unique fight\n"
         )
 
         tb.Label(
@@ -607,7 +610,7 @@ class CalibrationPanel(tb.Toplevel):
         nodes_filtered = [n for n in nodes if not n.is_fringe]
         _, edges, corridor_debug = detect_connections(self.preview.base_img, templates=self.templates,
                                                       nodes=nodes_filtered)
-        _, _ = perform_calibration_exact(
+        perform_calibration_exact(
             screenshot=self.scr_original_pil,
             nodes=nodes_filtered,
             log=self.log,
