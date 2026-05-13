@@ -4,9 +4,6 @@ from processing.template_library import TemplateLibrary, TEMPLATE_RES
 from data.settings import Settings
 
 
-def check_calibration_done():
-    return Settings.screenshot_scale > 0
-
 def perform_calibration_exact(screenshot, nodes=None, log=lambda msg: None, template_scale=None,
                               threshold=None):
     screenshot_scale, template_scale_t, threshold_t, w, h = get_initial_params(screenshot)
@@ -26,6 +23,7 @@ def perform_calibration_exact(screenshot, nodes=None, log=lambda msg: None, temp
         Settings.screenshot_scale = screenshot_scale
         Settings.template_scale = template_scale
         Settings.threshold = threshold
+        Settings.calibration_done = True
         Settings.save()
         saved = True
     else:

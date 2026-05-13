@@ -27,7 +27,6 @@ from front.fake_window_for_app_testing import open_fake_map
 from front.grabber import get_screen_res, KeyboardListener, switch_window
 from front.gui_calibrator import CalibrationPanel
 from front.gui_settings import SettingsPanel
-from processing.calibrator import check_calibration_done
 from processing.pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, get_game_screenshot, \
     run_pathfinder
 from utils.path_converter import get_path
@@ -94,8 +93,8 @@ class PipelineGUI:
         self._icons = {}
         self._blink_state = False
         self._scanner_running = False
-        self._demo_params_copy = []
         self._last_pil = None
+        self.fake_map_window = None
 
         self._build_ui()
         self._initiate_keyboard_listener()
@@ -208,8 +207,7 @@ class PipelineGUI:
         row1.pack(pady=5, fill="x")
 
         # keep reference so it can blink and annoy user if calibration is wrong
-        self.recalibrate_button = tb.Button(row1, text="Calibrator", width=19, command=self.start_calibrator,
-                                            padding=4)
+        self.recalibrate_button = tb.Button(row1, text="Calibrator", width=19, command=self.start_calibrator, padding=4)
         self.recalibrate_button.pack(side="left", padx=3)
         (tb.Button(row1, text="Automatic Scanner", width=19, command=self.start_automatic_pipeline, padding=4)
          .pack(side="left", padx=3))
@@ -218,12 +216,10 @@ class PipelineGUI:
 
         row2 = tb.Frame(parent)
         row2.pack(pady=5, fill="x")
-
         self.folder_button = tb.Button(row2, text="Choose Folder", width=19, command=self.choose_folder, padding=4)
         self.folder_button.pack(side="left", padx=3)
         (tb.Button(row2, text="Halfauto Scanner", width=19, command=self.start_halfauto_pipeline, padding=4)
          .pack(side="left", padx=3))
-
         (tb.Button(row2, text="Export Score Table", width=19, command=self.export_score_table, padding=4)
          .pack(side="left", padx=3))
 
@@ -232,6 +228,8 @@ class PipelineGUI:
         (tb.Button(row3, text="Settings", width=19, command=lambda: SettingsPanel(self.root), padding=4)
          .pack(side="left", padx=3))
         (tb.Button(row3, text="Offline Scanner", width=19, command=self.start_offline_pipeline, padding=4)
+         .pack(side="left", padx=3))
+        (tb.Button(row3, text="Open Demo", width=19, command=self.start_demo, padding=4)
          .pack(side="left", padx=3))
 
     def _build_score_table(self, parent):
@@ -534,7 +532,7 @@ class PipelineGUI:
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
                 return
 
-        if not check_calibration_done():
+        if not Settings.calibration_done:
             self.log("Please perform calibration first.")
             return
 
@@ -550,13 +548,25 @@ class PipelineGUI:
         self._scanner_running = True
         threading.Thread(target=self._run_auto_pipeline, daemon=True).start()
 
+    def start_automatic_pipeline_demo(self):
+        if self._scanner_running:
+            self.log("Tried to run more than one scanner at once, ignoring request")
+            return
+        if self.selected_folder:
+            if os.listdir(self.selected_folder):
+                self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
+                return
+        if not self.ask_continue_dialog("auto_demo"):
+            self.log("Scanning task cancelled")
+            return
+
+        self._scanner_running = True
+        threading.Thread(target=self._run_auto_pipeline, daemon=True).start()
+
     def _run_auto_pipeline(self):
         try:
             self.log("Auto scanner started")
-            m, path, img = run_auto_pipeline(
-                save_folder=self.selected_folder,
-                log=self.log,
-            )
+            m, path, img = run_auto_pipeline(save_folder=self.selected_folder, log=self.log)
             self.last_map = m
             self.last_path = path
             self.display_image(img)
@@ -577,11 +587,11 @@ class PipelineGUI:
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
                 return
 
-        if not check_calibration_done():
+        if not Settings.calibration_done:
             self.log("Please perform calibration first.")
             return
 
-        if not is_admin():
+        if not is_admin() and self.fake_map_window is None:
             self.show_warning_dialog("no_admin")
             return
 
@@ -596,10 +606,7 @@ class PipelineGUI:
     def _run_halfauto_pipeline(self):
         try:
             self.log("Halfauto scanner started")
-            m, path, img = run_halfauto_pipeline(
-                save_folder=self.selected_folder,
-                log=self.log,
-            )
+            m, path, img = run_halfauto_pipeline(save_folder=self.selected_folder, log=self.log)
             self.last_map = m
             self.last_path = path
             self.display_image(img)
@@ -622,25 +629,16 @@ class PipelineGUI:
             else:
                 self.log("Select folder with screenshots first")
                 return
-
-        demo_override = True if "Example_scan_result" in str(self.selected_folder) else False
-        if demo_override:
-            self._prepare_demo()
-            self.log("Preparing demo parameters")
-        else:
-            if not check_calibration_done():
-                self.log("Please perform calibration first.")
-                return
+        if not Settings.calibration_done:
+            self.log("Please perform calibration first.")
+            return
 
         self._scanner_running = True
         threading.Thread(target=self._run_offline_pipeline, daemon=True).start()
 
     def _run_offline_pipeline(self):
         try:
-            m, path, img = run_offline_pipeline(
-                save_folder=self.selected_folder,
-                log=self.log,
-            )
+            m, path, img = run_offline_pipeline(save_folder=self.selected_folder, log=self.log)
             self.last_map = m
             self.last_path = path
             self.display_image(img)
@@ -650,24 +648,6 @@ class PipelineGUI:
                 raise
         finally:
             self._scanner_running = False
-            if len(self._demo_params_copy) > 0:
-                self._restore_after_demo()
-
-    def _prepare_demo(self):
-        self._demo_params_copy.clear()
-        self._demo_params_copy.append(Settings.screenshot_scale)
-        self._demo_params_copy.append(Settings.template_scale)
-        self._demo_params_copy.append(Settings.threshold)
-        Settings.screenshot_scale = 1.0
-        Settings.template_scale = 1.0
-        Settings.threshold = 0.97
-
-    def _restore_after_demo(self):
-        if len(self._demo_params_copy) != 3:
-            raise IOError("Restore impossible, unknown program state")
-        Settings.threshold = self._demo_params_copy.pop()
-        Settings.template_scale = self._demo_params_copy.pop()
-        Settings.screenshot_scale = self._demo_params_copy.pop()
 
     def rerun_pathfinder(self):
         if not self.last_map:
@@ -731,11 +711,36 @@ class PipelineGUI:
 
     def open_fake_map_window(self):
         try:
+            if self.fake_map_window is not None:
+                try:
+                    if self.fake_map_window.winfo_exists():
+                        self.fake_map_window.lift()
+                        self.fake_map_window.focus_force()
+                        self.log("Fake map already opened")
+                        return
+                except tk.TclError:
+                    self.fake_map_window = None
+
             resolution = "720p" if self.low_res else "1080p"
-            open_fake_map(resolution=resolution)
+            self.fake_map_window = open_fake_map(resolution=resolution)
+            self.fake_map_window.protocol("WM_DELETE_WINDOW", self._close_fake_map_window)
             self.log(f"Opened fake map ({resolution})")
+
         except Exception as e:
             self.log(f"Fake map error: {e}")
+
+    def _close_fake_map_window(self):
+        if self.fake_map_window is not None:
+            try:
+                self.fake_map_window.destroy()
+            except:
+                pass
+            self.fake_map_window = None
+
+    def start_demo(self):
+        self.open_fake_map_window()
+        time.sleep(0.5)
+        self.start_automatic_pipeline_demo()
 
     # ======================================================================
     # Score Table Operations
@@ -792,6 +797,14 @@ class PipelineGUI:
                 "Do not touch mouse or keyboard until scanning is done.\n\n"
                 "If the scanner behaves incorrectly, quickly move mouse to top left screen corner to stop it.\n"
                 "If the script failed to switch window, alt-tab to game and back, then start again."
+            )
+        elif variant == "auto_demo":
+            text = (
+                "You are about to start the scanning process.\n"
+                "IT MOVES YOUR REAL MOUSE, this is intended behavior.\n"
+                "The script will switch window to fake chaos map and operate there.\n"
+                "Do not touch mouse or keyboard until scanning is done.\n\n"
+                "If the scanner behaves incorrectly, quickly move mouse to top left screen corner to stop it."
             )
         elif variant == "halfauto":
             text = (
@@ -881,7 +894,7 @@ class PipelineGUI:
     # Periodic UI Update
     # ======================================================================
     def _blink_loop(self):
-        if check_calibration_done():
+        if Settings.calibration_done:
             self.recalibrate_button.config(bootstyle="primary")
             return
         interval = 700

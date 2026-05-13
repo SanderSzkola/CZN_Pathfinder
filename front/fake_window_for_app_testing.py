@@ -89,6 +89,7 @@ def open_fake_map(resolution="1080p"):
 
     ImageViewer(win, resolution=resolution)
     win.focus_force()
+    return win
 
 
 if __name__ == "__main__":

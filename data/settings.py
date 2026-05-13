@@ -12,8 +12,9 @@ class Settings:
 
     # template params
     template_scale: float = 1.0
-    screenshot_scale: float = 0.0  # 0 as uncalibrated flag, normally 1 or 0.5
+    screenshot_scale: float = 1.0
     threshold: float = 0.975
+    calibration_done = False
 
     # preview draw flags
     preview_dim_background: bool = True
