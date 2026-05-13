@@ -438,7 +438,7 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
     work_q = Queue()
     finalizer = Finalizer()
     detect_result = DetectResult()
-    listener = DragListener(  # TEST: change to mock
+    listener = DragListener(
         screenshot_q=screenshot_q,
         save_folder=save_folder,
         log=log
@@ -556,8 +556,3 @@ def get_game_screenshot(log):
     except Exception as e:
         log(e)
     return None
-
-
-if __name__ == "__main__":
-    run_offline_pipeline(save_folder=get_path("Example_scan_result"), print_grid=False,
-                         log=lambda msg: print(msg))

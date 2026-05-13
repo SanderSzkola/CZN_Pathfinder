@@ -18,7 +18,6 @@ ZIP_NAME = f"CZN_Pathfinder_exe_build_{Settings.local_version}.zip"
 
 # should yell if it detects new item not in expected or ignored
 expected_items = [
-    "Example_scan_result",
     "Images/Encounter",
     "Images/Encounter_minimal_1920",
     "Images/Modifier_1920",
@@ -208,14 +207,6 @@ def clean_previous_builds():
     for d in [DIST_DIR, BUILD_DIR]:
         if d.exists():
             shutil.rmtree(d)
-    to_be_removed = []
-
-    example_dir = BASE_DIR / "Example_scan_result"
-    for f in os.listdir(example_dir):
-        if not f.startswith("map"):
-            to_be_removed.append(example_dir / f)
-    for f in to_be_removed:
-        os.remove(f)
 
 
 def build_executable():

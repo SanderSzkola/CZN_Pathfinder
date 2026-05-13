@@ -174,14 +174,3 @@ def run_pathfinder(map_data: Union[dict, str]):
             json.dump(existing, f, indent=2)
 
     return best_path, encounter_ranges, encounter_counts
-
-
-if __name__ == "__main__":
-    best_path, encounter_ranges, encounter_counts = run_pathfinder(get_path(["Example_scan_result", "merged_map.json"]))
-    print("Best path:", best_path)
-    print("Encounter ranges | min-max across all possible paths:")
-    for e in encounter_ranges:
-        print(f"{e}: {encounter_ranges.get(e)}")
-    print("Encounter counts | nodes contained in current best path:")
-    for e in encounter_counts:
-        print(f"{e}: {encounter_counts.get(e)}")

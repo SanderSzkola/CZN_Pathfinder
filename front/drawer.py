@@ -405,12 +405,3 @@ def draw_map(
         cv2.imwrite(output_path, out)
 
     return out
-
-
-if __name__ == "__main__":
-    path = get_path(["Example_scan_result", "merged_map.json"])
-    with open(path, "r") as f:
-        data = json.load(f)
-    best_path = data.get("best_path")
-    draw_map(data, best_path, get_path(["Example_scan_result", "merged_map.png"]))
-    print("Done")

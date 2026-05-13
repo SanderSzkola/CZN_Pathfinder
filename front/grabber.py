@@ -190,37 +190,6 @@ class DragListener:
         self.screenshot_q.put((step, img))
 
 
-class MockDragListener:
-    def __init__(self,
-                 screenshot_q: Queue,
-                 save_folder: Optional[str],
-                 log=lambda msg: None):
-        self.screenshot_q = screenshot_q
-        self.save_folder = "Example_scan_result"
-        self.drag_sq_threshold = DEFAULT_DRAG_SQ_THRESHOLD
-        self.log = log
-        self.down_pos = None
-        self.step = 0
-        self.listener = None
-
-    def start(self):
-        self.listener = mouse.Listener(on_click=self._on_click)
-        self.listener.start()
-        for f in os.listdir(self.save_folder):
-            if f.startswith("merged") or not f.endswith("png"):
-                continue
-            img = mock_screenshot(os.path.join(self.save_folder, f))
-            self.screenshot_q.put((self.step, img))
-            self.step += 1
-
-    def stop(self):
-        if self.listener:
-            self.listener.stop()
-
-    def _on_click(self, x, y, button, pressed):
-        return
-
-
 # keyboard listener for hotkey action triggers
 class KeyboardListener:
     def __init__(self, hotkeys: list[tuple[str, str]], on_trigger):
