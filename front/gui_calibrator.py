@@ -6,14 +6,14 @@ import numpy as np
 from pathlib import Path
 import cv2
 
-from processing.calibrator import perform_calibration_exact, get_initial_params
 from data.settings import Settings
-from utils.path_converter import get_path
 from front.grabber import mock_screenshot
 from front.unified_preview import UnifiedPreview
-from processing.detect_nodes import detect_nodes
+from processing.calibrator import perform_or_validate_calibration, get_initial_params
 from processing.detect_connections import detect_connections
+from processing.detect_nodes import detect_nodes
 from processing.template_library import TemplateLibrary
+from utils.path_converter import get_path
 
 
 class CalibrationPanel(tb.Toplevel):
@@ -610,7 +610,7 @@ class CalibrationPanel(tb.Toplevel):
         nodes_filtered = [n for n in nodes if not n.is_fringe]
         _, edges, corridor_debug = detect_connections(self.preview.base_img, templates=self.templates,
                                                       nodes=nodes_filtered)
-        perform_calibration_exact(
+        perform_or_validate_calibration(
             screenshot=self.scr_original_pil,
             nodes=nodes_filtered,
             log=self.log,

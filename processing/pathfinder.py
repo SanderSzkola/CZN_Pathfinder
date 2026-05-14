@@ -2,10 +2,9 @@
 import json
 from typing import Dict, List, Tuple, Optional, Union
 
-from data.score_table import ScoreTable
-from utils.path_converter import get_path
 from data.node import Node
 from data.score_config import SEASONS
+from data.score_table import ScoreTable
 
 
 def load_map(path: str):

@@ -7,8 +7,8 @@ from pathlib import Path
 import fnmatch
 import sys
 
-from data.settings import Settings
 from data.score_config import CURRENT_SEASON
+from data.settings import Settings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 

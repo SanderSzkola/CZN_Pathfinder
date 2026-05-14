@@ -5,10 +5,10 @@ import numpy as np
 from PIL.Image import Image
 
 from data.node import Node
-from utils.path_converter import get_path
-from processing.template_library import TemplateLibrary, TEMPLATE_NODE_PORTAL_FULL_W
-from data.settings import Settings
 from data.score_table import ScoreTable  # MUST CONTAIN EVERY VALID COMBINATION OF NODE+MODIFIER
+from data.settings import Settings
+from processing.template_library import TemplateLibrary, TEMPLATE_NODE_PORTAL_FULL_W
+from utils.path_converter import get_path
 
 """
 Detects nodes on provided screenshot based on templates from TemplateLibrary
@@ -308,7 +308,7 @@ def detect_nodes(screenshot_str_or_img,
 
 
 if __name__ == "__main__":
-    from processing.calibrator import perform_calibration_exact  # needed only here for quick testing
+    from processing.calibrator import perform_or_validate_calibration  # needed only here for quick testing
     from front.unified_preview import UnifiedPreview
 
     map_folder = get_path(["Test_scans", "Last_scan_result_1080_pathCoveredByTunnel"])
@@ -326,7 +326,7 @@ if __name__ == "__main__":
             continue
         map_path = os.path.join(map_folder, map_name)
         if i == 0:
-            screenshot_scale, _ = perform_calibration_exact(screenshot=map_path, log=lambda msg: print(msg))
+            screenshot_scale, _ = perform_or_validate_calibration(screenshot=map_path, log=lambda msg: print(msg))
             templates.scale_templates(Settings.template_scale)
         nodes = detect_nodes(map_path, templates, screenshot_scale=screenshot_scale, filter_fringe=False)
         print(f"Detected {len(nodes)} nodes")

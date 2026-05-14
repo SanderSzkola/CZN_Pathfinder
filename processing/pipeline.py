@@ -6,16 +6,16 @@ from queue import Queue
 import sys
 
 from data.node import Node
-from processing.detect_connections import detect_connections
-from processing.detect_nodes import detect_nodes
-from processing.template_library import TemplateLibrary
+from data.settings import Settings
 from front.drawer import draw_map
 from front.grabber import switch_window, screenshot, do_drag_move, move_mouse, mock_switch_window, mock_move_screen, \
     mock_screenshot, DragListener
+from processing.detect_connections import detect_connections
+from processing.detect_nodes import detect_nodes
 from processing.pathfinder import run_pathfinder
 from processing.process_map import Finalizer
+from processing.template_library import TemplateLibrary
 from utils.path_converter import get_path
-from data.settings import Settings
 
 """
 Full process (may be outdated a bit):
