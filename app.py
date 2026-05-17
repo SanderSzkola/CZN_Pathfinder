@@ -56,7 +56,7 @@ def run():
     root = tb.Window(themename=theme)
     root.tk.call("tk", "scaling", 1.25)
     low_res = get_screen_res()[0] < 1600
-    gui = PipelineGUI(root, low_res=low_res)
+    gui = PipelineGUI(root, low_res=low_res, is_admin=is_admin())
 
     def on_close():
         gui.shutdown()

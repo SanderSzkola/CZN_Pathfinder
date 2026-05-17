@@ -41,7 +41,9 @@ release_ignore = [
     "requirements.txt",
     "README.md",
     "Images/gui_image.png",
-    "Images/Demo.gif",
+    "Images/demo.gif",
+    "Images/calibration_window.png",
+    "Images/mini_mode.png",
 
 ]
 

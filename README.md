@@ -40,16 +40,18 @@ The map updates immediately when score values change.
 Built-in calibration window allows the script recognize nodes correctly for your game resolution.<br>
 Captures screenshots from opened game or saved image, then labels every visible node and draws paths, helping you
 understand how the script sees.
+![calibration](Images/calibration_window.png)
 
 ### Mini mode
 
 Double-click the map to collapse the UI into a compact always-on-top overlay that stays visible while playing.<br>
 Best used together with keyboard shortcuts enabled, to fully eliminate the need to alt-tab.
+![mini mode](Images/mini_mode.png)
 
 ## Automatic scan demo
 
 Here's how calibration and automatic scan looks in action:
-![demo](Images/Demo.gif)
+![demo](Images/demo.gif)
 You can also test how the script works by using built-in demo, together with provided fake chaos map.
 
 ## Installation
