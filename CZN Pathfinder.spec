@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['front/gui.py'],
+    ['app.py'],
     pathex=[],
     binaries=[],
     datas=[],

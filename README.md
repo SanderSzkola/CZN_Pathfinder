@@ -2,8 +2,6 @@
 
 ![gui](Images/gui_image.png)
 Reveal the full chaos map, calculate the best possible route, and adjust path priorities in real time.<br>
-CZN Pathfinder scans chaos minimap, reconstructs full layout, and highlights the optimal path based on your preferred
-encounters.<br>
 Designed for fast in-game use with automatic scanning, mini overlay mode and keyboard shortcuts.
 
 ## Features
@@ -70,9 +68,9 @@ Requires Python installed.
 git clone https://github.com/SanderSzkola/CZN_Pathfinder
 cd CZN_Pathfinder
 pip install -r requirements.txt
-cd front
-python gui.py
+python app.py
 ```
+You can create your own exe by installing PyInstaller and running build.py from utils folder.
 
 ### Please read instructions.txt before first use
 

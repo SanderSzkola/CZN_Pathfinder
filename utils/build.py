@@ -12,7 +12,7 @@ from data.settings import Settings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SOURCE_SCRIPT = "gui.py"
+SOURCE_SCRIPT = "app.py"
 EXE_NAME = "CZN Pathfinder"
 ZIP_NAME = f"CZN_Pathfinder_exe_build_{Settings.local_version}.zip"
 

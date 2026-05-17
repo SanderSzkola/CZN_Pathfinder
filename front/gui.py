@@ -1,9 +1,5 @@
 # gui.py
-import ctypes
-import sys
 import os
-import subprocess
-import argparse
 import threading
 import time
 import tkinter as tk
@@ -25,7 +21,7 @@ from data.score_table import ScoreTable
 from data.settings import Settings
 from front.drawer import draw_map, load_icon
 from front.fake_window_for_app_testing import open_fake_map
-from front.grabber import get_screen_res, KeyboardListener, switch_window
+from front.grabber import KeyboardListener, switch_window
 from front.gui_calibrator import CalibrationPanel
 from front.gui_settings import SettingsPanel
 from processing.pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, get_game_screenshot, \
@@ -34,36 +30,11 @@ from utils.path_converter import get_path
 from utils.version_checker import check_for_update
 
 
-def is_admin():
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
-        return False
-
-
-parser = argparse.ArgumentParser(add_help=False)
-parser.add_argument('--elevate', action='store_true', help='Run as admin')
-args, unknown = parser.parse_known_args()
-if (args.elevate or Settings.request_admin) and not is_admin():
-    executable = sys.executable
-    if "python.exe" in executable:
-        executable = executable.replace("python.exe", "pythonw.exe")
-        if not os.path.exists(executable):
-            executable = sys.executable
-    cmd_args = subprocess.list2cmdline(sys.argv[1:])
-    script_path = f'"{os.path.abspath(sys.argv[0])}"'
-    if getattr(sys, 'frozen', False):
-        final_arguments = cmd_args
-    else:
-        final_arguments = f"{script_path} {cmd_args}"
-    ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, final_arguments, None, 1)
-    sys.exit()
-
-
 class PipelineGUI:
-    def __init__(self, root, low_res=False):
+    def __init__(self, root, low_res=False, is_admin=False):
         self.root = root
         self.low_res = low_res
+        self.is_admin = is_admin
         self.map_scale_normal = Settings.ui_map_image_scale_normal / 100  # as %
         self.map_scale_mini = Settings.ui_map_image_scale_mini / 100  # as %
         self._is_mini = False
@@ -79,7 +50,7 @@ class PipelineGUI:
 
         self._update_geometry()
         self.root.title(f"CZN Pathfinder {Settings.local_version}")
-        self.root.iconbitmap("Images/Icon.ico")
+        self.root.iconbitmap(get_path(["Images","Icon.ico"]))
         self.root.attributes('-topmost', Settings.ui_window_always_on_top)
         self.root.resizable(False, False)
         self.root.update()
@@ -536,7 +507,7 @@ class PipelineGUI:
             self.log("Please perform calibration first.")
             return
 
-        if not is_admin():
+        if not self.is_admin:
             self.show_warning_dialog("no_admin")
             return
 
@@ -591,7 +562,7 @@ class PipelineGUI:
             self.log("Please perform calibration first.")
             return
 
-        if not is_admin() and self.fake_map_window is None:
+        if not self.is_admin and self.fake_map_window is None:
             self.show_warning_dialog("no_admin")
             return
 
@@ -739,8 +710,7 @@ class PipelineGUI:
 
     def start_demo(self):
         self.open_fake_map_window()
-        time.sleep(0.5)
-        self.start_automatic_pipeline_demo()
+        self.root.after(500, self.start_automatic_pipeline_demo)
 
     # ======================================================================
     # Score Table Operations
@@ -957,34 +927,3 @@ class PipelineGUI:
     def shutdown(self):
         if self._kb_listener:
             self._kb_listener.stop()
-
-
-# ======================================================================
-# Main
-# ======================================================================
-def app_do_not_scale():
-    try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)
-    except:
-        try:
-            ctypes.windll.user32.SetProcessDPIAware()
-        except:
-            pass
-
-
-if __name__ == "__main__":
-    app_do_not_scale()
-    theme = "darkly" if Settings.darkmode else "flatly"
-    root = tb.Window(themename=theme)
-    root.tk.call('tk', 'scaling', 1.25)  # todo: check tkinter autoscaling magic somewhere, windows 125% ui scale
-    low_res = get_screen_res()[0] < 1600
-    gui = PipelineGUI(root, low_res=low_res)
-
-
-    def on_close():
-        gui.shutdown()
-        root.destroy()
-
-
-    root.protocol("WM_DELETE_WINDOW", on_close)
-    root.mainloop()
