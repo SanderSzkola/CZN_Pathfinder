@@ -11,6 +11,7 @@ from tkinter import filedialog
 import ttkbootstrap as tb
 import cv2
 from pathlib import Path
+import datetime
 
 if not hasattr(cv2, "__version__"):  # random GPT-approved dependency error fix todo: check if i still need it?
     cv2.__version__ = "4"
@@ -406,7 +407,6 @@ class PipelineGUI:
     # Logging
     # ======================================================================
     def log(self, msg):
-        import datetime
         ts = datetime.datetime.now().strftime("%H:%M:%S")
         line = f"[{ts}] {msg}"
 
