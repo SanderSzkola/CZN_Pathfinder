@@ -1,13 +1,14 @@
 CZN Pathfinder - find the best way to navigate chaos maps. 
 
-Once the full map is provided, you can define priority for different nodes (normal fights, elite, rest, etc), and script will show you the best possible path.
-Use the panel on the right side of the window, it updates map in real time.
-If you want to see how it works on test data, you can run a demo by selecting "Example_scan_result" folder and then Offline Scanner.
+Quickstart:
+	Open app, settings, check 'Request admin on startup' save, close app.
+	Open game, start chaos, open chaos minimap.
+	Open app, press 'Calibrator', confirm that every visible node is labeled. Check help tab if label is unclear.
+	Finish calibration. On the right panel, choose which season map you wish to run. Press 'Automatic Scanner', watch the script do its work.
+	Adjust score sliders to your liking, press 'Export score table' to save them.
+	Read about mini mode below, it is currently the most comfortable way to use this app.
 
-Now, how to get a full map from your game? The game does not provide it at the moment, so you have three options, listed below.
-All of them require calibration first.
-Full process overview: Calibrate (once), do one of scans (once per map), change score values (until shown path looks good)
-
+More detailed instructions:
 
 Calibration: this will tell the script your game window size and how it should scale template images.
 You must perform it once, then every time you change game's resolution. It is saved in settings file, don't lose it.
@@ -15,6 +16,7 @@ Instructions:
 	Open the game in windowed mode (not fullscreen), show chaos minimap somewhere in the middle, to see many different nodes and modifiers.
 	Press Calibrator button on script gui. It will open new window with in-game screenshot.
 	Press Recalibrate button. It will mark every visible node with detected type, as in "NO" for NOrmal fight, or "RESH" for REst with a SHop.
+	Check help tab, it contains explanations for all labels.
 	Confirm that every node has appropriate label. Default setting should be good in most cases.
 	If labels are missing, try lowering threshold, press recalibrate and check again. If there are too many labels, raise it.
     If that does not work, try modifying template scale value. It is calculated to match game window's size, so it should not be tweaked too far from initial value.
@@ -26,7 +28,7 @@ This is not a bot / cheat, it simply drags the map until it sees the boss. It wi
 Requirements:
 	The game is opened in windowed mode, at the start of a chaos run, the minimap is shown and in default position (not moved left/right).
 	The script is running with admin privileges (game is also admin, so it will ignore signals sent by a non-admin process).
-	It takes about 1-2s for a screenshot, and 5-10 screenshots for the full map. You MUST observe it working, at least first few times, as it may break in some way.
+	It takes about 1-2s for a screenshot, and 2-6 screenshots for the full map. You MUST observe it working, at least first few times, as it may break in some way.
 	If you see it misbehaving, quickly move mouse to the top left corner to stop it.
 	Selecting folder is optional, it will output saved screenshots there. Without folder, scan is saved to Last_scan_result folder, previous content is deleted.
 If all requirements are met, press 'Automatic Scanner', and a while later you should see completed map scan.
@@ -80,7 +82,7 @@ Exclusion areas are marked by diagonal yellow and blue lines.
 
 Mini mode: script window may be minified by double-clicking map image, which together with 'always on top' option allows to always see map in a non-obstructive way.
     You can customise the size and position of mini mode window in settings.
-    When you exit mini mode, the position of window will be saved for next use.
+    Window can be moved freely. When you exit mini mode, the position of window will be saved for next use.
     Together with keyboard shortcuts, this allows for fast and seamless use of script, without the need to alt-tab between script and game windows.
 
 
