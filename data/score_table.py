@@ -61,12 +61,15 @@ class ScoreTable:
         loaded_season = data.get("active_season", CURRENT_SEASON)
         cls.active_season = loaded_season if loaded_season in SEASONS else CURRENT_SEASON
 
-        # ensure all seasons exist
+        # ensure all entries exist
         for season_key in SEASONS:
-            cls.tables.setdefault(
-                season_key,
-                cls.default_table_for(season_key)
-            )
+            defaults = cls.default_table_for(season_key)
+            loaded = cls.tables.get(season_key, {})
+
+            cls.tables[season_key] = {
+                key: loaded.get(key, deepcopy(default))
+                for key, default in defaults.items()
+            }
 
         cls._loaded = True
 
@@ -98,6 +101,7 @@ class ScoreTable:
                 "value": v.value,
                 "big_scale": v.big_scale,
                 "enabled": v.enabled,
+                "merge_group": v.merge_group,
             }
             for k, v in table.items()
         }
@@ -109,6 +113,7 @@ class ScoreTable:
                 value=v["value"],
                 big_scale=v.get("big_scale", False),
                 enabled=v.get("enabled", True),
+                merge_group=v.get("merge_group", 0),
             )
             for k, v in data.items()
         }

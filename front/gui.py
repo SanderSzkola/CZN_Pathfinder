@@ -50,7 +50,7 @@ class PipelineGUI:
 
         self._update_geometry()
         self.root.title(f"CZN Pathfinder {Settings.local_version}")
-        self.root.iconbitmap(get_path(["Images","Icon.ico"]))
+        self.root.iconbitmap(get_path(["Images", "Icon.ico"]))
         self.root.attributes('-topmost', Settings.ui_window_always_on_top)
         self.root.resizable(False, False)
         self.root.update()
@@ -221,6 +221,7 @@ class PipelineGUI:
 
         # season radio
         for season_key, season in SEASONS.items():
+            if season_key == "s*" and not Settings.testmode: continue  # too tall, breaks ui
             tb.Radiobutton(
                 header_row,
                 text=season.name,
@@ -242,9 +243,9 @@ class PipelineGUI:
         mods_raw = [(k, v) for k, v in items if len(k) > 2]
         mod_groups = {}
         for k, v in mods_raw:
-            group_key = k[2:]
+            group_key = (k[2:], v.merge_group)
             mod_groups.setdefault(group_key, []).append((k, v))
-        mods = list(mod_groups.items())  # (group_key, entries)
+        mods = [(modifier_name, entries) for (modifier_name, _), entries in mod_groups.items()]
 
         # alignment
         aligned_nodes = []
@@ -272,6 +273,7 @@ class PipelineGUI:
             prev_match = False
             insert_at = None
             for index, node in enumerate(aligned_nodes):
+                if node is None: continue
                 curr_match = mod_matches_node(entries, node[0])
                 if prev_match and not curr_match:
                     insert_at = index
@@ -309,7 +311,7 @@ class PipelineGUI:
         enc_folder = get_path(["Images", "Encounter_minimal_1600"])
         mod_folder = get_path(["Images", "Modifier_1600"])
         icon = self.create_icon(keys, enc_folder, mod_folder)
-        self._icons[display_key] = icon
+        self._icons[display_key + "_" + keys[0]] = icon
 
         tb.Label(row, text=display_key, image=icon, anchor="w").pack(side="left", padx=1)
         value_label = tb.Label(row, text=str(value.value))  # value over slider
@@ -658,8 +660,8 @@ class PipelineGUI:
             return
 
         self.root.attributes('-topmost', False)
-        self.root.after(10, lambda: self.root.attributes('-topmost', Settings.ui_window_always_on_top))
         scr = get_game_screenshot(self.log)
+        self.root.attributes('-topmost', Settings.ui_window_always_on_top)
         has_game_image = scr is not None and getattr(scr, "size", (0, 0))[0] > 0
         folder = self._get_valid_calibration_folder()
 

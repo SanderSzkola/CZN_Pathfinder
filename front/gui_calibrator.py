@@ -476,11 +476,14 @@ class CalibrationPanel(tb.Toplevel):
             "EL - elite fight\n"
             "EV - random event\n"
             "RE - rest\n"
+            "\n"
             "**SH - shop\n"
             "**OR - chaos orb / aura monster / harder monster\n"
             "**TU - dimensional tunnel / s1+s2 unique event\n"
             "**ME - memory of embers / s2 unique event\n"
             "**PE - persona / s3 unique fight\n"
+            "**DI - director's script / s3 unique event\n"
+            "**DE - desire / s4 unique modifier\n"
         )
 
         tb.Label(

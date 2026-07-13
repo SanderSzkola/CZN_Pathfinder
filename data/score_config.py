@@ -7,6 +7,7 @@ class ScoreItem:
     value: int
     big_scale: bool = False
     enabled: bool = True
+    merge_group: int = 0  # only merge nodes under common mod if this key matches
 
 
 class Season:
@@ -15,19 +16,23 @@ class Season:
         self.active_scores = set(active_scores)
 
 
-CURRENT_SEASON = "s3"  # REMEMBER TO UPDATE ON NEW SEASON
+CURRENT_SEASON = "s4"  # REMEMBER TO UPDATE ON NEW SEASON
 DEFAULT_VALUES = {
-    "NO": ScoreItem(-7),
-    "NOOR": ScoreItem(-10),
-    "NOPE": ScoreItem(8),
-    "EL": ScoreItem(2),
+    "NO": ScoreItem(-7),                    # normal
+    "NOOR": ScoreItem(-10),                 # orb of chaos
+    "NOPE": ScoreItem(8),                   # persona
+    "NODE": ScoreItem(7),                   # desire
+    "EL": ScoreItem(2),                     # elite
     "ELOR": ScoreItem(2),
     "ELPE": ScoreItem(8),
-    "RE": ScoreItem(-10),
-    "RESH": ScoreItem(4),
-    "EV": ScoreItem(9),
-    "EVTU": ScoreItem(40, True),
-    "EVME": ScoreItem(40, True),
+    "ELDE": ScoreItem(7),
+    "RE": ScoreItem(-10),                   # rest
+    "RESH": ScoreItem(4),                   # shop
+    "EV": ScoreItem(9),                     # event
+    "EVTU": ScoreItem(40, big_scale=True),  # dimensional tunnel
+    "EVME": ScoreItem(40, big_scale=True),  # memory of embers
+    "EVDI": ScoreItem(40, big_scale=True),  # director's script
+    "EVDE": ScoreItem(10, merge_group=1),
 }
 
 SEASONS = {
@@ -50,19 +55,36 @@ SEASONS = {
         "RE",
         "RESH",
         "EV",
+        "EVDI"
+    ]),
+    "s4": Season("Season 4", [
+        "NO",
+        "NOOR",
+        "NODE",
+        "EL",
+        "ELOR",
+        "ELDE",
+        "RE",
+        "RESH",
+        "EV",
+        "EVDE",
     ]),
     "s*": Season("All", [
         "NO",
         "NOOR",
         "NOPE",
+        "NODE",
         "EL",
         "ELOR",
         "ELPE",
+        "ELDE",
         "RE",
         "RESH",
         "EV",
         "EVTU",
         "EVME",
+        "EVDI",
+        "EVDE",
     ]),
     "sortie": Season("Sortie", [
         "NO",
