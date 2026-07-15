@@ -13,7 +13,7 @@ class Settings:
     # template params
     template_scale: float = 1.0
     screenshot_scale: float = 1.0
-    threshold: float = 0.975
+    threshold: float = 0.97  # mod symbols are getting complex, keep this low
     calibration_done = False
 
     # preview draw flags

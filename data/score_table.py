@@ -19,11 +19,11 @@ class ScoreTable:
 
     @classmethod
     def current(cls) -> Dict[str, ScoreItem]:
-        cls.load()
-        return cls.tables.setdefault(
-            cls.active_season,
-            cls.default_table_for(cls.active_season)
-        )
+        if not cls._loaded:
+            cls._create_defaults()
+            cls._loaded = True
+
+        return cls.tables.setdefault(cls.active_season, cls.default_table_for(cls.active_season))
 
     @classmethod
     def default_table_for(cls, season_key: str) -> Dict[str, ScoreItem]:
@@ -42,15 +42,9 @@ class ScoreTable:
 
     @classmethod
     def load(cls):
-        if cls._loaded:
-            return
-
         cls._ensure_path()
         if not cls._path.exists():
-            cls._create_defaults()
-            cls.save()
-            cls._loaded = True
-            return
+            return False
 
         with cls._path.open("r", encoding="utf-8") as f:
             data = json.load(f)
@@ -72,6 +66,7 @@ class ScoreTable:
             }
 
         cls._loaded = True
+        return True
 
     @classmethod
     def _create_defaults(cls):

@@ -73,7 +73,7 @@ class PipelineGUI:
         self._load_initial_background()
         self._blink_loop()
         if Settings.auto_import_score:
-            self.import_score_table()
+            self.import_score_table(user_triggered=False)
         self._check_update()
 
     # ======================================================================
@@ -721,15 +721,17 @@ class PipelineGUI:
         ScoreTable.current()[key].value = self.score_vars[key].get()
         self._schedule_pathfinder_rerun()
 
-    def import_score_table(self):
+    def import_score_table(self, user_triggered=True):
         try:
-            ScoreTable.load()
-            for key, val in ScoreTable.current().items():
-                if key in self.score_vars:
-                    self.score_vars[key].set(val.value)
-                    self.score_labels[key].config(text=str(val.value))
-            self.log("ScoreTable imported")
-            self._schedule_pathfinder_rerun()
+            loaded = ScoreTable.load()
+            if loaded:
+                self.score_mode.set(ScoreTable.active_season)
+                self._build_score_table(self.score_table_container)
+                self.log("Score Table imported")
+                self._schedule_pathfinder_rerun()
+            elif not loaded and user_triggered:
+                self.log("No Score Table file found, consider creating one by pressing Export once you changed "
+                         "default path priorities")
 
         except Exception as e:
             self.log(f"Import error: {e}")
