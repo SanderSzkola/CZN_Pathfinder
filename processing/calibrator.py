@@ -1,14 +1,10 @@
 # calibrator.py
-from detect_nodes import detect_nodes, _load_map_image
-from template_library import TemplateLibrary, TEMPLATE_RES
-from settings import Settings
+from data.settings import Settings
+from processing.detect_nodes import detect_nodes, _load_map_image
+from processing.template_library import TemplateLibrary, TEMPLATE_RES
 
 
-def check_calibration_done():
-    return Settings.screenshot_scale > 0
-
-def perform_calibration_exact(screenshot, nodes=None, log=lambda msg: None, template_scale=None,
-                              threshold=None):
+def perform_or_validate_calibration(screenshot, nodes=None, log=lambda msg: None, template_scale=None, threshold=None):
     screenshot_scale, template_scale_t, threshold_t, w, h = get_initial_params(screenshot)
     template_scale = template_scale_t if template_scale is None else template_scale
     threshold = threshold_t if threshold is None else threshold
@@ -26,6 +22,7 @@ def perform_calibration_exact(screenshot, nodes=None, log=lambda msg: None, temp
         Settings.screenshot_scale = screenshot_scale
         Settings.template_scale = template_scale
         Settings.threshold = threshold
+        Settings.calibration_done = True
         Settings.save()
         saved = True
     else:

@@ -2,7 +2,7 @@
 import tkinter as tk
 import ttkbootstrap as tb
 
-from settings import Settings
+from data.settings import Settings
 
 
 class SettingsPanel(tb.Toplevel):
@@ -30,9 +30,13 @@ class SettingsPanel(tb.Toplevel):
         notebook.add(tab_general, text="General")
         self._build_general_tab(tab_general)
 
-        tab_temp = tb.Frame(notebook)
-        notebook.add(tab_temp, text="Geometry")
-        self._build_temp_tab(tab_temp)
+        tab_geometry = tb.Frame(notebook)
+        notebook.add(tab_geometry, text="Geometry")
+        self._build_geometry_tab(tab_geometry)
+
+        tab_testing = tb.Frame(notebook)
+        notebook.add(tab_testing, text="Testing")
+        self._build_testing_tab(tab_testing)
 
     def _make_var(self, attr):
         val = getattr(Settings, attr)
@@ -61,8 +65,8 @@ class SettingsPanel(tb.Toplevel):
         self._vars[attr] = var
         return row + 1
 
-    def _add_explanation(self, parent, row, text):
-        tb.Label(parent, text=text).grid(row=row, column=0, columnspan=2, sticky="w", padx=6, pady=(0, 4))
+    def _add_explanation(self, parent, row, text, style="info"):
+        tb.Label(parent, text=text, style=style).grid(row=row, column=0, columnspan=2, sticky="w", padx=6, pady=(0, 4))
         return row + 1
 
     def _add_separator(self, parent, row, pady=16):
@@ -72,13 +76,12 @@ class SettingsPanel(tb.Toplevel):
     def _build_general_tab(self, parent):
         parent.columnconfigure(1, weight=1)
         row = 0
+        row = self._add_explanation(parent, row, "Any change requires script restart to take effect", style="danger")
 
-        row = self._add_explanation(parent, row, "Any change requires script restart to take effect")
         row = self._add_field(parent, row, "Target app name", "target_app_name")
         row = self._add_bool(parent, row, "Request admin on startup", "request_admin")
         row = self._add_bool(parent, row, "Dark mode", "darkmode")
         row = self._add_bool(parent, row, "Auto import score table", "auto_import_score")
-        row = self._add_bool(parent, row, "Testmode", "testmode")
 
         row = self._add_separator(parent, row)
         row = self._add_bool(parent, row, "Detect keyboard", "keyboard_input")
@@ -96,10 +99,10 @@ class SettingsPanel(tb.Toplevel):
         row = self._add_field(parent, row, "Local version", "local_version", disabled=True)
         row = self._add_field(parent, row, "GitHub version", "remote_version", disabled=True)
 
-    def _build_temp_tab(self, parent):
+    def _build_geometry_tab(self, parent):
         parent.columnconfigure(1, weight=1)
         row = 0
-        row = self._add_explanation(parent, row, "Any change requires script restart to take effect")
+        row = self._add_explanation(parent, row, "Any change requires script restart to take effect", style="danger")
         row = self._add_explanation(parent, row,
                                     "Those settings control how ui looks and behaves.\n"
                                     "Offset means how far the script window should be moved, relative to \n"
@@ -112,6 +115,18 @@ class SettingsPanel(tb.Toplevel):
         row = self._add_field(parent, row, "Map image size % (20-100)", "ui_map_image_scale_normal")
         row = self._add_field(parent, row, "Minimap image size % (20-100)", "ui_map_image_scale_mini")
         row = self._add_bool(parent, row, "Keep script window always on top", "ui_window_always_on_top")
+
+    def _build_testing_tab(self, parent):
+        parent.columnconfigure(1, weight=1)
+        row = 0
+        row = self._add_explanation(parent, row, "Any change requires script restart to take effect", style="danger")
+
+        row = self._add_bool(parent, row, "Testmode", "testmode")
+        row = self._add_field(parent, row, "Open fake map", "keyboard_input_fake_map")
+        row = self._add_explanation(parent, row, "Requires Detect keyboard setting from general to work")
+        row = self._add_field(parent, row, "Switch resolution to 720p", "keyboard_input_fake_map_720")
+        row = self._add_field(parent, row, "Switch resolution to 1080p", "keyboard_input_fake_map_1080")
+        row = self._add_field(parent, row, "Switch resolution to 1440p", "keyboard_input_fake_map_1440")
 
     def _build_buttons(self, parent):
         frame = tb.Frame(parent)

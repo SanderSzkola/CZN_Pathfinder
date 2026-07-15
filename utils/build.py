@@ -7,15 +7,17 @@ from pathlib import Path
 import fnmatch
 import sys
 
-from settings import Settings
+from data.score_config import CURRENT_SEASON
+from data.settings import Settings
 
-SOURCE_SCRIPT = "gui.py"
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+SOURCE_SCRIPT = "app.py"
 EXE_NAME = "CZN Pathfinder"
 ZIP_NAME = f"CZN_Pathfinder_exe_build_{Settings.local_version}.zip"
 
 # should yell if it detects new item not in expected or ignored
 expected_items = [
-    "Example_scan_result",
     "Images/Encounter",
     "Images/Encounter_minimal_1920",
     "Images/Modifier_1920",
@@ -26,6 +28,7 @@ expected_items = [
     "ManualScreenshotVisualGuide.png",
     "instructions.txt",
     "Images/Icon.ico",
+    "Images/Fake_map",
 
 ]
 
@@ -38,24 +41,26 @@ release_ignore = [
     "requirements.txt",
     "README.md",
     "Images/gui_image.png",
-    "Images/Demo.gif",
+    "Images/demo.gif",
+    "Images/calibration_window.png",
+    "Images/mini_mode.png",
 
 ]
 
-DIST_DIR = Path("dist")
-BUILD_DIR = Path("build")
-FINAL_OUTPUT_DIR = Path("Exe_build_folder")
+DIST_DIR = BASE_DIR / "dist"
+BUILD_DIR = BASE_DIR / "build"
+FINAL_OUTPUT_DIR = BASE_DIR / "Exe_build_folder"
 
 
 def insert_custom_backgrounds(expected):
-    path = Path("Images/Map_background")
+    path = BASE_DIR / "Images" / "Map_background"
     for image in os.listdir(path):
         if image.endswith("_g.png"):
             path_t = path / image
             expected.append(path_t)
 
 def load_gitignore():
-    path = Path(".gitignore")
+    path = BASE_DIR / ".gitignore"
     if not path.exists():
         return []
     rules = []
@@ -117,7 +122,7 @@ def match_gitignore(path: Path, rules):
 
 
 def prepare():
-    root = Path(".").resolve()
+    root = BASE_DIR.resolve()
     gitignore_rules = load_gitignore()
     result = []
 
@@ -158,12 +163,12 @@ def prepare():
 
 def expand_expected_items(items):
     expanded = []
-    root = Path(".")
+    root = BASE_DIR
 
     for item in items:
-        p = Path(item)
+        p = BASE_DIR / item
         if not p.exists():
-            raise RuntimeError(f"expected_item not found: {item}")
+            raise RuntimeError(f"expected_item not found: {item} at path {p}")
 
         if p.is_file():
             expanded.append(p.relative_to(root).as_posix())
@@ -204,13 +209,6 @@ def clean_previous_builds():
     for d in [DIST_DIR, BUILD_DIR]:
         if d.exists():
             shutil.rmtree(d)
-    to_be_removed = []
-
-    for f in os.listdir("Example_scan_result"):
-        if not f.startswith("map"):
-            to_be_removed.append(os.path.join("Example_scan_result", f))
-    for f in to_be_removed:
-        os.remove(f)
 
 
 def build_executable():
@@ -219,7 +217,7 @@ def build_executable():
         "--clean",
         "CZN Pathfinder.spec"
     ]
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=True, cwd=BASE_DIR)
 
 
 def create_zip():
@@ -227,7 +225,7 @@ def create_zip():
     zip_path = FINAL_OUTPUT_DIR / ZIP_NAME
     expanded = expand_expected_items(expected_items)
     exe_file = EXE_NAME + ".exe"
-    exe_path = Path("dist") / exe_file
+    exe_path = DIST_DIR / exe_file
     if not exe_path.exists():
         raise FileNotFoundError("No exe found")
 
@@ -235,7 +233,7 @@ def create_zip():
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
         z.write(str(exe_path), folder_prefix + Path(exe_path).name)
         for item in expanded:
-            z.write(item, folder_prefix + item)
+            z.write(BASE_DIR / item, folder_prefix + item)
 
 
 def main():
@@ -246,7 +244,8 @@ def main():
     create_zip()
     clean_previous_builds()
     print("Build completed.")
-    print(f"Version {Settings.local_version}, github {Settings.remote_version}, CHECK IF THIS IS CORRECT")
+    print(f"Version {Settings.local_version}, github {Settings.remote_version}"
+          f" | season {CURRENT_SEASON} | CHECK IF THIS IS CORRECT")
 
 
 if __name__ == "__main__":

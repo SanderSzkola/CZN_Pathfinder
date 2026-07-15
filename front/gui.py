@@ -1,9 +1,5 @@
 # gui.py
-import ctypes
-import sys
 import os
-import subprocess
-import argparse
 import threading
 import time
 import tkinter as tk
@@ -11,6 +7,7 @@ from tkinter import filedialog
 import ttkbootstrap as tb
 import cv2
 from pathlib import Path
+import datetime
 
 if not hasattr(cv2, "__version__"):  # random GPT-approved dependency error fix todo: check if i still need it?
     cv2.__version__ = "4"
@@ -19,66 +16,41 @@ from PIL import Image, ImageTk
 import webbrowser
 import re
 
-from pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, get_game_screenshot, run_pathfinder
-from grabber import get_screen_res, KeyboardListener, switch_window
-from calibrator import check_calibration_done
-from drawer import draw_map, load_icon
-from score_table import ScoreTable
-from path_converter import get_path
-from gui_calibrator import CalibrationPanel
-from settings import Settings
-from version_checker import check_for_update
-from gui_settings import SettingsPanel
-
-
-def is_admin():
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
-        return False
-
-
-parser = argparse.ArgumentParser(add_help=False)
-parser.add_argument('--elevate', action='store_true', help='Run as admin')
-args, unknown = parser.parse_known_args()
-if (args.elevate or Settings.request_admin) and not is_admin():
-    executable = sys.executable
-    if "python.exe" in executable:
-        executable = executable.replace("python.exe", "pythonw.exe")
-        if not os.path.exists(executable):
-            executable = sys.executable
-    cmd_args = subprocess.list2cmdline(sys.argv[1:])
-    script_path = f'"{os.path.abspath(sys.argv[0])}"'
-    if getattr(sys, 'frozen', False):
-        final_arguments = cmd_args
-    else:
-        final_arguments = f"{script_path} {cmd_args}"
-    ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, final_arguments, None, 1)
-    sys.exit()
+from data.score_config import SEASONS
+from data.score_table import ScoreTable
+from data.settings import Settings
+from front.drawer import draw_map, load_icon
+from front.fake_window_for_app_testing import open_fake_map
+from front.grabber import KeyboardListener, switch_window
+from front.gui_calibrator import CalibrationPanel
+from front.gui_settings import SettingsPanel
+from processing.pipeline import run_auto_pipeline, run_offline_pipeline, run_halfauto_pipeline, get_game_screenshot, \
+    run_pathfinder
+from utils.path_converter import get_path
+from utils.version_checker import check_for_update
 
 
 class PipelineGUI:
-    def __init__(self, root, low_res=False):
+    def __init__(self, root, low_res=False, is_admin=False):
         self.root = root
         self.low_res = low_res
+        self.is_admin = is_admin
         self.map_scale_normal = Settings.ui_map_image_scale_normal / 100  # as %
         self.map_scale_mini = Settings.ui_map_image_scale_mini / 100  # as %
         self._is_mini = False
+        self.left_panel_w = 1190
+        self.left_panel_h = 490
+        self.right_panel_w = 410
+        self.right_panel_h = 490
 
         if self.low_res:
-            self.left_panel_w = 880
-            self.left_panel_h = 490
-            self.right_panel_w = 410
-            self.right_panel_h = 420
-        else:
-            self.left_panel_w = 1190
-            self.left_panel_h = 490
-            self.right_panel_w = 410
-            self.right_panel_h = 420
+            big_left_panel_w = self.left_panel_w
+            self.left_panel_w = 1270 - self.right_panel_w  # 1280x720
+            self.left_panel_h = int(self.left_panel_w * self.left_panel_h / big_left_panel_w)
 
         self._update_geometry()
         self.root.title(f"CZN Pathfinder {Settings.local_version}")
-        self.root.iconbitmap("Images/Icon.ico")
+        self.root.iconbitmap(get_path(["Images", "Icon.ico"]))
         self.root.attributes('-topmost', Settings.ui_window_always_on_top)
         self.root.resizable(False, False)
         self.root.update()
@@ -88,20 +60,20 @@ class PipelineGUI:
         self.last_image = None
         self.last_path = None
         self.log_file_path = get_path("log_file.log")
-        self.score_table = ScoreTable()
+        self.score_mode = tk.StringVar(value=ScoreTable.active_season)
         self._delayed_pathfinder_id = None
         self._icons = {}
         self._blink_state = False
         self._scanner_running = False
-        self._demo_params_copy = []
         self._last_pil = None
+        self.fake_map_window = None
 
         self._build_ui()
         self._initiate_keyboard_listener()
         self._load_initial_background()
         self._blink_loop()
-        if Settings.auto_import_score and ScoreTable.check_file_exists():
-            self.import_score_table()
+        if Settings.auto_import_score:
+            self.import_score_table(user_triggered=False)
         self._check_update()
 
     # ======================================================================
@@ -171,7 +143,11 @@ class PipelineGUI:
 
         self._build_log_display(panel)
         self._build_button_rows(panel)
-        self._build_score_table(panel)
+
+        # keep ref so it can be rebuilt
+        self.score_table_container = tb.Frame(panel)
+        self.score_table_container.pack(fill="both", expand=True)
+        self._build_score_table(self.score_table_container)
 
     def _build_log_display(self, parent):
         frame = tb.Frame(parent)
@@ -203,8 +179,7 @@ class PipelineGUI:
         row1.pack(pady=5, fill="x")
 
         # keep reference so it can blink and annoy user if calibration is wrong
-        self.recalibrate_button = tb.Button(row1, text="Calibrator", width=19, command=self.start_calibrator,
-                                            padding=4)
+        self.recalibrate_button = tb.Button(row1, text="Calibrator", width=19, command=self.start_calibrator, padding=4)
         self.recalibrate_button.pack(side="left", padx=3)
         (tb.Button(row1, text="Automatic Scanner", width=19, command=self.start_automatic_pipeline, padding=4)
          .pack(side="left", padx=3))
@@ -213,12 +188,10 @@ class PipelineGUI:
 
         row2 = tb.Frame(parent)
         row2.pack(pady=5, fill="x")
-
         self.folder_button = tb.Button(row2, text="Choose Folder", width=19, command=self.choose_folder, padding=4)
         self.folder_button.pack(side="left", padx=3)
         (tb.Button(row2, text="Halfauto Scanner", width=19, command=self.start_halfauto_pipeline, padding=4)
          .pack(side="left", padx=3))
-
         (tb.Button(row2, text="Export Score Table", width=19, command=self.export_score_table, padding=4)
          .pack(side="left", padx=3))
 
@@ -228,109 +201,185 @@ class PipelineGUI:
          .pack(side="left", padx=3))
         (tb.Button(row3, text="Offline Scanner", width=19, command=self.start_offline_pipeline, padding=4)
          .pack(side="left", padx=3))
+        (tb.Button(row3, text="Open Demo", width=19, command=self.start_demo, padding=4)
+         .pack(side="left", padx=3))
 
     def _build_score_table(self, parent):
-        panel = tb.Frame(parent)
-        panel.pack(fill="both")
-
-        tb.Label(panel, text="Score Table", anchor="w").pack()
-
+        # cleanup so it can be rebuilt
+        for child in self.score_table_container.winfo_children():
+            child.destroy()
         self.score_vars = {}
         self.score_labels = {}
+        self._icons = {}
+
+        # real build
+        panel = tb.Frame(parent)
+        panel.pack(fill="both", expand=True)
+        header_row = tb.Frame(panel)
+        header_row.pack(fill="x")
+        tb.Label(header_row, text="Score Table", anchor="w").pack(side="top")
+
+        # season radio
+        for season_key, season in SEASONS.items():
+            if season_key == "s*" and not Settings.testmode: continue  # too tall, breaks ui
+            tb.Radiobutton(
+                header_row,
+                text=season.name,
+                variable=self.score_mode,
+                value=season_key,
+                command=self._on_score_mode_change
+            ).pack(side="left", padx=5)
+
+        # splitting logic
         columns_frame = tb.Frame(panel)
         columns_frame.pack(fill="x")
+        active_keys = SEASONS[self.score_mode.get()].active_scores
+        items = [
+            (k, v)
+            for k, v in ScoreTable.current().items()
+            if k in active_keys and v.enabled
+        ]
+        nodes = [(k, [(k, v)]) for k, v in items if len(k) == 2]
+        mods_raw = [(k, v) for k, v in items if len(k) > 2]
+        mod_groups = {}
+        for k, v in mods_raw:
+            group_key = (k[2:], v.merge_group)
+            mod_groups.setdefault(group_key, []).append((k, v))
+        mods = [(modifier_name, entries) for (modifier_name, _), entries in mod_groups.items()]
 
-        items = list(self.score_table.table.items())
-        nodes = []
-        mods = []
-        for key, val in items:
-            if len(key) == 2:
-                nodes.append((key, val))
+        # alignment
+        aligned_nodes = []
+        aligned_mods = []
+        remaining_mods = mods.copy()
+
+        # direct node - mod match
+        def mod_matches_node(entries, node_key):
+            return any(mk.startswith(node_key) for mk, _ in entries)
+
+        for node_key, node_entries in nodes:
+            aligned_nodes.append((node_key, node_entries))
+            match_idx = None
+            for i, (group_key, entries) in enumerate(remaining_mods):
+                if mod_matches_node(entries, node_key):
+                    match_idx = i
+                    break
+            if match_idx is not None:
+                aligned_mods.append(remaining_mods.pop(match_idx))
             else:
-                mods.append((key, val))
+                aligned_mods.append(None)
 
-        mod_idx = 0
-        mod_len = len(mods)
+        # leftover mods, insert at the end of correct node - mod sequence
+        for group_key, entries in remaining_mods:
+            prev_match = False
+            insert_at = None
+            for index, node in enumerate(aligned_nodes):
+                if node is None: continue
+                curr_match = mod_matches_node(entries, node[0])
+                if prev_match and not curr_match:
+                    insert_at = index
+                    break
+                prev_match = curr_match
 
-        for node_key, node_val in nodes:
-            row_frame = tb.Frame(columns_frame)
-            row_frame.pack(fill="x")
-            row_frame.columnconfigure(0, weight=1, uniform="col")
-            row_frame.columnconfigure(1, weight=1, uniform="col")
-            left = tb.Frame(row_frame)
-            right = tb.Frame(row_frame)
+            if insert_at is None and prev_match:
+                insert_at = len(aligned_nodes)
+            if insert_at is not None:
+                aligned_nodes.insert(insert_at, None)
+                aligned_mods.insert(insert_at, (group_key, entries))
+
+        # render
+        for node_item, mod_item in zip(aligned_nodes, aligned_mods):
+            row = tb.Frame(columns_frame)
+            row.pack(fill="x")
+            row.columnconfigure(0, weight=1, uniform="col")
+            row.columnconfigure(1, weight=1, uniform="col")
+            left = tb.Frame(row)
+            right = tb.Frame(row)
             left.grid(row=0, column=0, sticky="ew")
             right.grid(row=0, column=1, sticky="ew")
-            self._create_score_row(left, node_key, node_val)
-            mod_key, mod_val = mods[mod_idx]
-            self._create_score_row(right, mod_key, mod_val)
-            mod_idx += 1
 
-            while mod_idx < mod_len and mods[mod_idx][0].startswith(node_key):
-                row_frame = tb.Frame(columns_frame)
-                row_frame.pack(fill="x")
-                row_frame.columnconfigure(0, weight=1, uniform="col")
-                row_frame.columnconfigure(1, weight=1, uniform="col")
-                left = tb.Frame(row_frame)
-                right = tb.Frame(row_frame)
-                left.grid(row=0, column=0, sticky="ew")
-                right.grid(row=0, column=1, sticky="ew")
-                # filler on nodes side so mods are still kinda aligned
-                filler = tb.Frame(left)
-                filler.pack(fill="both", expand=True)
-                mod_key, mod_val = mods[mod_idx]
-                self._create_score_row(right, mod_key, mod_val)
-                mod_idx += 1
+            if node_item:
+                self._create_score_row(left, *node_item)
+            if mod_item:
+                self._create_score_row(right, *mod_item)
 
-    def _create_score_row(self, parent, key, value):
-        def _on_scale_change(val, k=key, label_widget=None):
-            if label_widget is not None:
-                label_widget.config(text=str(int(float(val))))
-            self.update_score_value(k)
+    def _create_score_row(self, parent, display_key, entries):
+        keys = [k for k, _ in entries]
+        value = entries[0][1]
+        row = tb.Frame(parent)
+        row.pack(fill="x", expand=True)
 
         enc_folder = get_path(["Images", "Encounter_minimal_1600"])
         mod_folder = get_path(["Images", "Modifier_1600"])
-        row = tb.Frame(parent)
-        row.pack(fill="x", expand=True)
-        if len(key) == 2:
-            img = load_icon(enc_folder, key)
-        else:
-            img = load_icon(mod_folder, key[2:])
-        if img.shape[2] == 4:
-            img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
-        else:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
+        icon = self.create_icon(keys, enc_folder, mod_folder)
+        self._icons[display_key + "_" + keys[0]] = icon
 
-        pil = Image.fromarray(img)
-        icon = ImageTk.PhotoImage(pil)
-        self._icons[key] = icon
-        tb.Label(row, text=key, image=icon, anchor="w").pack(side="left", padx=1)
-
-        value_label = tb.Label(row, text=str(value))  # value over slider
+        tb.Label(row, text=display_key, image=icon, anchor="w").pack(side="left", padx=1)
+        value_label = tb.Label(row, text=str(value.value))  # value over slider
         value_label.pack(side="top", anchor="n", padx=1)
-        var = tb.IntVar(value=value)
-        self.score_vars[key] = var
-        self.score_labels[key] = value_label
-        bigger_scale = key == "EVTU" or key == "EVME" # todo: maybe add some flag to scoretable, before this gets out of hand
+        var = tb.IntVar(value=value.value)
+        for k in keys:
+            self.score_vars[k] = var
+            self.score_labels[k] = value_label
+
+        def on_change(val):
+            v = int(float(val))
+            value_label.config(text=str(v))
+            for k in keys:
+                self.score_vars[k].set(v)
+                self.update_score_value(k)
+
         tk.Scale(
             row,
-            from_=-10 if not bigger_scale else -50,
-            to=10 if not bigger_scale else 50,
+            from_=-50 if value.big_scale else -10,
+            to=50 if value.big_scale else 10,
+            resolution=5 if value.big_scale else 1,
             orient="horizontal",
             length=150,
             variable=var,
-            command=lambda v, lb=value_label, k=key: _on_scale_change(v, k, lb),
+            command=on_change,
             borderwidth=1,
             highlightthickness=0,
             sliderlength=10,
-            resolution=1 if not bigger_scale else 5,
         ).pack(side="left", padx=1)
+
+    def create_icon(self, keys, enc_folder, mod_folder):
+        def _to_rgba(img):
+            if img.shape[2] == 4:
+                return cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
+            return cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
+
+        # node, just return
+        if len(keys) == 1 and len(keys[0]) == 2:
+            img = load_icon(enc_folder, keys[0])
+            img = _to_rgba(img)
+            return ImageTk.PhotoImage(Image.fromarray(img))
+
+        # mod - base mod image and up to 2 small applicable node images on the left
+        mod_img = load_icon(mod_folder, keys[0][2:])
+        mod_img = _to_rgba(mod_img)
+        pil_mod = Image.fromarray(mod_img)
+        w, h = pil_mod.size
+
+        canvas = Image.new("RGBA", (int(1.5 * w), h), (0, 0, 0, 0))
+        canvas.paste(pil_mod, (canvas.width - w, 0), pil_mod)
+
+        max_nodes = 2
+        node_area_h = h // max_nodes
+        node_size = (w // 2, node_area_h)
+        for i, nk in enumerate(keys[:max_nodes]):
+            node_img = load_icon(enc_folder, nk[:2])
+            node_img = _to_rgba(node_img)
+            pil_node = Image.fromarray(node_img)
+            pil_node = pil_node.resize(node_size, Image.Resampling.BILINEAR)
+            y = i * node_area_h
+            canvas.paste(pil_node, (0, y), pil_node)
+
+        return ImageTk.PhotoImage(canvas)
 
     # ======================================================================
     # Logging
     # ======================================================================
     def log(self, msg):
-        import datetime
         ts = datetime.datetime.now().strftime("%H:%M:%S")
         line = f"[{ts}] {msg}"
 
@@ -386,9 +435,13 @@ class PipelineGUI:
         try:
             im = self._to_image(obj)
             self._last_pil = im
-            w, h = im.size
-            new_w = self._scale_to_ui_size(w)
-            new_h = self._scale_to_ui_size(h)
+            panel_w = self._scale_to_ui_size(self.left_panel_w)
+            panel_h = self._scale_to_ui_size(self.left_panel_h)
+            img_w, img_h = im.size
+
+            scale = min(panel_w / img_w, panel_h / img_h)
+            new_w = int(img_w * scale)
+            new_h = int(img_h * scale)
             im = im.resize((new_w, new_h), Image.Resampling.BILINEAR)
 
             self.last_image = ImageTk.PhotoImage(im)
@@ -423,10 +476,6 @@ class PipelineGUI:
 
     def _load_initial_background(self):
         img = Image.open(get_path(["Images", "filler_map.png"]))
-        if self.low_res:
-            img = img.resize((self._scale_to_ui_size(self.right_panel_w),
-                              self._scale_to_ui_size(self.right_panel_h)),
-                             Image.Resampling.BILINEAR)
         self.display_image(img)
 
     # ======================================================================
@@ -456,11 +505,11 @@ class PipelineGUI:
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
                 return
 
-        if not check_calibration_done():
+        if not Settings.calibration_done:
             self.log("Please perform calibration first.")
             return
 
-        if not is_admin():
+        if not self.is_admin:
             self.show_warning_dialog("no_admin")
             return
 
@@ -472,14 +521,25 @@ class PipelineGUI:
         self._scanner_running = True
         threading.Thread(target=self._run_auto_pipeline, daemon=True).start()
 
+    def start_automatic_pipeline_demo(self):
+        if self._scanner_running:
+            self.log("Tried to run more than one scanner at once, ignoring request")
+            return
+        if self.selected_folder:
+            if os.listdir(self.selected_folder):
+                self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
+                return
+        if not self.ask_continue_dialog("auto_demo"):
+            self.log("Scanning task cancelled")
+            return
+
+        self._scanner_running = True
+        threading.Thread(target=self._run_auto_pipeline, daemon=True).start()
+
     def _run_auto_pipeline(self):
         try:
             self.log("Auto scanner started")
-            m, path, img = run_auto_pipeline(
-                save_folder=self.selected_folder,
-                log=self.log,
-                score_table=self.score_table
-            )
+            m, path, img = run_auto_pipeline(save_folder=self.selected_folder, log=self.log)
             self.last_map = m
             self.last_path = path
             self.display_image(img)
@@ -500,11 +560,11 @@ class PipelineGUI:
                 self.log("Please select empty folder for auto scanning, scanner may get confused on unrelated files")
                 return
 
-        if not check_calibration_done():
+        if not Settings.calibration_done:
             self.log("Please perform calibration first.")
             return
 
-        if not is_admin():
+        if not self.is_admin and self.fake_map_window is None:
             self.show_warning_dialog("no_admin")
             return
 
@@ -519,11 +579,7 @@ class PipelineGUI:
     def _run_halfauto_pipeline(self):
         try:
             self.log("Halfauto scanner started")
-            m, path, img = run_halfauto_pipeline(
-                save_folder=self.selected_folder,
-                log=self.log,
-                score_table=self.score_table
-            )
+            m, path, img = run_halfauto_pipeline(save_folder=self.selected_folder, log=self.log)
             self.last_map = m
             self.last_path = path
             self.display_image(img)
@@ -546,26 +602,16 @@ class PipelineGUI:
             else:
                 self.log("Select folder with screenshots first")
                 return
-
-        demo_override = True if "Example_scan_result" in str(self.selected_folder) else False
-        if demo_override:
-            self._prepare_demo()
-            self.log("Preparing demo parameters")
-        else:
-            if not check_calibration_done():
-                self.log("Please perform calibration first.")
-                return
+        if not Settings.calibration_done:
+            self.log("Please perform calibration first.")
+            return
 
         self._scanner_running = True
         threading.Thread(target=self._run_offline_pipeline, daemon=True).start()
 
     def _run_offline_pipeline(self):
         try:
-            m, path, img = run_offline_pipeline(
-                save_folder=self.selected_folder,
-                log=self.log,
-                score_table=self.score_table
-            )
+            m, path, img = run_offline_pipeline(save_folder=self.selected_folder, log=self.log)
             self.last_map = m
             self.last_path = path
             self.display_image(img)
@@ -575,24 +621,6 @@ class PipelineGUI:
                 raise
         finally:
             self._scanner_running = False
-            if len(self._demo_params_copy) > 0:
-                self._restore_after_demo()
-
-    def _prepare_demo(self):
-        self._demo_params_copy.clear()
-        self._demo_params_copy.append(Settings.screenshot_scale)
-        self._demo_params_copy.append(Settings.template_scale)
-        self._demo_params_copy.append(Settings.threshold)
-        Settings.screenshot_scale = 1.0
-        Settings.template_scale = 1.0
-        Settings.threshold = 0.97
-
-    def _restore_after_demo(self):
-        if len(self._demo_params_copy) != 3:
-            raise IOError("Restore impossible, unknown program state")
-        Settings.threshold = self._demo_params_copy.pop()
-        Settings.template_scale = self._demo_params_copy.pop()
-        Settings.screenshot_scale = self._demo_params_copy.pop()
 
     def rerun_pathfinder(self):
         if not self.last_map:
@@ -603,7 +631,7 @@ class PipelineGUI:
 
         def task():
             try:
-                path, encounter_ranges, encounter_counts = run_pathfinder(self.last_map, self.score_table)
+                path, encounter_ranges, encounter_counts = run_pathfinder(self.last_map)
                 self.last_path = path
                 img = draw_map(self.last_map,
                                path,
@@ -631,7 +659,9 @@ class PipelineGUI:
             self.log("Calibrator task cancelled")
             return
 
+        self.root.attributes('-topmost', False)
         scr = get_game_screenshot(self.log)
+        self.root.attributes('-topmost', Settings.ui_window_always_on_top)
         has_game_image = scr is not None and getattr(scr, "size", (0, 0))[0] > 0
         folder = self._get_valid_calibration_folder()
 
@@ -652,43 +682,73 @@ class PipelineGUI:
             folder=folder
         )
 
+    def open_fake_map_window(self):
+        try:
+            if self.fake_map_window is not None:
+                try:
+                    if self.fake_map_window.winfo_exists():
+                        self.fake_map_window.lift()
+                        self.fake_map_window.focus_force()
+                        self.log("Fake map already opened")
+                        return
+                except tk.TclError:
+                    self.fake_map_window = None
+
+            resolution = "720p" if self.low_res else "1080p"
+            self.fake_map_window = open_fake_map(resolution=resolution)
+            self.fake_map_window.protocol("WM_DELETE_WINDOW", self._close_fake_map_window)
+            self.log(f"Opened fake map ({resolution})")
+
+        except Exception as e:
+            self.log(f"Fake map error: {e}")
+
+    def _close_fake_map_window(self):
+        if self.fake_map_window is not None:
+            try:
+                self.fake_map_window.destroy()
+            except:
+                pass
+            self.fake_map_window = None
+
+    def start_demo(self):
+        self.open_fake_map_window()
+        self.root.after(500, self.start_automatic_pipeline_demo)
+
     # ======================================================================
     # Score Table Operations
     # ======================================================================
     def update_score_value(self, key):
-        self.score_table.table[key] = self.score_vars[key].get()
+        ScoreTable.current()[key].value = self.score_vars[key].get()
+        self._schedule_pathfinder_rerun()
 
-        if self.last_map is not None:
-            if self._delayed_pathfinder_id is not None:
-                self.root.after_cancel(self._delayed_pathfinder_id)
-            self._delayed_pathfinder_id = self.root.after(500, self.rerun_pathfinder)
-
-    def import_score_table(self):
+    def import_score_table(self, user_triggered=True):
         try:
-            st = ScoreTable.import_()
-            self.score_table = st
-
-            for key, val in st.table.items():
-                if key in self.score_vars:
-                    self.score_vars[key].set(val)
-                    self.score_labels[key].config(text=str(int(float(val))))
-
-            self.log("ScoreTable imported")
-
-            if self.last_map is not None:
-                if self._delayed_pathfinder_id is not None:
-                    self.root.after_cancel(self._delayed_pathfinder_id)
-                self._delayed_pathfinder_id = self.root.after(500, self.rerun_pathfinder)
+            loaded = ScoreTable.load()
+            if loaded:
+                self.score_mode.set(ScoreTable.active_season)
+                self._build_score_table(self.score_table_container)
+                self.log("Score Table imported")
+                self._schedule_pathfinder_rerun()
+            elif not loaded and user_triggered:
+                self.log("No Score Table file found, consider creating one by pressing Export once you changed "
+                         "default path priorities")
 
         except Exception as e:
             self.log(f"Import error: {e}")
 
     def export_score_table(self):
         try:
-            ScoreTable.export(self.score_table)
+            ScoreTable.save()
             self.log("ScoreTable exported")
         except Exception as e:
             self.log(f"Export error: {e}")
+
+    def _on_score_mode_change(self):
+        ScoreTable.active_season = self.score_mode.get()
+        self.log(f"Score mode changed to: {ScoreTable.active_season}")
+        # rebuild UI completely
+        self._build_score_table(self.score_table_container)
+        self._schedule_pathfinder_rerun()
 
     # ======================================================================
     # Dialogs
@@ -711,6 +771,14 @@ class PipelineGUI:
                 "Do not touch mouse or keyboard until scanning is done.\n\n"
                 "If the scanner behaves incorrectly, quickly move mouse to top left screen corner to stop it.\n"
                 "If the script failed to switch window, alt-tab to game and back, then start again."
+            )
+        elif variant == "auto_demo":
+            text = (
+                "You are about to start the scanning process.\n"
+                "IT MOVES YOUR REAL MOUSE, this is intended behavior.\n"
+                "The script will switch window to fake chaos map and operate there.\n"
+                "Do not touch mouse or keyboard until scanning is done.\n\n"
+                "If the scanner behaves incorrectly, quickly move mouse to top left screen corner to stop it."
             )
         elif variant == "halfauto":
             text = (
@@ -800,7 +868,7 @@ class PipelineGUI:
     # Periodic UI Update
     # ======================================================================
     def _blink_loop(self):
-        if check_calibration_done():
+        if Settings.calibration_done:
             self.recalibrate_button.config(bootstyle="primary")
             return
         interval = 700
@@ -812,6 +880,13 @@ class PipelineGUI:
         self._blink_state = not self._blink_state
 
         self.root.after(interval, self._blink_loop)
+
+    def _schedule_pathfinder_rerun(self, delay=300):
+        if self.last_map is None:
+            return
+        if self._delayed_pathfinder_id is not None:
+            self.root.after_cancel(self._delayed_pathfinder_id)
+        self._delayed_pathfinder_id = self.root.after(delay, self.rerun_pathfinder)
 
     def _check_update(self):
         def task():
@@ -827,6 +902,7 @@ class PipelineGUI:
         hotkeys = [
             ("auto", Settings.keyboard_input_autoscanner),
             ("halfauto", Settings.keyboard_input_halfautoscanner),
+            ("fake_map", Settings.keyboard_input_fake_map),
         ]
         if Settings.keyboard_input:
             try:
@@ -849,37 +925,9 @@ class PipelineGUI:
             self.start_automatic_pipeline(from_key=True)
         elif action == "halfauto":
             self.start_halfauto_pipeline(from_key=True)
+        elif action == "fake_map" and Settings.testmode:
+            self.open_fake_map_window()
 
     def shutdown(self):
         if self._kb_listener:
             self._kb_listener.stop()
-
-
-# ======================================================================
-# Main
-# ======================================================================
-def app_do_not_scale():
-    try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)
-    except:
-        try:
-            ctypes.windll.user32.SetProcessDPIAware()
-        except:
-            pass
-
-if __name__ == "__main__":
-    app_do_not_scale()
-    theme = "darkly" if Settings.darkmode else "flatly"
-    root = tb.Window(themename=theme)
-    root.tk.call('tk', 'scaling', 1.25) # todo: check tkinter autoscaling magic somewhere, windows 125% ui scale
-    low_res = get_screen_res()[0] < 1600
-    gui = PipelineGUI(root, low_res=low_res)
-
-
-    def on_close():
-        gui.shutdown()
-        root.destroy()
-
-
-    root.protocol("WM_DELETE_WINDOW", on_close)
-    root.mainloop()

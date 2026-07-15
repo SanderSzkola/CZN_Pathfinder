@@ -3,7 +3,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from path_converter import get_path
+from utils.path_converter import get_path
 
 
 class Settings:
@@ -12,8 +12,9 @@ class Settings:
 
     # template params
     template_scale: float = 1.0
-    screenshot_scale: float = 0.0  # 0 as uncalibrated flag, normally 1 or 0.5
-    threshold: float = 0.975
+    screenshot_scale: float = 1.0
+    threshold: float = 0.97  # mod symbols are getting complex, keep this low
+    calibration_done = False
 
     # preview draw flags
     preview_dim_background: bool = True
@@ -33,6 +34,15 @@ class Settings:
     ui_window_offset_y_mini: int = 0
     ui_window_always_on_top: bool = False
 
+    # keyboard
+    keyboard_input: bool = False
+    keyboard_input_autoscanner: str = "s+1"
+    keyboard_input_halfautoscanner: str = "s+2"
+    keyboard_input_fake_map: str = "s+t"
+    keyboard_input_fake_map_720: str = "4"
+    keyboard_input_fake_map_1080: str = "5"
+    keyboard_input_fake_map_1440: str = "6"
+
     # whatever else
     testmode: bool = False
     request_admin: bool = False
@@ -40,11 +50,8 @@ class Settings:
     autoupdate: bool = True
     last_update_check: datetime | None = None
     remote_version: str | None = None
-    local_version: str | None = "v0.4.6"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow; -rc1
+    local_version: str | None = "v0.5.1"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow; -rc1
     target_app_name: str = "Chaos Zero Nightmare"
-    keyboard_input: bool = False
-    keyboard_input_autoscanner: str = "s+1"
-    keyboard_input_halfautoscanner: str = "s+2"
 
     @classmethod
     def _ensure_path(cls) -> None:
@@ -57,7 +64,6 @@ class Settings:
             return
 
         cls._ensure_path()
-
         if not cls._path.exists():
             cls.save()
             cls._loaded = True
@@ -71,10 +77,8 @@ class Settings:
                 continue
             if key == "local_version":
                 continue
-
             if key == "last_update_check" and value is not None:
                 value = datetime.fromisoformat(value)
-
             setattr(cls, key, value)
 
         cls._loaded = True

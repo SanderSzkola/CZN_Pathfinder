@@ -3,9 +3,12 @@ import os
 import cv2
 import numpy as np
 
-from path_converter import get_path
+from utils.path_converter import get_path
 
-TEMPLATE_RES = (1920, 1080)
+TEMPLATE_RES = (1920, 1080)  # all values relative to this
+TEMPLATE_NODE_SIZE = 32  # px, square
+TEMPLATE_MOD_SIZE = 24  # px, square
+TEMPLATE_NODE_PORTAL_FULL_W = 200
 
 
 class TemplateLibrary:

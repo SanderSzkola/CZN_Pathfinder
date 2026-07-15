@@ -2,7 +2,7 @@
 from packaging.version import Version
 from datetime import datetime, timedelta, timezone
 import requests
-from settings import Settings
+from data.settings import Settings
 
 
 def check_for_update(log):

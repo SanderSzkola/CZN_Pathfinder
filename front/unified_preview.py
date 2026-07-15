@@ -2,15 +2,11 @@
 import cv2
 import numpy as np
 
-from settings import Settings
-from detect_connections import load_icon_map
-from detect_nodes import FRINGE_SAFETY_MARGIN
+from data.settings import Settings
+from processing.detect_connections import load_icon_map
+from processing.detect_nodes import get_trim
 
 CORRIDOR_ALPHA = 0.07
-TRIM_TOP_PX = 120
-TRIM_RIGHT_PX = 120
-TRIM_LEFT_PX = 120
-
 
 class UnifiedPreview:
     def __init__(self, base_img):
@@ -227,11 +223,11 @@ class UnifiedPreview:
     def _draw_trim(self, img):
         h, w = img.shape[:2]
 
-        s = self.scale
-        top = int(TRIM_TOP_PX * s)
-        left = int(TRIM_LEFT_PX * s)
-        right = int(TRIM_RIGHT_PX * s)
-        fringe = int(FRINGE_SAFETY_MARGIN * s * 0.9)  # slightly reduced so it does not obscure very close nodes
+        trim = get_trim(Settings.screenshot_scale, Settings.template_scale)
+        top = trim["top"]
+        left = trim["left"]
+        right = trim["right"]
+        fringe = trim["fringe"]
 
         # soft discard
         fringe_mask = np.zeros((h, w), dtype=np.uint8)
@@ -241,7 +237,7 @@ class UnifiedPreview:
             fringe_mask[top:h, rx0:rx1] = 255
 
         lx0 = min(w, left)
-        lx1 = min(w, int(left + fringe / 4))
+        lx1 = min(w, left + trim["fringe_left_soft"])
         if lx1 > lx0:
             fringe_mask[top:h, lx0:lx1] = 255
 

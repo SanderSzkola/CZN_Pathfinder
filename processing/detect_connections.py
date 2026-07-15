@@ -4,15 +4,15 @@ import cv2
 import numpy as np
 from PIL.Image import Image
 
-from detect_nodes import TemplateLibrary
-from path_converter import get_path
-from settings import Settings
+from data.settings import Settings
+from processing.detect_nodes import TemplateLibrary
+from utils.path_converter import get_path
 
 PX_TOLERANCE = 16
 CORRIDOR_HALF = 6
 CORRIDOR_OFFSET = 14
 THRESHOLD = 128
-MIN_CORRIDOR_FILL = 0.50
+MIN_CORRIDOR_FILL = 0.50  # or 0.30 for 1280x720 res
 ANGLE_MERGE_DEG = 10
 
 
@@ -194,6 +194,9 @@ def detect_connections(map_fragment, templates, nodes=None, screenshot_index=0):
 
     edges_raw = []
     corridor_debug = []
+    min_corridor_fill = MIN_CORRIDOR_FILL
+    if Settings.screenshot_scale == 1 and Settings.template_scale <= 0.7:
+        min_corridor_fill = 0.30  # 1280x720 have way too big icons, covers half of the path
 
     for n in nodes:
         if n.col + 1 not in columns:
@@ -211,7 +214,7 @@ def detect_connections(map_fragment, templates, nodes=None, screenshot_index=0):
             eff_len = merge_longest_lines(components)
             fill = eff_len / corridor_len
 
-            accepted = fill >= MIN_CORRIDOR_FILL
+            accepted = fill >= min_corridor_fill
             corridor_debug.append((geom, accepted))
 
             if accepted:
@@ -247,8 +250,8 @@ def detect_connections(map_fragment, templates, nodes=None, screenshot_index=0):
 
 
 if __name__ == "__main__":
-    from calibrator import perform_calibration_exact  # needed only here for quick testing
-    from unified_preview import UnifiedPreview
+    from processing.calibrator import perform_or_validate_calibration  # needed only here for quick testing
+    from front.unified_preview import UnifiedPreview
 
     map_folder = get_path(["Test_scans", "Last_scan_result_1080_pathCoveredByTunnel"])
     # maps = ["map_frag_02.png", ]
@@ -264,7 +267,7 @@ if __name__ == "__main__":
             continue
         map_path = os.path.join(map_folder, map_name)
         if i == 0:
-            perform_calibration_exact(screenshot=map_path, log=lambda msg: print(msg))
+            perform_or_validate_calibration(screenshot=map_path, log=lambda msg: print(msg))
             templates.scale_templates(Settings.template_scale)
         nodes, edges, corridor_debug = detect_connections(map_path, templates, screenshot_index=i)
         preview.base_img = ensure_gray(map_path)[0]

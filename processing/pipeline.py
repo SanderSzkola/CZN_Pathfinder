@@ -5,18 +5,17 @@ import time
 from queue import Queue
 import sys
 
-from node import Node
-from detect_connections import detect_connections
-from detect_nodes import detect_nodes
-from template_library import TemplateLibrary
-from drawer import draw_map
-from grabber import switch_window, screenshot, do_drag_move, move_mouse, mock_switch_window, mock_move_screen, \
-    mock_screenshot, DragListener, MockDragListener
-from pathfinder import run_pathfinder
-from process_map import Finalizer
-from score_table import ScoreTable
-from path_converter import get_path
-from settings import Settings
+from data.node import Node
+from data.settings import Settings
+from front.drawer import draw_map
+from front.grabber import switch_window, screenshot, do_drag_move, move_mouse, mock_switch_window, mock_move_screen, \
+    mock_screenshot, DragListener
+from processing.detect_connections import detect_connections
+from processing.detect_nodes import detect_nodes
+from processing.pathfinder import run_pathfinder
+from processing.process_map import Finalizer
+from processing.template_library import TemplateLibrary
+from utils.path_converter import get_path
 
 """
 Full process (may be outdated a bit):
@@ -199,8 +198,7 @@ def prepare_clean_folder(base_name: str, log):
     return folder
 
 
-def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lambda msg: None,
-                      score_table: ScoreTable = None):
+def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lambda msg: None):
     finalizer = Finalizer()
     templates = TemplateLibrary()
     templates.scale_templates(Settings.template_scale)
@@ -319,7 +317,7 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
 
     json_path = os.path.join(save_folder, "merged_map.json") if save_folder else None
     map_obj = finalizer.finalize(json_path)
-    path, encounter_ranges, encounter_counts = run_pathfinder(map_obj, score_table)
+    path, encounter_ranges, encounter_counts = run_pathfinder(map_obj)
     image_path = os.path.join(save_folder, "merged_map.png") if save_folder else None
     image = draw_map(map_obj,
                      path,
@@ -332,8 +330,7 @@ def run_auto_pipeline(max_steps=15, save_folder=None, print_grid=False, log=lamb
     return map_obj, path, image
 
 
-def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
-                         score_table: ScoreTable = None):
+def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None):
     if save_folder is None:
         raise ValueError("run_offline_pipeline requires save_folder with images")
 
@@ -414,7 +411,7 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
     log("Scanning done")
     json_path = os.path.join(save_folder, "merged_map.json")
     map_obj = finalizer.finalize(json_path)
-    path, encounter_ranges, encounter_counts = run_pathfinder(map_obj, score_table)
+    path, encounter_ranges, encounter_counts = run_pathfinder(map_obj)
     image_path = os.path.join(save_folder, "merged_map.png")
     image = draw_map(map_obj,
                      path,
@@ -427,8 +424,7 @@ def run_offline_pipeline(max_steps=20, save_folder=None, print_grid=False, log=l
     return map_obj, path, image
 
 
-def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None,
-                          score_table: ScoreTable = None):
+def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=lambda msg: None):
     if save_folder is None:
         save_folder = prepare_clean_folder("Last_scan_result", log)
     else:
@@ -442,7 +438,7 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
     work_q = Queue()
     finalizer = Finalizer()
     detect_result = DetectResult()
-    listener = DragListener(  # TEST: change to mock
+    listener = DragListener(
         screenshot_q=screenshot_q,
         save_folder=save_folder,
         log=log
@@ -540,7 +536,7 @@ def run_halfauto_pipeline(max_steps=20, save_folder=None, print_grid=False, log=
 
     json_path = os.path.join(save_folder, "merged_map.json")
     map_obj = finalizer.finalize(json_path)
-    path, encounter_ranges, encounter_counts = run_pathfinder(map_obj, score_table)
+    path, encounter_ranges, encounter_counts = run_pathfinder(map_obj)
     image_path = os.path.join(save_folder, "merged_map.png")
     image = draw_map(map_obj,
                      path,
@@ -560,8 +556,3 @@ def get_game_screenshot(log):
     except Exception as e:
         log(e)
     return None
-
-
-if __name__ == "__main__":
-    run_offline_pipeline(save_folder=get_path("Example_scan_result"), print_grid=False,
-                         log=lambda msg: print(msg))

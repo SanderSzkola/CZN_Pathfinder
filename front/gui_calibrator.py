@@ -6,14 +6,14 @@ import numpy as np
 from pathlib import Path
 import cv2
 
-from calibrator import perform_calibration_exact, get_initial_params
-from settings import Settings
-from path_converter import get_path
-from grabber import mock_screenshot
-from unified_preview import UnifiedPreview
-from detect_nodes import detect_nodes
-from detect_connections import detect_connections
-from template_library import TemplateLibrary
+from data.settings import Settings
+from front.grabber import mock_screenshot
+from front.unified_preview import UnifiedPreview
+from processing.calibrator import perform_or_validate_calibration, get_initial_params
+from processing.detect_connections import detect_connections
+from processing.detect_nodes import detect_nodes
+from processing.template_library import TemplateLibrary
+from utils.path_converter import get_path
 
 
 class CalibrationPanel(tb.Toplevel):
@@ -62,7 +62,7 @@ class CalibrationPanel(tb.Toplevel):
         low_res = True  # do not need much space now, leave possibility later
 
         if low_res:
-            self.window_w = 1280
+            self.window_w = 1270
             self.window_h = 600
             self.map_w = 900
             self.map_h = 600
@@ -199,6 +199,7 @@ class CalibrationPanel(tb.Toplevel):
             text="Detected resolution from captured screenshot. Should be somewhere around chosen game resolution.\nTemplates res is 1920 x 1080",
             wraplength=self.right_panel_width - 40,
             justify="left",
+            style="info"
         ).grid(
             row=row + 1,
             column=0,
@@ -228,6 +229,7 @@ class CalibrationPanel(tb.Toplevel):
             text="Rescale multiplier for templates. Halved if over 1.\nExample: If your res is 1440p, halved its 720p,\n720 / 1080 ~ 0.667",
             wraplength=self.right_panel_width - 40,
             justify="left",
+            style="info"
         ).grid(
             row=row + 1,
             column=0,
@@ -256,6 +258,7 @@ class CalibrationPanel(tb.Toplevel):
             text="How accurate a valid match should be. Too high and it skips nodes, too low and it hallucinates them.",
             wraplength=self.right_panel_width - 40,
             justify="left",
+            style="info"
         ).grid(
             row=row + 1,
             column=0,
@@ -273,10 +276,10 @@ class CalibrationPanel(tb.Toplevel):
 
         tb.Label(
             grid,
-            text="Tweak TEMPLATE SCALE and THRESHOLD until every node and modifier is correctly labeled.\nInitial values are likely close to ideal ones.",
+            text="Tweak TEMPLATE SCALE and THRESHOLD until every node and modifier is correctly labeled."
+                 "\nInitial values are likely close to ideal ones.",
             wraplength=self.right_panel_width - 40,
             justify="left",
-            bootstyle="info"
         ).grid(
             row=row + 2,
             column=0,
@@ -408,21 +411,29 @@ class CalibrationPanel(tb.Toplevel):
 
         self._folders = self.list_valid_image_folders()
         self._folder_var = tk.StringVar()
-        tb.Label(
+        folder_box = tb.Labelframe(
             container,
             text="Image folders",
-            font=("Segoe UI", 10, "bold")
-        ).pack(anchor="w", padx=10, pady=(0, 5))
+            padding=8
+        )
+        folder_box.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
         self._folder_list = tk.Listbox(
-            container,
+            folder_box,
             height=18,
-            exportselection=False
+            exportselection=False,
+            relief="flat",
+            highlightthickness=0
         )
-        self._folder_list.pack(fill="both", expand=True, padx=10)
+        self._folder_list.pack(fill="both", expand=True)
+        self._folder_list.config(
+            bg=self.style.colors.bg,
+            fg=self.style.colors.fg,
+            selectbackground=self.style.colors.primary,
+        )
 
         for path, selectable, indent in self._folders:
-            label = f"{'  ' * indent}{path.name}"
+            label = f"{'    ' * indent}{path.name}"
             self._folder_list.insert("end", label)
 
         self._folder_list.bind("<<ListboxSelect>>", self._on_folder_selected)
@@ -465,9 +476,14 @@ class CalibrationPanel(tb.Toplevel):
             "EL - elite fight\n"
             "EV - random event\n"
             "RE - rest\n"
-            "SH - shop\n"
-            "OR - chaos orb / aura monster / harder monster\n"
-            "TU - dimensional tunnel / seasonal event\n"
+            "\n"
+            "**SH - shop\n"
+            "**OR - chaos orb / aura monster / harder monster\n"
+            "**TU - dimensional tunnel / s1+s2 unique event\n"
+            "**ME - memory of embers / s2 unique event\n"
+            "**PE - persona / s3 unique fight\n"
+            "**DI - director's script / s3 unique event\n"
+            "**DE - desire / s4 unique modifier\n"
         )
 
         tb.Label(
@@ -597,7 +613,7 @@ class CalibrationPanel(tb.Toplevel):
         nodes_filtered = [n for n in nodes if not n.is_fringe]
         _, edges, corridor_debug = detect_connections(self.preview.base_img, templates=self.templates,
                                                       nodes=nodes_filtered)
-        _, _ = perform_calibration_exact(
+        perform_or_validate_calibration(
             screenshot=self.scr_original_pil,
             nodes=nodes_filtered,
             log=self.log,
