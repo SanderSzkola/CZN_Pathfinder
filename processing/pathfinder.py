@@ -1,6 +1,7 @@
 # pathfinder.py
 import json
-from typing import Dict, List, Tuple, Optional, Union
+from copy import deepcopy
+from typing import Dict, List, Tuple, Union
 
 from data.node import Node
 from data.score_config import SEASONS
@@ -36,88 +37,146 @@ def build_forward_graph(nodes: Dict[str, Node], edges: List[Tuple[str, str]]):
     return graph
 
 
-def score_node(node: Node):
-    # if modifier, return mod score and node score as tiebreaker, otherwise return just node score
-    table = ScoreTable.current()
-    node_score = table[node.type].value if node.type in table else 0
-
-    if node.modifier:
-        complex_key = f"{node.type}{node.modifier}"
-        if complex_key in table:
-            return table[complex_key].value, node_score
-
-    return node_score, 0
-
-
-def dfs_best_path(nodes, graph):
+def dfs_all_paths(nodes, graph):
+    # pure structure, no score
     start_nodes = [nid for nid, nd in nodes.items() if nd.col == 0]
-    best_path: Optional[List[str]] = None
-    # (primary score, node score for grouped mods, -row_changes)
-    best_score = (
-        float("-inf"),
-        float("-inf"),
-        float("-inf"),
+    all_paths = []
+
+    def dfs(current, path):
+        nxt = graph.get(current, [])
+        if not nxt:
+            all_paths.append(path.copy())
+            return
+        for child in nxt:
+            dfs(child, path + [child])
+
+    for start in start_nodes:
+        dfs(start, [start])
+
+    return all_paths
+
+
+def build_limit_dict():
+    result = {}
+    season = ScoreTable.active_season
+    for limit in ScoreTable.mod_limits:
+        if season not in limit.seasons:
+            continue
+        result[limit.mod] = {
+            "count": 0,
+            "limit": limit.limit,
+        }
+
+    return result
+
+
+def node_scores(node: Node):
+    table = ScoreTable.current()
+    base = table.get(node.type)
+    base_score = base.value if base else 0
+    if not node.modifier:
+        return base_score, None
+
+    key = f"{node.type}{node.modifier}"
+    mod = table.get(key)
+    if mod is None:
+        return base_score, None
+
+    return base_score, mod.value
+
+
+def evaluate_path(path, nodes):
+    # take single path, analyze all variations of accept vs ignore mod, return best one
+    table = ScoreTable.current()
+    initial_state = (
+        path,  # original path
+        0,  # current index
+        0,  # primary score, mod > node, used outside, changes depending on where mod were applied
+        0,  # secondary score, just node, tiebreaker, stable
+        0,  # row changes, tiebreaker, stable
+        0,  # quality, by how much mods influence the path, sort by this
+        build_limit_dict(),  # mod counters
     )
 
-    encounter_ranges = {key: [99, -99] for key in ScoreTable.current()}
-    current_counts = {key: 0 for key in ScoreTable.current()}
-    enc_trash_list = []
+    states = [initial_state]
+    finished = []
 
-    def dfs(current, path, score, secondary_score, row_changes):
-        nonlocal best_path, best_score
-
-        key = nodes[current].label()
-        if key not in encounter_ranges:
-            enc_trash_list.append(key)
-            encounter_ranges[key] = [0, 0]
-            current_counts[key] = 0
-        current_counts[key] += 1
-        next_nodes = graph.get(current, [])
-
-        if not next_nodes:
-            for k, v in current_counts.items():
-                if k in encounter_ranges:
-                    if v < encounter_ranges[k][0]:
-                        encounter_ranges[k][0] = v
-                    if v > encounter_ranges[k][1]:
-                        encounter_ranges[k][1] = v
-
-            candidate_score = (score, secondary_score, -row_changes)
-            if candidate_score > best_score:
-                best_path = path.copy()
-                best_score = candidate_score
-
-            current_counts[key] -= 1  # this path is done, subtract last score and go up
-            return
-
-        for nxt in next_nodes:
-            primary_add, secondary_add = score_node(nodes[nxt])
-            next_row_changes = row_changes
-            if nodes[nxt].row != nodes[current].row:
-                next_row_changes += 1
-            dfs(
-                nxt,
-                path + [nxt],
-                score + primary_add,
-                secondary_score + secondary_add,
-                next_row_changes,
-            )
-        current_counts[key] -= 1
-
-    for start_id in start_nodes:
-        primary, secondary = score_node(nodes[start_id])
-        dfs(
-            start_id,
-            [start_id],
-            primary,
+    while states:
+        (
+            original_path,
+            index,
+            score,
             secondary,
-            0,
-        )
+            row_changes,
+            quality,
+            mod_counts,
+        ) = states.pop()
 
-    for t in enc_trash_list:
-        encounter_ranges.pop(t, None)
+        if index >= len(original_path):
+            finished.append((
+                original_path,
+                score,
+                secondary,
+                row_changes,
+                quality,
+            ))
+            continue
 
-    return best_path, int(best_score[0]), encounter_ranges
+        node = nodes[original_path[index]]
+
+        next_row_changes = row_changes
+        if index > 0:
+            prev = nodes[original_path[index - 1]]
+            if prev.row != node.row:
+                next_row_changes += 1
+
+        # base score, only for modless nodes or limited
+        base_score, mod_score = node_scores(node)
+        if node.modifier is None or node.modifier in mod_counts:
+            states.append((
+                original_path,
+                index + 1,
+                score + base_score,
+                secondary + base_score,
+                next_row_changes,
+                quality,
+                deepcopy(mod_counts),
+            ))
+
+        # mod score
+        if mod_score is None:
+            continue
+        key = f"{node.type}{node.modifier}"
+        if key not in table:
+            continue
+
+        next_counts = deepcopy(mod_counts)
+        if key in next_counts:
+            next_counts[key]["count"] += 1
+            if next_counts[key]["count"] > next_counts[key]["limit"]:
+                continue
+        quality += base_score - mod_score
+
+        states.append((
+            original_path,
+            index + 1,
+            score + mod_score,
+            secondary + base_score,
+            next_row_changes,
+            quality,
+            next_counts,
+        ))
+
+    if not finished:
+        return None
+    finished.sort(
+        key=lambda x: (
+            x[4],  # quality
+            x[1],  # total score
+        ),
+        reverse=True,
+    )
+    return finished[0]
 
 
 def count_encounters(path, nodes):
@@ -128,9 +187,31 @@ def count_encounters(path, nodes):
         counts[key] = counts.get(key, 0) + 1
 
     ordered_counts = {}
-    for key in ScoreTable().current().keys():
+    for key in ScoreTable.current():
         ordered_counts[key] = counts.get(key, 0)
     return ordered_counts
+
+
+def count_encounter_ranges(paths, nodes):
+    ranges = {
+        key: [99, -99]
+        for key in ScoreTable.current()
+    }
+
+    for path in paths:
+        counts = {}
+        for nid in path:
+            key = nodes[nid].label()
+            counts[key] = counts.get(key, 0) + 1
+
+        for key in ranges:
+            value = counts.get(key, 0)
+            if value < ranges[key][0]:
+                ranges[key][0] = value
+            if value > ranges[key][1]:
+                ranges[key][1] = value
+
+    return ranges
 
 
 def run_pathfinder(map_data: Union[dict, str]):
@@ -147,11 +228,27 @@ def run_pathfinder(map_data: Union[dict, str]):
         edges = [(a, b) for a, b in map_data["edges"]]
 
     graph = build_forward_graph(nodes, edges)
-    best_path, best_value, encounter_ranges = dfs_best_path(nodes, graph)
-
-    if best_path is None:
+    all_paths = dfs_all_paths(nodes, graph)
+    if not all_paths:
         raise RuntimeError("No valid path found.")
 
+    best = None
+    for path in all_paths:
+        result = evaluate_path(path, nodes)
+        if result is None:
+            continue
+        if best is None:
+            best = result
+            continue
+
+        # primary mod, secondary node, row changes
+        if (result[1], result[2], -result[3]) > (best[1], best[2], -best[3],):
+            best = result
+    if best is None:
+        raise RuntimeError("No valid path satisfies modifier limits.")
+
+    best_path = best[0]
+    encounter_ranges = count_encounter_ranges(all_paths, nodes)
     encounter_counts = count_encounters(best_path, nodes)
 
     # filter out non-season mods

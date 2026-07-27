@@ -4,7 +4,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Dict
 
-from data.score_config import ScoreItem, DEFAULT_VALUES, SEASONS, CURRENT_SEASON
+from data.score_config import ScoreItem, ModLimit, DEFAULT_VALUES, SEASONS, CURRENT_SEASON
 from utils.path_converter import get_path
 
 DEFAULT_PATH = "ScoreTable.json"
@@ -16,6 +16,7 @@ class ScoreTable:
 
     tables: Dict[str, Dict[str, ScoreItem]] = {}
     active_season: str = CURRENT_SEASON
+    mod_limits: list[ModLimit] = []
 
     @classmethod
     def current(cls) -> Dict[str, ScoreItem]:
@@ -54,6 +55,11 @@ class ScoreTable:
         }
         loaded_season = data.get("active_season", CURRENT_SEASON)
         cls.active_season = loaded_season if loaded_season in SEASONS else CURRENT_SEASON
+        cls.mod_limits = cls.mod_limits_from_dict(data.get("mod_limits", []))
+        # todo: temp, do a proper editor later
+        if not cls.mod_limits:
+            desire_mod_limit = ModLimit("DE", "s4", 4)
+            cls.mod_limits.append(desire_mod_limit)
 
         # ensure all entries exist
         for season_key in SEASONS:
@@ -80,6 +86,7 @@ class ScoreTable:
         cls._ensure_path()
         data = {
             "active_season": cls.active_season,
+            "mod_limits": cls.mod_limits_to_dict(cls.mod_limits),
             "tables": {
                 season: cls.to_dict(table)
                 for season, table in cls.tables.items()
@@ -102,6 +109,17 @@ class ScoreTable:
         }
 
     @staticmethod
+    def mod_limits_to_dict(mod_limits: list[ModLimit]) -> list[dict]:
+        return [
+            {
+                "mod": limit.mod,
+                "seasons": limit.seasons,
+                "limit": limit.limit,
+            }
+            for limit in mod_limits
+        ]
+
+    @staticmethod
     def from_dict(data: dict) -> Dict[str, ScoreItem]:
         return {
             k: ScoreItem(
@@ -112,3 +130,14 @@ class ScoreTable:
             )
             for k, v in data.items()
         }
+
+    @staticmethod
+    def mod_limits_from_dict(data: list[dict]) -> list[ModLimit]:
+        return [
+            ModLimit(
+                mod=item["mod"],
+                seasons=list(item.get("seasons", [])),
+                limit=item.get("limit", 0),
+            )
+            for item in data
+        ]

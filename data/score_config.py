@@ -16,6 +16,13 @@ class Season:
         self.active_scores = set(active_scores)
 
 
+class ModLimit:
+    def __init__(self, mod: str, seasons=None, limit: int = 0):
+        self.mod = mod  # mod only, like SH, not RESH
+        self.seasons = [] if seasons is None else seasons
+        self.limit = limit
+
+
 CURRENT_SEASON = "s4"  # REMEMBER TO UPDATE ON NEW SEASON
 DEFAULT_VALUES = {
     "NO": ScoreItem(-7),                    # normal
