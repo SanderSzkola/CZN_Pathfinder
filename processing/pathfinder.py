@@ -160,7 +160,7 @@ def evaluate_path(path, nodes):
         states.append((
             original_path,
             index + 1,
-            score + mod_score,
+            score + base_score + mod_score,
             secondary + base_score,
             next_row_changes,
             quality,
@@ -184,7 +184,10 @@ def count_encounters(path, nodes):
 
     for nid in path:
         key = nodes[nid].label()
+        base_key_from_mod = key[:2] if len(key) > 2 else None
         counts[key] = counts.get(key, 0) + 1
+        if base_key_from_mod is not None:
+            counts[base_key_from_mod] = counts.get(base_key_from_mod, 0) + 1
 
     ordered_counts = {}
     for key in ScoreTable.current():
@@ -202,7 +205,10 @@ def count_encounter_ranges(paths, nodes):
         counts = {}
         for nid in path:
             key = nodes[nid].label()
+            base_key_from_mod = key[:2] if len(key) > 2 else None
             counts[key] = counts.get(key, 0) + 1
+            if base_key_from_mod is not None:
+                counts[base_key_from_mod] = counts.get(base_key_from_mod, 0) + 1
 
         for key in ranges:
             value = counts.get(key, 0)
