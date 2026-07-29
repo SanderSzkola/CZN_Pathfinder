@@ -1,8 +1,13 @@
 # gui_settings.py
 import tkinter as tk
 import ttkbootstrap as tb
+import cv2
+from PIL import Image, ImageTk
 
 from data.settings import Settings
+from data.score_config import DEFAULT_LIMITS, SEASONS
+from front.drawer import load_icon
+from utils.path_converter import get_path
 
 
 class SettingsPanel(tb.Toplevel):
@@ -14,6 +19,7 @@ class SettingsPanel(tb.Toplevel):
         self.transient(parent)
         self.grab_set()
         self._vars = {}
+        self._mod_icons = {}
 
         container = tb.Frame(self, padding=12)
         container.pack(fill="both", expand=True)
@@ -33,6 +39,10 @@ class SettingsPanel(tb.Toplevel):
         tab_geometry = tb.Frame(notebook)
         notebook.add(tab_geometry, text="Geometry")
         self._build_geometry_tab(tab_geometry)
+
+        tab_limits = tb.Frame(notebook)
+        notebook.add(tab_limits, text="Mod limits")
+        self._build_limits_tab(tab_limits)
 
         tab_testing = tb.Frame(notebook)
         notebook.add(tab_testing, text="Testing")
@@ -115,6 +125,81 @@ class SettingsPanel(tb.Toplevel):
         row = self._add_field(parent, row, "Map image size % (20-100)", "ui_map_image_scale_normal")
         row = self._add_field(parent, row, "Minimap image size % (20-100)", "ui_map_image_scale_mini")
         row = self._add_bool(parent, row, "Keep script window always on top", "ui_window_always_on_top")
+
+    def _get_mod_icon(self, mod):
+        if mod in self._mod_icons:
+            return self._mod_icons[mod]
+
+        folder = get_path(["Images", "Modifier_1600"])
+        img = load_icon(folder, mod)
+        if img.shape[2] == 4:
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
+        else:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
+
+        icon = ImageTk.PhotoImage(Image.fromarray(img))
+        self._mod_icons[mod] = icon
+        return icon
+
+    def _add_limit_row(self, parent, row, limit, seasons):
+        outer = tb.Labelframe(parent, padding=4)
+        outer.grid(row=row, column=0, sticky="ew", padx=6, pady=6)
+        parent.columnconfigure(0, weight=1)
+
+        # top - name and slider
+        icon = self._get_mod_icon(limit.mod)
+        tb.Label(
+            outer,
+            text=limit.full_name,
+            image=icon,
+            compound="left",
+            width=8,
+            anchor="w",
+        ).grid(row=0, column=0, sticky="w")
+        value = tk.IntVar(value=limit.limit)
+
+        slider = tk.Scale(
+            outer,
+            from_=0,
+            to=10,
+            orient="horizontal",
+            variable=value,
+            borderwidth=1,
+            highlightthickness=0,
+            sliderlength=10,
+        )
+        slider.grid(row=0, column=1, sticky="ew", padx=(0, 6))
+        tb.Label(outer, textvariable=value, width=2, ).grid(row=0, column=2)
+
+        # bottom - seasons
+        checks = tb.Frame(outer)
+        checks.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        season_vars = {}
+        for i, season in enumerate(seasons):
+            var = tk.BooleanVar(value=season in limit.seasons)
+
+            tb.Checkbutton(
+                checks,
+                text=season.upper(),
+                variable=var,
+            ).grid(row=0, column=i, padx=(0, 8))
+
+            season_vars[season] = var
+
+        self._limit_vars[limit.mod] = {
+            "value": value,
+            "seasons": season_vars,
+        }
+
+
+    def _build_limits_tab(self, parent):
+        parent.columnconfigure(0, weight=1)
+
+        seasons = [s for s in SEASONS if s != "s*"]
+        self._limit_vars = {}
+
+        for row, limit in enumerate(DEFAULT_LIMITS.values()):
+            self._add_limit_row(parent, row, limit, seasons)
 
     def _build_testing_tab(self, parent):
         parent.columnconfigure(1, weight=1)

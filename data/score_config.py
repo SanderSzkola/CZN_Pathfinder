@@ -17,29 +17,30 @@ class Season:
 
 
 class ModLimit:
-    def __init__(self, mod: str, seasons=None, limit: int = 0):
+    def __init__(self, mod: str, full_name: str | None = None, seasons=None, limit: int = 0):
         self.mod = mod  # mod only, like SH, not RESH
+        self.full_name = full_name if full_name is not None and len(full_name) > 0 else mod
         self.seasons = [] if seasons is None else seasons
         self.limit = limit
 
 
 CURRENT_SEASON = "s4"  # REMEMBER TO UPDATE ON NEW SEASON
 DEFAULT_VALUES = {
-    "NO": ScoreItem(-7),                    # normal
-    "NOOR": ScoreItem(-10),                 # orb of chaos
-    "NOPE": ScoreItem(8),                   # persona
-    "NODE": ScoreItem(7),                   # desire
-    "EL": ScoreItem(2),                     # elite
-    "ELOR": ScoreItem(2),
-    "ELPE": ScoreItem(8),
-    "ELDE": ScoreItem(7),
-    "RE": ScoreItem(-10),                   # rest
-    "RESH": ScoreItem(4),                   # shop
-    "EV": ScoreItem(9),                     # event
+    "NO": ScoreItem(-5),    # normal
+    "NOOR": ScoreItem(0),   # orb of chaos
+    "NOPE": ScoreItem(6),   # persona
+    "NODE": ScoreItem(6),   # desire
+    "EL": ScoreItem(-3),    # elite
+    "ELOR": ScoreItem(0),
+    "ELPE": ScoreItem(6),
+    "ELDE": ScoreItem(6),
+    "RE": ScoreItem(-4),    # rest
+    "RESH": ScoreItem(6),   # shop
+    "EV": ScoreItem(4),     # event
     "EVTU": ScoreItem(40, big_scale=True),  # dimensional tunnel
     "EVME": ScoreItem(40, big_scale=True),  # memory of embers
     "EVDI": ScoreItem(40, big_scale=True),  # director's script
-    "EVDE": ScoreItem(10, merge_group=1),
+    "EVDE": ScoreItem(2, merge_group=1),
 }
 
 SEASONS = {
@@ -102,4 +103,10 @@ SEASONS = {
         "RESH",
         "EV",
     ]),
+}
+
+DEFAULT_LIMITS = {
+    "SH": ModLimit("SH", "Shop", ["s12", "s3", "s4"], 3),
+    "PE": ModLimit("PE", "Persona", ["s3"], 5),
+    "DE": ModLimit("DE", "Desire", ["s4"], 4),
 }
