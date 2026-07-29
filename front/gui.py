@@ -884,7 +884,7 @@ class PipelineGUI:
 
         self.root.after(interval, self._blink_loop)
 
-    def _schedule_pathfinder_rerun(self, delay=300):
+    def _schedule_pathfinder_rerun(self, delay=600):
         if self.last_map is None:
             return
         if self._delayed_pathfinder_id is not None:
