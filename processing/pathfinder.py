@@ -1,11 +1,11 @@
 # pathfinder.py
 import json
-from copy import deepcopy
 from typing import Dict, List, Tuple, Union
 
 from data.node import Node
 from data.score_config import SEASONS
 from data.score_table import ScoreTable
+from data.settings import Settings
 
 
 def load_map(path: str):
@@ -57,17 +57,15 @@ def dfs_all_paths(nodes, graph):
 
 
 def build_limit_dict():
-    result = {}
     season = ScoreTable.active_season
-    for limit in ScoreTable.mod_limits:
-        if season not in limit.seasons:
-            continue
-        result[limit.mod] = {
+    return {
+        limit.mod: {
             "count": 0,
             "limit": limit.limit,
         }
-
-    return result
+        for limit in Settings.mod_limits.values()
+        if season in limit.seasons
+    }
 
 
 def node_scores(node: Node):
@@ -81,11 +79,10 @@ def node_scores(node: Node):
     mod = table.get(key)
     if mod is None:
         return base_score, None
-
     return base_score, mod.value
 
 
-def evaluate_path(path, nodes):
+def evaluate_path(path, nodes, limits):
     # take single path, analyze all variations of accept vs ignore mod, return best one
     table = ScoreTable.current()
     initial_state = (
@@ -95,9 +92,8 @@ def evaluate_path(path, nodes):
         0,  # secondary score, just node, tiebreaker, stable
         0,  # row changes, tiebreaker, stable
         0,  # quality, by how much mods influence the path, sort by this
-        build_limit_dict(),  # mod counters
+        limits,  # mod counters
     )
-
     states = [initial_state]
     finished = []
 
@@ -140,7 +136,7 @@ def evaluate_path(path, nodes):
                 secondary + base_score,
                 next_row_changes,
                 quality,
-                deepcopy(mod_counts),
+                mod_counts,
             ))
 
         # mod score
@@ -150,11 +146,13 @@ def evaluate_path(path, nodes):
         if key not in table:
             continue
 
-        next_counts = deepcopy(mod_counts)
+        next_counts = mod_counts.copy()
         if key in next_counts:
-            next_counts[key]["count"] += 1
-            if next_counts[key]["count"] > next_counts[key]["limit"]:
+            counter = next_counts[key].copy()
+            counter["count"] += 1
+            if counter["count"] > counter["limit"]:
                 continue
+            next_counts[key] = counter
         quality += base_score - mod_score
 
         states.append((
@@ -238,9 +236,10 @@ def run_pathfinder(map_data: Union[dict, str]):
     if not all_paths:
         raise RuntimeError("No valid path found.")
 
+    limits = build_limit_dict()
     best = None
     for path in all_paths:
-        result = evaluate_path(path, nodes)
+        result = evaluate_path(path, nodes, limits)
         if result is None:
             continue
         if best is None:

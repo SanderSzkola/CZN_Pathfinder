@@ -1,5 +1,5 @@
 # score_config.py
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -16,12 +16,16 @@ class Season:
         self.active_scores = set(active_scores)
 
 
+@dataclass
 class ModLimit:
-    def __init__(self, mod: str, full_name: str | None = None, seasons=None, limit: int = 0):
-        self.mod = mod  # mod only, like SH, not RESH
-        self.full_name = full_name if full_name is not None and len(full_name) > 0 else mod
-        self.seasons = [] if seasons is None else seasons
-        self.limit = limit
+    mod: str  # mod only, like SH, not RESH
+    full_name: str | None = None
+    seasons: list[str] = field(default_factory=list)
+    limit: int = 0
+
+    def __post_init__(self):
+        if not self.full_name:
+            self.full_name = self.mod
 
 
 CURRENT_SEASON = "s4"  # REMEMBER TO UPDATE ON NEW SEASON

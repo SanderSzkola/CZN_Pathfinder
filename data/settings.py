@@ -1,8 +1,11 @@
 # settings.py
 import json
+from copy import deepcopy
+from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
+from data.score_config import ModLimit, DEFAULT_LIMITS
 from utils.path_converter import get_path
 
 
@@ -52,6 +55,7 @@ class Settings:
     remote_version: str | None = None
     local_version: str | None = "v0.5.1"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow; -rc1
     target_app_name: str = "Chaos Zero Nightmare"
+    mod_limits: dict[str, ModLimit] = deepcopy(DEFAULT_LIMITS)
 
     @classmethod
     def _ensure_path(cls) -> None:
@@ -77,6 +81,11 @@ class Settings:
                 continue
             if key == "local_version":
                 continue
+            if key == "mod_limits":
+                value = {
+                    k: ModLimit(**v)
+                    for k, v in value.items()
+                }
             if key == "last_update_check" and value is not None:
                 value = datetime.fromisoformat(value)
             setattr(cls, key, value)
@@ -90,7 +99,11 @@ class Settings:
         data = {
             k: getattr(cls, k)
             for k in vars(cls)
-            if not k.startswith("_") and not callable(getattr(cls, k))
+            if not k.startswith("_") and not k.startswith("mod_limits") and not callable(getattr(cls, k))
+        }
+        data["mod_limits"] = {
+            key: asdict(limit)
+            for key, limit in cls.mod_limits.items()
         }
 
         if cls.last_update_check is not None:
