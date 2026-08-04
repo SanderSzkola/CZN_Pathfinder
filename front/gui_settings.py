@@ -164,7 +164,7 @@ class SettingsPanel(tb.Toplevel):
 
         slider = tk.Scale(
             outer,
-            from_=0,
+            from_=1,
             to=10,
             orient="horizontal",
             variable=value,
@@ -201,9 +201,10 @@ class SettingsPanel(tb.Toplevel):
         row = 0
         row = self._add_warning(parent, row)
         row = self._add_explanation(parent, row,
-                                    "Sets how many times each modifier contributes to a path score. \n"
-                                    "After the limit is reached, additional occurrences of that mod \n"
-                                    "are ignored during score calculation.")
+                                    "Sets how many times each modifier contributes to a path score.\n"
+                                    "After the limit is reached, additional occurrences of that mod\n"
+                                    "are ignored during score calculation. Base score still counts.\n"
+                                    "Example: Shop limited to 2, 3rd will be scored as campfire")
         seasons = [s for s in SEASONS if s != "s*"]
         self._limit_vars = {}
         for limit in Settings.mod_limits.values():
