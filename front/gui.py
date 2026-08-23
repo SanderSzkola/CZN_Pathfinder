@@ -532,6 +532,9 @@ class PipelineGUI:
         if not self.ask_continue_dialog("auto_demo"):
             self.log("Scanning task cancelled")
             return
+        if self.root.attributes('-topmost'):
+            self.log("Disabled Always on top setting as it may collide with the demo")
+            self.root.attributes('-topmost', False)
 
         self._scanner_running = True
         threading.Thread(target=self._run_auto_pipeline, daemon=True).start()
@@ -881,7 +884,7 @@ class PipelineGUI:
 
         self.root.after(interval, self._blink_loop)
 
-    def _schedule_pathfinder_rerun(self, delay=300):
+    def _schedule_pathfinder_rerun(self, delay=600):
         if self.last_map is None:
             return
         if self._delayed_pathfinder_id is not None:

@@ -443,12 +443,26 @@ class CalibrationPanel(tb.Toplevel):
 
     def _build_help_panel(self, parent):
         parent.pack_propagate(False)
-
         container = tb.Frame(parent)
         container.pack(fill="both", expand=True, padx=12, pady=12)
+        canvas = tk.Canvas(container, highlightthickness=0, borderwidth=0)
+        scrollbar = tb.Scrollbar(container, orient="vertical", command=canvas.yview)
+        scrollable = tb.Frame(canvas)
+        scroll_window = canvas.create_window((0, 0), window=scrollable, anchor="nw")
+
+        def update_scrollregion(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        def resize_scrollable(event):
+            canvas.itemconfigure(scroll_window, width=event.width)
+
+        scrollable.bind("<Configure>", update_scrollregion)
+        canvas.bind("<Configure>", resize_scrollable)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
 
         tb.Label(
-            container,
+            scrollable,
             text="Calibration Help",
             font=("Segoe UI", 11, "bold")
         ).pack(anchor="w", pady=(0, 8))
@@ -484,15 +498,24 @@ class CalibrationPanel(tb.Toplevel):
             "**PE - persona / s3 unique fight\n"
             "**DI - director's script / s3 unique event\n"
             "**DE - desire / s4 unique modifier\n"
+            "**TR - trail of the husk / s4 unique event"
         )
 
-        tb.Label(
-            container,
+        help_label = tb.Label(
+            scrollable,
             text=help_text,
             justify="left",
             anchor="nw",
             wraplength=self.right_panel_width - 40
-        ).pack(fill="both", expand=True)
+        )
+        help_label.pack(fill="x", expand=False)
+
+        def on_mousewheel(event):
+            canvas.yview_scroll(int(-event.delta / 120), "units")
+
+        canvas.bind("<MouseWheel>", on_mousewheel)
+        scrollable.bind("<MouseWheel>", on_mousewheel)
+        help_label.bind("<MouseWheel>", on_mousewheel)
 
     # ==================================================================
     # Preview image

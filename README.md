@@ -33,13 +33,14 @@ Examples:
 - prefer elites to normal fights
 - prioritize shops but avoid rests
 
-The map updates immediately when score values change.
+The above ideas are represented by default priorities. Scores are additive, so algorithm will naturally choose the 'best' path.
+Whether that path sacrifices one event to avoid 3 normal fights is up to you to fine-tune. Modifiers can be limited, allowing you, for example, to ensure 2 shops if possible, while counting 3rd one with lower rest score.
 
 ### Interactive calibration tool
 
-Built-in calibration window allows the script recognize nodes correctly for your game resolution.<br>
-Captures screenshots from opened game or saved image, then labels every visible node and draws paths, helping you
-understand how the script sees.
+Built-in calibration window allows the script to recognize nodes correctly, for your game resolution.<br>
+It captures screenshots from opened game or loads saved image, then marks every detected node and path.
+Adjust variables on the right until it works for your resolution.
 ![calibration](Images/calibration_window.png)
 
 ### Mini mode
@@ -59,7 +60,7 @@ You can also test how the script works by using built-in demo, together with pro
 ### Option 1 - executable release (recommended)
 
 - Download the latest exe release
-- Extract it anywhere
+- Extract
 - Run CZN Pathfinder.exe
 
 ### Option 2 - run from source

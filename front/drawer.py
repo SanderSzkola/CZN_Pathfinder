@@ -11,7 +11,7 @@ from utils.path_converter import get_path
 
 GRID = 70
 ICON_SCALE = 0.35
-MODIFIER_Y_OFFSET = -4
+MODIFIER_Y_OFFSET = -5
 MIN_COLS = 17
 MIN_ROWS = 8  # 5 from game map + 2 for counters + 1 for top / bottom padding
 _BG_CACHE = None
@@ -67,10 +67,11 @@ def paste_icon(dst: np.ndarray, icon: np.ndarray, px: int, py: int):
         roi[:, :, 3] = 255
 
 
-def _scale_icon(icon: np.ndarray):
+def _scale_icon(icon: np.ndarray, mod=False):
     ih, iw = icon.shape[:2]
-    w = max(1, int(iw * ICON_SCALE))
-    h = max(1, int(ih * ICON_SCALE))
+    icon_scale = ICON_SCALE * 1.4 if mod else ICON_SCALE
+    w = max(1, int(iw * icon_scale))
+    h = max(1, int(ih * icon_scale))
     return cv2.resize(icon, (w, h), interpolation=cv2.INTER_AREA), w, h
 
 
@@ -199,7 +200,7 @@ def draw_encounter_row(
         if mod_key:
             mod_icon = load_icon(modifier_dir, mod_key)
             if mod_icon is not None:
-                mod_scaled, mw, mh = _scale_icon(mod_icon)
+                mod_scaled, mw, mh = _scale_icon(mod_icon, mod=True)
                 mod_px = x_grid + (ew // 2) - mw
                 mod_py = y_grid - mh + MODIFIER_Y_OFFSET
                 paste_icon(canvas, mod_scaled, mod_px, mod_py)
@@ -303,7 +304,7 @@ def draw_map(
         if icon is None:
             continue
 
-        icon_scaled, mw, mh = _scale_icon(icon)
+        icon_scaled, mw, mh = _scale_icon(icon, mod=True)
         px = int(cx + w // 2 - mw)
         py = int(cy - mh + MODIFIER_Y_OFFSET)
         paste_icon(canvas, icon_scaled, px, py)

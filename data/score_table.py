@@ -22,8 +22,8 @@ class ScoreTable:
         if not cls._loaded:
             cls._create_defaults()
             cls._loaded = True
-
-        return cls.tables.setdefault(cls.active_season, cls.default_table_for(cls.active_season))
+            cls.tables.setdefault(cls.active_season, cls.default_table_for(cls.active_season))
+        return cls.tables[cls.active_season]
 
     @classmethod
     def default_table_for(cls, season_key: str) -> Dict[str, ScoreItem]:
