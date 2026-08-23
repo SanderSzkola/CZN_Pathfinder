@@ -204,7 +204,7 @@ class SettingsPanel(tb.Toplevel):
                                     "Sets how many times each modifier contributes to a path score.\n"
                                     "After the limit is reached, additional occurrences of that mod\n"
                                     "are ignored during score calculation. Base score still counts.\n"
-                                    "Example: Shop limited to 2, 3rd will be scored as campfire")
+                                    "Example: Shop limited to 2, 3rd will be scored as rest")
         seasons = [s for s in SEASONS if s != "s*"]
         self._limit_vars = {}
         for limit in Settings.mod_limits.values():

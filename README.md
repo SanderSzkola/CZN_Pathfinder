@@ -33,7 +33,8 @@ Examples:
 - prefer elites to normal fights
 - prioritize shops but avoid rests
 
-The map updates immediately when score values change.
+The above ideas are represented by default priorities. Scores are additive, so algorithm will naturally choose the 'best' path.
+Whether that path sacrifices one event to avoid 3 normal fights is up to you to fine-tune. Modifiers can be limited, allowing you, for example, to ensure 2 shops if possible, while counting 3rd one with lower rest score.
 
 ### Interactive calibration tool
 
