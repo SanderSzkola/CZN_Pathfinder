@@ -34,10 +34,12 @@ DEFAULT_VALUES = {          # additive, so RESH = RE + RESH
     "NOOR": ScoreItem(1),   # orb of chaos
     "NOPE": ScoreItem(6),   # persona
     "NODE": ScoreItem(6),   # desire
+    "NOTR": ScoreItem(40, big_scale=True),  # trail of the husk
     "EL": ScoreItem(-2),    # elite
     "ELOR": ScoreItem(1),
     "ELPE": ScoreItem(6),
     "ELDE": ScoreItem(6),
+    "ELTR": ScoreItem(40, big_scale=True),
     "RE": ScoreItem(-4),    # rest
     "RESH": ScoreItem(6),   # shop
     "EV": ScoreItem(4),     # event
@@ -73,9 +75,11 @@ SEASONS = {
         "NO",
         "NOOR",
         "NODE",
+        "NOTR",
         "EL",
         "ELOR",
         "ELDE",
+        "ELTR",
         "RE",
         "RESH",
         "EV",
@@ -86,10 +90,12 @@ SEASONS = {
         "NOOR",
         "NOPE",
         "NODE",
+        "NOTR"
         "EL",
         "ELOR",
         "ELPE",
         "ELDE",
+        "ELTR"
         "RE",
         "RESH",
         "EV",

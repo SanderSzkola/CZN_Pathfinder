@@ -53,7 +53,7 @@ class Settings:
     autoupdate: bool = True
     last_update_check: datetime | None = None
     remote_version: str | None = None
-    local_version: str | None = "v0.5.1"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow; -rc1
+    local_version: str | None = "v0.5.2"  # REMEMBER TO UPDATE BEFORE BUILD, or integrate into build somehow; -rc1
     target_app_name: str = "Chaos Zero Nightmare"
     mod_limits: dict[str, ModLimit] = deepcopy(DEFAULT_LIMITS)
 
