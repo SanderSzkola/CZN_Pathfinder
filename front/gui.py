@@ -308,8 +308,8 @@ class PipelineGUI:
         row = tb.Frame(parent)
         row.pack(fill="x", expand=True)
 
-        enc_folder = get_path(["Images", "Encounter_minimal_1600"])
-        mod_folder = get_path(["Images", "Modifier_1600"])
+        enc_folder = get_path(["Images", "Encounter_bigForUI"])
+        mod_folder = get_path(["Images", "Modifier_bigForUI"])
         icon = self.create_icon(keys, enc_folder, mod_folder)
         self._icons[display_key + "_" + keys[0]] = icon
 

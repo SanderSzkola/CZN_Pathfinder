@@ -45,7 +45,7 @@ def group_rows(nodes):
 # ------------------------------------------------------------
 
 def load_icon_map():
-    base_paths = [get_path(["Images", "Encounter"]), get_path(["Images", "Modifier_1920"])]
+    base_paths = [get_path(["Images", "Encounter_fullForMap"]), get_path(["Images", "Modifier_smallForTM"])]
     icons = {}
     for base in base_paths:
         for file in os.listdir(base):

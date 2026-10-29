@@ -6,6 +6,7 @@ from PIL.Image import Image
 
 from data.node import Node
 from data.score_table import ScoreTable  # MUST CONTAIN EVERY VALID COMBINATION OF NODE+MODIFIER
+from data.score_config import PASSTHROUGH_NODES
 from data.settings import Settings
 from processing.template_library import TemplateLibrary, TEMPLATE_NODE_PORTAL_FULL_W
 from utils.path_converter import get_path
@@ -254,10 +255,11 @@ def detect_nodes(screenshot_str_or_img,
         active_nodes.add(key[:2])
         if len(key) > 2:
             active_mods.add(key[2:4])
+    passthrough_nodes = PASSTHROUGH_NODES.get(ScoreTable.active_season, PASSTHROUGH_NODES["default"])
     node_templates = {
         k: v
         for k, v in templates.node_templates_scaled.items()
-        if k[:2].upper() in active_nodes or k[:2].upper() == "WA"
+        if k[:2].upper() in active_nodes or k[:2].upper() in passthrough_nodes
     }
     modifier_templates = {
         k: v

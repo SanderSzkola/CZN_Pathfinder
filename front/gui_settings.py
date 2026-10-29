@@ -133,7 +133,7 @@ class SettingsPanel(tb.Toplevel):
         if mod in self._mod_icons:
             return self._mod_icons[mod]
 
-        folder = get_path(["Images", "Modifier_1600"])
+        folder = get_path(["Images", "Modifier_bigForUI"])
         img = load_icon(folder, mod)
         if img.shape[2] == 4:
             img = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)

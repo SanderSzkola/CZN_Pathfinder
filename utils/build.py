@@ -18,11 +18,11 @@ ZIP_NAME = f"CZN_Pathfinder_exe_build_{Settings.local_version}.zip"
 
 # should yell if it detects new item not in expected or ignored
 expected_items = [
-    "Images/Encounter",
-    "Images/Encounter_minimal_1920",
-    "Images/Modifier_1920",
-    "Images/Encounter_minimal_1600",
-    "Images/Modifier_1600",
+    "Images/Encounter_fullForMap",
+    "Images/Encounter_smallForTM",
+    "Images/Modifier_smallForTM",
+    "Images/Encounter_bigForUI",
+    "Images/Modifier_bigForUI",
     "Images/filler_map.png",
     "LICENSE",
     "ManualScreenshotVisualGuide.png",

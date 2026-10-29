@@ -12,7 +12,7 @@ TEMPLATE_NODE_PORTAL_FULL_W = 200
 
 
 class TemplateLibrary:
-    def __init__(self, encounter_dir="Encounter_minimal_1920", modifier_dir="Modifier_1920", scale=1.0):
+    def __init__(self, encounter_dir="Encounter_smallForTM", modifier_dir="Modifier_smallForTM", scale=1.0):
         # original set loaded once from disk, do not change
         self.node_templates = self._load_templates(get_path(["Images", encounter_dir]))
         self.modifier_templates = self._load_templates(get_path(["Images", modifier_dir]))

@@ -59,7 +59,7 @@ You can also test how the script works by using built-in demo, together with pro
 
 ### Option 1 - executable release (recommended)
 
-- Download the latest exe release
+- Download the [latest](https://github.com/SanderSzkola/CZN_Pathfinder/releases/latest) exe release
 - Extract
 - Run CZN Pathfinder.exe
 
