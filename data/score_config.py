@@ -132,5 +132,5 @@ DEFAULT_LIMITS = {
 
 PASSTHROUGH_NODES = {
     "default": {"WA"},
-    "s5": {"WA", "ME5"},
+    "s5": {"WA", "5M"},
 }
