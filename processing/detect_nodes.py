@@ -19,15 +19,17 @@ TRIM_TOP_PX = 120
 TRIM_RIGHT_PX = 150
 TRIM_LEFT_PX = 150
 # color verify params
-ALL_CHANNELS_COLOR_MAX_DIFF = 50
-SINGLE_COLOR_MAX_DIFF = 10
 MAX_LIGHTING_GAIN = 1.25
 MIN_LIGHTING_GAIN = 0.75
+TEMPLATE_LEVELS = [255, 90, 20]  # purest form of magic numbers, it just works™
+IMAGE_LEVELS = [255, 90, 20]
+SHAPE_THRESHOLD = 0.8
+COLOR_MAX_DIFF = 20
 
 
 # validate shape matches against color channels
 def _color_verify(map_bgr, tmpl_bgr, mask_idx, x, y, template_name, color_second_pass_cache, debug=False,
-                  color_max_diff=SINGLE_COLOR_MAX_DIFF):
+                  color_max_diff=COLOR_MAX_DIFF):
     h, w, _ = tmpl_bgr.shape
     patch = map_bgr[y:y + h, x:x + w]
     if patch.shape[:2] != (h, w):
@@ -69,6 +71,15 @@ def _color_verify(map_bgr, tmpl_bgr, mask_idx, x, y, template_name, color_second
             f"{'PASS' if passed else 'REJECT'}"
         )
     return passed
+
+def _threshold_gray(gray, levels):
+    arr = gray.astype(np.int16)
+    conditions = [
+        arr > 180,
+        arr > 130,
+        arr > 80
+    ]
+    return np.select(conditions, levels, default=0).astype(np.uint8)
 
 
 def _load_map_image(map_fragment):
@@ -132,28 +143,35 @@ def _non_max_suppression(points, shape, w, h):
     return taken
 
 
-def _detect_templates(map_gray, map_bgr, templates, threshold):
+
+def _detect_templates(map_gray, map_bgr, templates, threshold=SHAPE_THRESHOLD,
+                      color_max_diff=COLOR_MAX_DIFF, debug=False):
     candidates = []
     color_second_pass_cache = {}
+    leftmost_x = None
+    map_thresholded = _threshold_gray(map_gray, IMAGE_LEVELS)
+    colorV_passed = 0
+    colorV_glow_passed = 0
+    colorV_rejected = 0
+
 
     for label, (tmpl_gray, mask, tmpl_bgr, mask_idx) in templates.items():
-        # handle glow as addition to normal node
-        if label == "normal_glow":
+        if label.endswith("_glow"):
             continue
 
-        # the most expensive part, keep template num to minimum!
         h, w = tmpl_gray.shape
+        tmpl_thresholded = _threshold_gray(tmpl_gray, TEMPLATE_LEVELS)
+
         res = cv2.matchTemplate(
-            map_gray,
-            tmpl_gray,
+            map_thresholded,
+            tmpl_thresholded,
             cv2.TM_CCORR_NORMED,
             mask=mask
         )
 
-        # local max filter; neighborhood size ~ template size / 2
         neigh = max(1, max(h // 2, w // 2))
         dilated = cv2.dilate(res, np.ones((neigh, neigh), dtype=np.float32))
-        local_max = (res == dilated)
+        local_max = res == dilated
 
         cand_mask = (res >= threshold) & local_max
         ys, xs = np.where(cand_mask)
@@ -162,44 +180,64 @@ def _detect_templates(map_gray, map_bgr, templates, threshold):
 
         scores = res[ys, xs]
         order = np.argsort(scores)[::-1]
-        xs = xs[order]
-        ys = ys[order]
+        xs, ys = xs[order], ys[order]
 
-        pts = list(zip(xs, ys))
-        taken = _non_max_suppression(pts, res.shape, w, h)
+        taken = _non_max_suppression(list(zip(xs, ys)), res.shape, w, h)
         abbrev = label[:2].upper()
 
-        for (x, y) in taken:
-            if not _color_verify(
-                    map_bgr=map_bgr,
-                    tmpl_bgr=tmpl_bgr,
-                    mask_idx=mask_idx,
-                    x=x,
-                    y=y,
-                    template_name=label,
-                    color_second_pass_cache=color_second_pass_cache,
-            ):
-                if label != "normal":
-                    continue
-                label_g = "normal_glow"
-                _, _, tmpl_bgr_g, mask_idx_g = templates[label_g]
-                if not _color_verify(
+        glow_template = templates.get(f"{label}_glow")
+
+        for x, y in taken:
+            cx = x + w // 2
+            cy = y + h // 2
+            score = float(res[y, x])
+
+            # First pass: normal color verification
+            color_ok = _color_verify(
+                map_bgr=map_bgr,
+                tmpl_bgr=tmpl_bgr,
+                mask_idx=mask_idx,
+                x=x,
+                y=y,
+                template_name=label,
+                color_second_pass_cache=color_second_pass_cache,
+                color_max_diff=color_max_diff,
+                debug=debug
+            )
+
+            if color_ok:
+                colorV_passed +=1
+            else:
+                # Second pass: glow color verification
+                glow_ok = False
+
+                if glow_template is not None:
+                    _, _, tmpl_bgr_g, mask_idx_g = glow_template
+
+                    glow_ok = _color_verify(
                         map_bgr=map_bgr,
                         tmpl_bgr=tmpl_bgr_g,
                         mask_idx=mask_idx_g,
                         x=x,
                         y=y,
-                        template_name=label_g,
+                        template_name=f"{label}_glow",
                         color_second_pass_cache=color_second_pass_cache,
-                        color_max_diff=SINGLE_COLOR_MAX_DIFF * 2,
-                ):
+                        color_max_diff=color_max_diff * 2,
+                        debug=debug
+                    )
+
+                if not glow_ok:
+                    colorV_rejected +=1
                     continue
+                else:
+                    colorV_glow_passed +=1
 
-            score = float(res[y, x])
-            cx = x + w // 2
-            cy = y + h // 2
             candidates.append((cx, cy, abbrev, score))
+            if leftmost_x is None or cx < leftmost_x:
+                leftmost_x = cx
 
+    if debug or Settings.testmode:
+        print(f"[DetectNodes] passed:{colorV_passed:2d}, glowPassed:{colorV_glow_passed:2d}, rejected:{colorV_rejected}")
     return candidates
 
 
@@ -267,7 +305,13 @@ def detect_nodes(screenshot_str_or_img,
         if k[:2].upper() in active_mods
     }
 
-    node_candidates = _detect_templates(map_gray_trimmed, map_bgr_trimmed, node_templates, threshold)
+    node_candidates = _detect_templates(
+        map_gray_trimmed,
+        map_bgr_trimmed,
+        node_templates,
+        threshold=SHAPE_THRESHOLD,
+        color_max_diff=COLOR_MAX_DIFF
+    )
     node_candidates.sort(key=lambda c: c[3], reverse=True)
 
     nodes = []
@@ -288,7 +332,13 @@ def detect_nodes(screenshot_str_or_img,
             nodes.append(Node(cx, cy, t, node_id=node_id))
 
     # detect modifiers
-    modifier_hits = _detect_templates(map_gray_trimmed, map_bgr_trimmed, modifier_templates, threshold)
+    modifier_hits = _detect_templates(
+        map_gray_trimmed,
+        map_bgr_trimmed,
+        modifier_templates,
+        threshold=SHAPE_THRESHOLD,
+        color_max_diff=COLOR_MAX_DIFF
+    )
     _assign_modifiers(nodes, modifier_hits, screenshot_scale)
 
     h, w = map_bgr_trimmed.shape[:2]
