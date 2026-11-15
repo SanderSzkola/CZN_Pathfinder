@@ -8,7 +8,7 @@ from utils.path_converter import get_path
 TEMPLATE_RES = (1920, 1080)  # all values relative to this
 TEMPLATE_NODE_SIZE = 32  # px, square
 TEMPLATE_MOD_SIZE = 24  # px, square
-TEMPLATE_NODE_PORTAL_FULL_W = 200
+TEMPLATE_NODE_PORTAL_FULL_W = 200  # full width of node + portal mod, used elsewhere but related to templates so it is here
 
 
 class TemplateLibrary:
@@ -89,7 +89,8 @@ class TemplateLibrary:
 
             gray_s = cv2.resize(gray, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
             bgr_s = cv2.resize(bgr, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-            mask_s = cv2.resize(mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST)  # alpha, either transparent or not, no linear scaling
+            mask_s = cv2.resize(mask, (new_w, new_h),
+                                interpolation=cv2.INTER_NEAREST)  # alpha, either transparent or not, no linear scaling
             mask_s[mask_s > 0] = 255
 
             mask_idx_s = np.where(mask_s == 255)

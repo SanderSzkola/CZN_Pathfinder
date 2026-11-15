@@ -23,80 +23,99 @@ MAX_LIGHTING_GAIN = 1.25
 MIN_LIGHTING_GAIN = 0.75
 TEMPLATE_LEVELS = [255, 90, 20]  # purest form of magic numbers, it just works™
 IMAGE_LEVELS = [255, 90, 20]
-SHAPE_THRESHOLD = 0.8
+SHAPE_GRAY_THRESHOLDS = [180, 130, 80]
+SHAPE_ACCURACY_THRESHOLD = 0.8
 COLOR_MAX_DIFF = 20
 
 
 # validate shape matches against color channels
-def _color_verify(map_bgr, tmpl_bgr, mask_idx, x, y, template_name, color_second_pass_cache, debug=False,
-                  color_max_diff=COLOR_MAX_DIFF):
-    h, w, _ = tmpl_bgr.shape
-    patch = map_bgr[y:y + h, x:x + w]
-    if patch.shape[:2] != (h, w):
+def _verify_template_color(
+        screenshot_bgr,
+        template,
+        template_name,
+        x,
+        y,
+        template_color_cache,
+        color_max_diff=COLOR_MAX_DIFF,
+        debug=False,
+):
+    _, _, template_bgr, template_mask_indices = template
+    template_height, template_width, _ = template_bgr.shape
+    screenshot_patch = screenshot_bgr[
+        y:y + template_height,
+        x:x + template_width,
+    ]
+    if screenshot_patch.shape[:2] != (template_height, template_width):
         return False
 
     # cache template avg
-    cache_key = template_name
-    if cache_key not in color_second_pass_cache:
-        tmpl_pixels = tmpl_bgr[mask_idx]
-        tmpl_avg = tmpl_pixels.mean(axis=0)
-        color_second_pass_cache[cache_key] = tmpl_avg
+    if template_name not in template_color_cache:
+        template_pixels = template_bgr[template_mask_indices]
+        template_color_cache[template_name] = template_pixels.mean(axis=0)
 
-    tmpl_avg = color_second_pass_cache[cache_key]
-    probe_pixels = patch[mask_idx]
-    probe_avg = probe_pixels.mean(axis=0)
+    template_average = template_color_cache[template_name]
+    screenshot_pixels = screenshot_patch[template_mask_indices]
+    screenshot_average = screenshot_pixels.mean(axis=0)
 
     # lighting gain, to fix darkening towards bottom
-    num = float(np.dot(probe_avg, tmpl_avg))
-    den = float(np.dot(tmpl_avg, tmpl_avg))
-    if den <= 1e-6:
+    numerator = float(np.dot(screenshot_average, template_average))
+    denominator = float(np.dot(template_average, template_average))
+    if denominator <= 1e-6:
         return False
-    k = num / den
-    k = float(np.clip(k, MIN_LIGHTING_GAIN, MAX_LIGHTING_GAIN))
-    tmpl_corrected = tmpl_avg * k
 
-    abs_diff = np.abs(probe_avg - tmpl_corrected)
-    max_diff = float(abs_diff.max())
+    lighting_gain = numerator / denominator
+    lighting_gain = float(np.clip(
+        lighting_gain,
+        MIN_LIGHTING_GAIN,
+        MAX_LIGHTING_GAIN,
+    ))
+    corrected_template_average = template_average * lighting_gain
 
-    passed = bool(np.all(abs_diff <= color_max_diff))
+    channel_differences = np.abs(
+        screenshot_average - corrected_template_average
+    )
+    max_channel_difference = float(channel_differences.max())
+    passed = bool(np.all(channel_differences <= color_max_diff))
 
     if debug:
         print(
             f"[COLORV] {template_name} | "
-            f"tmpl_avg(B,G,R)=({tmpl_avg[0]:4.1f},{tmpl_avg[1]:4.1f},{tmpl_avg[2]:4.1f}) "
-            f"probe_avg=({probe_avg[0]:4.1f},{probe_avg[1]:4.1f},{probe_avg[2]:4.1f}) "
-            f"gain={k:3.2f} "
-            f"corr_diff=({abs_diff[0]:3.1f},{abs_diff[1]:3.1f},{abs_diff[2]:3.1f}) "
-            f"max={max_diff:.1f} "
+            f"tmpl_avg(B,G,R)=({template_average[0]:4.1f},{template_average[1]:4.1f},{template_average[2]:4.1f}) "
+            f"probe_avg=({screenshot_average[0]:4.1f},{screenshot_average[1]:4.1f},{screenshot_average[2]:4.1f}) "
+            f"gain={lighting_gain:3.2f} "
+            f"corr_diff=({channel_differences[0]:3.1f},{channel_differences[1]:3.1f},{channel_differences[2]:3.1f}) "
+            f"max={max_channel_difference:.1f} "
             f"{'PASS' if passed else 'REJECT'}"
         )
     return passed
 
-def _threshold_gray(gray, levels):
-    arr = gray.astype(np.int16)
+
+def _threshold_gray(gray_image, levels):
+    grayscale_values = gray_image.astype(np.int16)
     conditions = [
-        arr > 180,
-        arr > 130,
-        arr > 80
+        grayscale_values > threshold
+        for threshold in SHAPE_GRAY_THRESHOLDS
     ]
     return np.select(conditions, levels, default=0).astype(np.uint8)
 
 
 def _load_map_image(map_fragment):
     if isinstance(map_fragment, str):
-        img = cv2.imread(map_fragment, cv2.IMREAD_COLOR)
-        if img is None:
+        image = cv2.imread(map_fragment, cv2.IMREAD_COLOR)
+        if image is None:
             raise ValueError(f"Failed to read image from path: {map_fragment}")
-        return img
+        return image
 
     if isinstance(map_fragment, np.ndarray):
         return map_fragment
 
     if isinstance(map_fragment, Image):
-        bgr = np.array(map_fragment)
-        return cv2.cvtColor(bgr, cv2.COLOR_RGB2BGR)
+        image_rgb = np.array(map_fragment)
+        return cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
 
-    raise TypeError(f"map_fragment must be a path, numpy or PIL.Image, not {type(map_fragment)}")
+    raise TypeError(
+        f"map_fragment must be a path, numpy or PIL.Image, not {type(map_fragment)}"
+    )
 
 
 def get_trim(screenshot_scale, template_scale):
@@ -107,284 +126,378 @@ def get_trim(screenshot_scale, template_scale):
         "top_detect": int(TRIM_TOP_PX * template_scale),
         "left_detect": int(TRIM_LEFT_PX * template_scale),
         "right_detect": int(TRIM_RIGHT_PX * template_scale),
-
         "top": int(TRIM_TOP_PX * combined_scale),
         "left": int(TRIM_LEFT_PX * combined_scale),
         "right": int(TRIM_RIGHT_PX * combined_scale),
-
         "fringe": fringe_margin,
         "fringe_left_soft": fringe_margin // 4,
     }
 
 
-def _trim_map(map_img, trim):
+def _trim_map(map_image, trim):
     top = trim["top_detect"]
     left = trim["left_detect"]
     right = trim["right_detect"]
 
-    gray = cv2.cvtColor(map_img, cv2.COLOR_BGR2GRAY)
-    gray_trim = gray[top:, left:-right]
-    bgr_trim = map_img[top:, left:-right]
-    return gray_trim, bgr_trim
+    grayscale_image = cv2.cvtColor(map_image, cv2.COLOR_BGR2GRAY)
+    grayscale_region = grayscale_image[top:, left:-right]
+    color_region = map_image[top:, left:-right]
+    return grayscale_region, color_region
 
 
-def _non_max_suppression(points, shape, w, h):
+def _non_max_suppression(points, result_shape, template_width, template_height):
     taken = []
-    occupied = np.zeros(shape, dtype=np.uint8)
-    for (x, y) in points:
+    occupied = np.zeros(result_shape, dtype=np.uint8)
+
+    for x, y in points:
         if occupied[y, x] == 1:
             continue
         taken.append((x, y))
-        y0 = max(0, y - h // 2)
-        y1 = y + h // 2
-        x0 = max(0, x - w // 2)
-        x1 = x + w // 2
-        occupied[y0:y1, x0:x1] = 1
+
+        y_start = max(0, y - template_height // 2)
+        y_end = y + template_height // 2
+        x_start = max(0, x - template_width // 2)
+        x_end = x + template_width // 2
+        occupied[y_start:y_end, x_start:x_end] = 1
+
     return taken
 
 
+def _detect_templates(
+        screenshot_gray,
+        screenshot_bgr,
+        templates,
+        screenshot_index,
+        threshold=SHAPE_ACCURACY_THRESHOLD,
+        color_max_diff=COLOR_MAX_DIFF,
+        debug=False,
+):
+    detected_candidates = []
+    template_color_cache = {}
+    color_passed_count = 0
+    glow_passed_count = 0
+    color_rejected_count = 0
 
-def _detect_templates(map_gray, map_bgr, templates, threshold=SHAPE_THRESHOLD,
-                      color_max_diff=COLOR_MAX_DIFF, debug=False):
-    candidates = []
-    color_second_pass_cache = {}
-    leftmost_x = None
-    map_thresholded = _threshold_gray(map_gray, IMAGE_LEVELS)
-    colorV_passed = 0
-    colorV_glow_passed = 0
-    colorV_rejected = 0
+    thresholded_screenshot = _threshold_gray(screenshot_gray, IMAGE_LEVELS)
 
-
-    for label, (tmpl_gray, mask, tmpl_bgr, mask_idx) in templates.items():
-        if label.endswith("_glow"):
+    for template_name, template in templates.items():
+        if template_name.endswith("_glow"):
             continue
 
-        h, w = tmpl_gray.shape
-        tmpl_thresholded = _threshold_gray(tmpl_gray, TEMPLATE_LEVELS)
+        template_gray, mask, _, _ = template
+        template_height, template_width = template_gray.shape
+        thresholded_template = _threshold_gray(template_gray, TEMPLATE_LEVELS)
 
-        res = cv2.matchTemplate(
-            map_thresholded,
-            tmpl_thresholded,
+        match_scores = cv2.matchTemplate(
+            thresholded_screenshot,
+            thresholded_template,
             cv2.TM_CCORR_NORMED,
-            mask=mask
+            mask=mask,
         )
 
-        neigh = max(1, max(h // 2, w // 2))
-        dilated = cv2.dilate(res, np.ones((neigh, neigh), dtype=np.float32))
-        local_max = res == dilated
+        neighborhood_size = max(
+            1,
+            template_height // 2,
+            template_width // 2,
+        )
+        dilated_scores = cv2.dilate(
+            match_scores,
+            np.ones((neighborhood_size, neighborhood_size), dtype=np.float32),
+        )
+        local_maxima = match_scores == dilated_scores
 
-        cand_mask = (res >= threshold) & local_max
-        ys, xs = np.where(cand_mask)
-        if ys.size == 0:
+        candidate_mask = (match_scores >= threshold) & local_maxima
+        candidate_y, candidate_x = np.where(candidate_mask)
+        if candidate_y.size == 0:
             continue
 
-        scores = res[ys, xs]
-        order = np.argsort(scores)[::-1]
-        xs, ys = xs[order], ys[order]
+        candidate_scores = match_scores[candidate_y, candidate_x]
+        score_order = np.argsort(candidate_scores)[::-1]
+        candidate_x = candidate_x[score_order]
+        candidate_y = candidate_y[score_order]
 
-        taken = _non_max_suppression(list(zip(xs, ys)), res.shape, w, h)
-        abbrev = label[:2].upper()
+        candidate_positions = _non_max_suppression(
+            list(zip(candidate_x, candidate_y)),
+            match_scores.shape,
+            template_width,
+            template_height,
+        )
 
-        glow_template = templates.get(f"{label}_glow")
+        node_type = template_name[:2].upper()
+        glow_template_name = f"{template_name}_glow"
+        glow_template = templates.get(glow_template_name)
 
-        for x, y in taken:
-            cx = x + w // 2
-            cy = y + h // 2
-            score = float(res[y, x])
+        for x, y in candidate_positions:
+            center_x = x + template_width // 2
+            center_y = y + template_height // 2
+            match_score = float(match_scores[y, x])
 
             # First pass: normal color verification
-            color_ok = _color_verify(
-                map_bgr=map_bgr,
-                tmpl_bgr=tmpl_bgr,
-                mask_idx=mask_idx,
+            color_ok = _verify_template_color(
+                screenshot_bgr=screenshot_bgr,
+                template=template,
+                template_name=template_name,
                 x=x,
                 y=y,
-                template_name=label,
-                color_second_pass_cache=color_second_pass_cache,
+                template_color_cache=template_color_cache,
                 color_max_diff=color_max_diff,
                 debug=debug
             )
 
             if color_ok:
-                colorV_passed +=1
-            else:
-                # Second pass: glow color verification
-                glow_ok = False
+                color_passed_count += 1
+            # Second pass: glow color verification, only leftmost screenshot could ever glow
+            elif screenshot_index == 0 and glow_template is not None:
+                color_ok = _verify_template_color(
+                    screenshot_bgr=screenshot_bgr,
+                    template=glow_template,
+                    template_name=glow_template_name,
+                    x=x,
+                    y=y,
+                    template_color_cache=template_color_cache,
+                    color_max_diff=color_max_diff * 2,
+                    debug=debug,
+                )
 
-                if glow_template is not None:
-                    _, _, tmpl_bgr_g, mask_idx_g = glow_template
+                if color_ok:
+                    glow_passed_count += 1
 
-                    glow_ok = _color_verify(
-                        map_bgr=map_bgr,
-                        tmpl_bgr=tmpl_bgr_g,
-                        mask_idx=mask_idx_g,
-                        x=x,
-                        y=y,
-                        template_name=f"{label}_glow",
-                        color_second_pass_cache=color_second_pass_cache,
-                        color_max_diff=color_max_diff * 2,
-                        debug=debug
-                    )
+            if not color_ok:
+                color_rejected_count += 1
+                continue
 
-                if not glow_ok:
-                    colorV_rejected +=1
-                    continue
-                else:
-                    colorV_glow_passed +=1
-
-            candidates.append((cx, cy, abbrev, score))
-            if leftmost_x is None or cx < leftmost_x:
-                leftmost_x = cx
+            detected_candidates.append((
+                center_x,
+                center_y,
+                node_type,
+                match_score,
+            ))
 
     if debug or Settings.testmode:
-        print(f"[DetectNodes] passed:{colorV_passed:2d}, glowPassed:{colorV_glow_passed:2d}, rejected:{colorV_rejected}")
-    return candidates
+        print(
+            f"[DetectNodes] passed:{color_passed_count:2d}, "
+            f"glowPassed:{glow_passed_count:2d}, "
+            f"rejected:{color_rejected_count}"
+        )
+
+    return detected_candidates
+
+
+def _get_active_templates(templates):
+    # look only for active mods
+    active_node_types = set()
+    active_modifier_types = set()
+
+    for combination in ScoreTable.current():
+        active_node_types.add(combination[:2])
+        if len(combination) > 2:
+            active_modifier_types.add(combination[2:4])
+
+    passthrough_node_types = PASSTHROUGH_NODES.get(
+        ScoreTable.active_season,
+        PASSTHROUGH_NODES["default"],
+    )
+
+    node_templates = {
+        name: template
+        for name, template in templates.node_templates_scaled.items()
+        if name[:2].upper() in active_node_types
+           or name[:2].upper() in passthrough_node_types
+    }
+    modifier_templates = {
+        name: template
+        for name, template in templates.modifier_templates_scaled.items()
+        if name[:2].upper() in active_modifier_types
+    }
+
+    return node_templates, modifier_templates
+
+
+def _create_nodes(node_candidates, screenshot_index, screenshot_scale):
+    node_candidates.sort(key=lambda candidate: candidate[3], reverse=True)
+
+    nodes = []
+    # deduplicate nodes
+    deduplicate_distance_squared = int(50 / screenshot_scale) ** 2
+
+    for center_x, center_y, node_type, _match_score in node_candidates:
+        is_duplicate = any(
+            (center_x - node.x) ** 2 + (center_y - node.y) ** 2
+            < deduplicate_distance_squared
+            for node in nodes
+        )
+        if is_duplicate:
+            continue
+
+        node_id = f"{screenshot_index:02d}{len(nodes):02d}"
+        nodes.append(Node(center_x, center_y, node_type, node_id=node_id))
+
+    return nodes
 
 
 def _assign_modifiers(nodes, modifier_hits, screenshot_scale):
-    for mx, my, mod, _ in modifier_hits:
-        best = None
-        best_dist = float("inf")
+    valid_combinations = ScoreTable.current()
+
+    for modifier_x, modifier_y, modifier_type, _match_score in modifier_hits:
+        nearest_node = None
+        nearest_distance_squared = float("inf")
+
         for node in nodes:
-            d = (mx - node.x) ** 2 + (my - node.y) ** 2
-            if d < best_dist:
-                best = node
-                best_dist = d
-        if best is not None:
-            if best_dist < (130 / screenshot_scale) ** 2:
-                if (best.type + mod) in ScoreTable.current():
-                    best.modifier = mod
-                    # print(f"Mod {mod} assigned to {best.type} with distance {best_dist}")
-            else:
-                # print(f"Mod {mod} with distance {best_dist} DISCARDED")
-                pass
+            distance_squared = (
+                    (modifier_x - node.x) ** 2
+                    + (modifier_y - node.y) ** 2
+            )
+            if distance_squared < nearest_distance_squared:
+                nearest_node = node
+                nearest_distance_squared = distance_squared
+
+        if nearest_node is None:
+            continue
+
+        if nearest_distance_squared >= (130 / screenshot_scale) ** 2:
+            # print(f"Mod {modifier_type} with distance {nearest_distance_squared} DISCARDED")
+            continue
+
+        if (nearest_node.type + modifier_type) in valid_combinations:
+            nearest_node.modifier = modifier_type
+            # print(f"Mod {modifier_type} assigned to {nearest_node.type} with distance {nearest_distance_squared}")
 
 
-def detect_nodes(screenshot_str_or_img,
-                 templates: TemplateLibrary,
-                 screenshot_index=0,
-                 threshold=0.98,
-                 screenshot_scale=1.0,
-                 filter_fringe=True):
-    screenshot = _load_map_image(screenshot_str_or_img)
-    if Settings.testmode:
-        print(
-            f"[Testmode] "
-            f"Detect nodes step {screenshot_index}; screenshot_scale = {screenshot_scale}, thresh = {threshold}, "
-            f"templates_scale = {templates.last_scale}")
-    h, w = screenshot.shape[:2]
-    if screenshot_scale != 1.0:
-        scaled_screenshot = cv2.resize(
-            screenshot,
-            (int(w * screenshot_scale), int(h * screenshot_scale)),
-            interpolation=cv2.INTER_AREA,
-        )
-    else:
-        scaled_screenshot = screenshot
-
-    template_scale = templates.last_scale
-    trim = get_trim(screenshot_scale, template_scale)
-    map_gray_trimmed, map_bgr_trimmed = _trim_map(scaled_screenshot, trim)
-
-    # look only for active mods
-    active_nodes = set()
-    active_mods = set()
-    for key in ScoreTable.current():
-        active_nodes.add(key[:2])
-        if len(key) > 2:
-            active_mods.add(key[2:4])
-    passthrough_nodes = PASSTHROUGH_NODES.get(ScoreTable.active_season, PASSTHROUGH_NODES["default"])
-    node_templates = {
-        k: v
-        for k, v in templates.node_templates_scaled.items()
-        if k[:2].upper() in active_nodes or k[:2].upper() in passthrough_nodes
-    }
-    modifier_templates = {
-        k: v
-        for k, v in templates.modifier_templates_scaled.items()
-        if k[:2].upper() in active_mods
-    }
-
-    node_candidates = _detect_templates(
-        map_gray_trimmed,
-        map_bgr_trimmed,
-        node_templates,
-        threshold=SHAPE_THRESHOLD,
-        color_max_diff=COLOR_MAX_DIFF
-    )
-    node_candidates.sort(key=lambda c: c[3], reverse=True)
-
-    nodes = []
-    counter = 0
-
-    # deduplicate nodes
-    deduplicate_area = int((50 / screenshot_scale)) ** 2
-    for cx, cy, t, score in node_candidates:
-        keep = True
-        for n in nodes:
-            if (cx - n.x) ** 2 + (cy - n.y) ** 2 < deduplicate_area:
-                keep = False
-                break
-
-        if keep:
-            node_id = f"{screenshot_index:02d}{counter:02d}"
-            counter += 1
-            nodes.append(Node(cx, cy, t, node_id=node_id))
-
-    # detect modifiers
-    modifier_hits = _detect_templates(
-        map_gray_trimmed,
-        map_bgr_trimmed,
-        modifier_templates,
-        threshold=SHAPE_THRESHOLD,
-        color_max_diff=COLOR_MAX_DIFF
-    )
-    _assign_modifiers(nodes, modifier_hits, screenshot_scale)
-
-    h, w = map_bgr_trimmed.shape[:2]
+def _restore_node_coordinates(nodes, trimmed_image_shape, trim, screenshot_scale):
+    _, trimmed_width = trimmed_image_shape[:2]
     top_offset = trim["top"]
     left_offset = trim["left"]
+
     for node in nodes:
-        if node.x <= trim["fringe_left_soft"] * screenshot_scale or node.x >= w - trim["fringe"] * screenshot_scale:
+        if (
+                node.x <= trim["fringe_left_soft"] * screenshot_scale
+                or node.x >= trimmed_width - trim["fringe"] * screenshot_scale
+        ):
             node.is_fringe = True
+
         node.x = int(node.x / screenshot_scale) + left_offset
         node.y = int(node.y / screenshot_scale) + top_offset
 
-    nodes.sort(key=lambda n: n.x)
+
+def detect_nodes(
+        screenshot_str_or_img,
+        templates: TemplateLibrary,
+        screenshot_index=0,
+        threshold=SHAPE_ACCURACY_THRESHOLD,
+        screenshot_scale=1.0,
+        filter_fringe=True,
+):
+    screenshot = _load_map_image(screenshot_str_or_img)
+    if Settings.testmode:
+        print(
+            f"[DetectNodes] "
+            f"step {screenshot_index}; screenshot_scale = {screenshot_scale}, "
+            f"thresh = {threshold}, templates_scale = {templates.last_scale}"
+        )
+
+    screenshot_height, screenshot_width = screenshot.shape[:2]
+    if screenshot_scale != 1.0:
+        screenshot = cv2.resize(
+            screenshot,
+            (
+                int(screenshot_width * screenshot_scale),
+                int(screenshot_height * screenshot_scale),
+            ),
+            interpolation=cv2.INTER_AREA,
+        )
+
+    trim = get_trim(screenshot_scale, templates.last_scale)
+    screenshot_gray, screenshot_bgr = _trim_map(screenshot, trim)
+    node_templates, modifier_templates = _get_active_templates(templates)
+
+    node_candidates = _detect_templates(
+        screenshot_gray,
+        screenshot_bgr,
+        node_templates,
+        screenshot_index,
+        threshold=threshold,
+        color_max_diff=COLOR_MAX_DIFF,
+    )
+    nodes = _create_nodes(
+        node_candidates,
+        screenshot_index,
+        screenshot_scale,
+    )
+
+    # detect modifiers
+    modifier_candidates = _detect_templates(
+        screenshot_gray,
+        screenshot_bgr,
+        modifier_templates,
+        screenshot_index,
+        threshold=threshold,
+        color_max_diff=COLOR_MAX_DIFF,
+    )
+    _assign_modifiers(nodes, modifier_candidates, screenshot_scale)
+
+    _restore_node_coordinates(
+        nodes,
+        screenshot_bgr.shape,
+        trim,
+        screenshot_scale,
+    )
+
+    nodes.sort(key=lambda node: node.x)
     # random waypoint fix, probably not needed now
     # if len(nodes) > 2 and nodes[-1].type == "WA" and nodes[-2].type != "WA" and abs(nodes[-1].x - nodes[-2].x) > 10:
     #     nodes = nodes[:-1]
     if filter_fringe:
-        nodes = [n for n in nodes if not n.is_fringe]
+        nodes = [node for node in nodes if not node.is_fringe]
+    if Settings.testmode:
+        print(f"[DetectNodes] final count:{len(nodes)}")
+
     return nodes
 
 
-if __name__ == "__main__":
+def _run_test_preview():
     from processing.calibrator import perform_or_validate_calibration  # needed only here for quick testing
     from front.unified_preview import UnifiedPreview
 
     map_folder = get_path(["Test_scans", "Last_scan_result_1080_pathCoveredByTunnel"])
-    # maps = ["map_frag_02.png", ]
-    maps = os.listdir(map_folder)
     templates = TemplateLibrary()
     preview = UnifiedPreview(None)
     preview.enable_nodes_preview()
     preview.enable_trim_overlay()
     screenshot_scale = 1.0
-    for i, map_name in enumerate(maps):
-        name, ext = map_name.split('.')
-        if name.endswith("preview") or name.startswith("merged") or not ext.endswith("png"):
-            i -= 1
+
+    valid_map_names = []
+    for map_name in os.listdir(map_folder):
+        name, extension = os.path.splitext(map_name)
+        if name.endswith("preview") or name.startswith("merged") or extension != ".png":
             continue
+        valid_map_names.append((map_name, name))
+
+    for screenshot_index, (map_name, name) in enumerate(valid_map_names):
         map_path = os.path.join(map_folder, map_name)
-        if i == 0:
-            screenshot_scale, _ = perform_or_validate_calibration(screenshot=map_path, log=lambda msg: print(msg))
+
+        if screenshot_index == 0:
+            screenshot_scale, _ = perform_or_validate_calibration(
+                screenshot=map_path,
+                log=lambda message: print(message),
+            )
             templates.scale_templates(Settings.template_scale)
-        nodes = detect_nodes(map_path, templates, screenshot_scale=screenshot_scale, filter_fringe=False)
-        print(f"Detected {len(nodes)} nodes")
+
+        nodes = detect_nodes(
+            map_path,
+            templates,
+            screenshot_index=screenshot_index,
+            screenshot_scale=screenshot_scale,
+            filter_fringe=False,
+        )
+
         preview.base_img = _load_map_image(map_path)
         preview.set_nodes(nodes)
         # preview.draw_mod_assign_range = True
         preview.save(get_path([map_folder, f"{name}_nodes_preview.png"]))
         print(f"{map_name} done")
+
     print("Done.")
+
+
+if __name__ == "__main__":
+    _run_test_preview()
