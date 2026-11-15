@@ -1,6 +1,6 @@
 # calibrator.py
 from data.settings import Settings
-from processing.detect_nodes import detect_nodes, _load_map_image, SHAPE_ACCURACY_THRESHOLD
+from processing.detect_nodes import detect_nodes, _load_map_image
 from processing.template_library import TemplateLibrary, TEMPLATE_RES
 
 
@@ -55,6 +55,6 @@ def get_initial_params(screenshot):
 
     template_scale = round(scale_h + 0.001, 3)
     template_scale = min(template_scale, 1.0)
-    threshold = SHAPE_ACCURACY_THRESHOLD
+    threshold = Settings.threshold
 
     return screenshot_scale, template_scale, threshold, w, h

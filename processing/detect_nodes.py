@@ -24,7 +24,6 @@ MIN_LIGHTING_GAIN = 0.75
 TEMPLATE_LEVELS = [255, 90, 20]  # purest form of magic numbers, it just works™
 IMAGE_LEVELS = [255, 90, 20]
 SHAPE_GRAY_THRESHOLDS = [180, 130, 80]
-SHAPE_ACCURACY_THRESHOLD = 0.8
 COLOR_MAX_DIFF = 20
 
 
@@ -168,7 +167,7 @@ def _detect_templates(
         screenshot_bgr,
         templates,
         screenshot_index,
-        threshold=SHAPE_ACCURACY_THRESHOLD,
+        threshold=Settings.threshold,
         color_max_diff=COLOR_MAX_DIFF,
         debug=False,
 ):
@@ -383,7 +382,7 @@ def detect_nodes(
         screenshot_str_or_img,
         templates: TemplateLibrary,
         screenshot_index=0,
-        threshold=SHAPE_ACCURACY_THRESHOLD,
+        threshold=Settings.threshold,
         screenshot_scale=1.0,
         filter_fringe=True,
 ):
