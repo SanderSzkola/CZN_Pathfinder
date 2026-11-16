@@ -61,7 +61,7 @@ SEASONS = {
         "EVTU",
         "EVME",
     ]),
-    "s3": Season("S 3", [
+    "s3": Season("S3", [
         "NO",
         "NOPE",
         "EL",
@@ -71,7 +71,7 @@ SEASONS = {
         "EV",
         "EVDI"
     ]),
-    "s4": Season("S 4", [
+    "s4": Season("S4", [
         "NO",
         "NOOR",
         "NODE",
@@ -85,7 +85,7 @@ SEASONS = {
         "EV",
         "EVDE",
     ]),
-    "s5": Season("S 5", [
+    "s5": Season("S5", [
         "NO",
         "NOOR",
         "EL",

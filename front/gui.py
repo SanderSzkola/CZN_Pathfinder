@@ -17,7 +17,7 @@ import webbrowser
 import re
 
 from data.score_config import SEASONS
-from data.score_table import ScoreTable
+from data.score_table import ScoreTable, TABLES_PER_SEASON
 from data.settings import Settings
 from front.drawer import draw_map, load_icon
 from front.fake_window_for_app_testing import open_fake_map
@@ -60,7 +60,7 @@ class PipelineGUI:
         self.last_image = None
         self.last_path = None
         self.log_file_path = get_path("log_file.log")
-        self.score_mode = tk.StringVar(value=ScoreTable.active_season)
+        self.score_mode = tk.StringVar(value=ScoreTable.get_key())
         self._delayed_pathfinder_id = None
         self._icons = {}
         self._blink_state = False
@@ -222,22 +222,27 @@ class PipelineGUI:
         # season radio
         for season_key, season in SEASONS.items():
             if season_key == "s*" and not Settings.testmode: continue  # too tall, breaks ui
-            tb.Radiobutton(
-                header_row,
-                text=season.name,
-                variable=self.score_mode,
-                value=season_key,
-                command=self._on_score_mode_change
-            ).pack(side="left", padx=5)
+            frame = tb.Frame(header_row)
+            frame.pack(side="left", padx=3)
+            tb.Label(frame, text=season.name).pack(side="left", padx=(0, 1))
+            for table_index in range(1, TABLES_PER_SEASON + 1):
+                tb.Radiobutton(
+                    frame,
+                    text=str(table_index),
+                    variable=self.score_mode,
+                    value=f"{season_key}:{table_index}",
+                    command=self._on_score_mode_change,
+                    bootstyle="info-toolbutton",
+                    padding=2,
+                ).pack(side="left")
 
         # splitting logic
         columns_frame = tb.Frame(panel)
         columns_frame.pack(fill="x")
-        active_keys = SEASONS[self.score_mode.get()].active_scores
         items = [
             (k, v)
             for k, v in ScoreTable.current().items()
-            if k in active_keys and v.enabled
+            if v.enabled
         ]
         nodes = [(k, [(k, v)]) for k, v in items if len(k) == 2]
         mods_raw = [(k, v) for k, v in items if len(k) > 2]
@@ -728,7 +733,7 @@ class PipelineGUI:
         try:
             loaded = ScoreTable.load()
             if loaded:
-                self.score_mode.set(ScoreTable.active_season)
+                self.score_mode.set(ScoreTable.get_key())
                 self._build_score_table(self.score_table_container)
                 self.log("Score Table imported")
                 self._schedule_pathfinder_rerun()
@@ -747,8 +752,10 @@ class PipelineGUI:
             self.log(f"Export error: {e}")
 
     def _on_score_mode_change(self):
-        ScoreTable.active_season = self.score_mode.get()
-        self.log(f"Score mode changed to: {ScoreTable.active_season}")
+        season_key, table_index = self.score_mode.get().split(":")
+        ScoreTable.active_season = season_key
+        ScoreTable.active_table = int(table_index)
+        self.log(f"Score mode changed to: {ScoreTable.get_key()}")
         # rebuild UI completely
         self._build_score_table(self.score_table_container)
         self._schedule_pathfinder_rerun()
