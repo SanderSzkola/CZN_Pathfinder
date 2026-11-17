@@ -215,26 +215,55 @@ class PipelineGUI:
         # real build
         panel = tb.Frame(parent)
         panel.pack(fill="both", expand=True)
-        header_row = tb.Frame(panel)
-        header_row.pack(fill="x")
-        tb.Label(header_row, text="Score Table", anchor="w").pack(side="top")
+        tb.Label(panel, text="Score Table", anchor="w").pack(side="top")
+        tab_bar = tb.Frame(panel)
+        tab_bar.pack(fill="x", pady=(4, 0))
 
-        # season radio
-        for season_key, season in SEASONS.items():
-            if season_key == "s*" and not Settings.testmode: continue  # too tall, breaks ui
-            frame = tb.Frame(header_row)
-            frame.pack(side="left", padx=3)
-            tb.Label(frame, text=season.name).pack(side="left", padx=(0, 1))
-            for table_index in range(1, TABLES_PER_SEASON + 1):
-                tb.Radiobutton(
-                    frame,
-                    text=str(table_index),
-                    variable=self.score_mode,
-                    value=f"{season_key}:{table_index}",
-                    command=self._on_score_mode_change,
-                    bootstyle="info-toolbutton",
-                    padding=2,
-                ).pack(side="left")
+        # Season navigation
+        season_area = tb.Frame(tab_bar)
+        season_area.pack(side="left", fill="x", expand=True)
+        self._score_tab_left = tb.Button(
+            season_area, text="◀", width=3,
+            bootstyle="secondary-outline",
+            command=lambda: self._scroll_score_seasons(-1),
+        )
+        self._score_tab_left.pack(side="left")
+        self._score_season_frame = tb.Frame(season_area)
+        self._score_season_frame.pack(side="left", fill="x", expand=True)
+        self._score_tab_right = tb.Button(
+            season_area, text="▶", width=3,
+            bootstyle="secondary-outline",
+            command=lambda: self._scroll_score_seasons(1),
+        )
+        self._score_tab_right.pack(side="left")
+
+        # Table selection
+        table_area = tb.Frame(tab_bar)
+        table_area.pack(side="right", padx=(5, 0))
+
+        self._score_table_buttons = []
+        for table_index in range(1, TABLES_PER_SEASON + 1):
+            btn = tb.Radiobutton(
+                table_area,
+                text=str(table_index),
+                variable=self.score_mode,
+                value=f"{self._get_current_score_season()}:{table_index}",
+                command=self._on_score_mode_change,
+                bootstyle="info-toolbutton",
+                padding=4,
+            )
+            btn.pack(side="left", fill="x", expand=True)
+            self._score_table_buttons.append(btn)
+
+        # Seasons
+        self._score_seasons = [
+            (key, season)
+            for key, season in SEASONS.items()
+            if key != "s*" or Settings.testmode
+        ]
+
+        self._score_season_index = getattr(self, "_score_season_index", 0)
+        self._render_score_seasons()
 
         # splitting logic
         columns_frame = tb.Frame(panel)
@@ -306,6 +335,38 @@ class PipelineGUI:
                 self._create_score_row(left, *node_item)
             if mod_item:
                 self._create_score_row(right, *mod_item)
+
+    def _get_current_score_season(self):
+        return self.score_mode.get().split(":")[0]
+
+    def _render_score_seasons(self):
+        for child in self._score_season_frame.winfo_children():
+            child.destroy()
+
+        visible_count = 4
+        total = len(self._score_seasons)
+        self._score_season_index = max(0, min(self._score_season_index, max(0, total - visible_count)))
+
+        visible = self._score_seasons[self._score_season_index:self._score_season_index + visible_count]
+
+        for season_key, season in visible:
+            tb.Radiobutton(
+                self._score_season_frame,
+                text=season.name,
+                variable=self.score_mode,
+                value=f"{season_key}:{self.score_mode.get().split(':')[1]}",
+                command=self._on_score_mode_change,
+                bootstyle="info-toolbutton",
+                padding=4,
+            ).pack(side="left", fill="x", expand=True)
+
+        self._score_tab_left.configure(state="normal" if self._score_season_index > 0 else "disabled")
+        self._score_tab_right.configure(
+            state="normal" if self._score_season_index + visible_count < total else "disabled")
+
+    def _scroll_score_seasons(self, direction):
+        self._score_season_index += direction
+        self._render_score_seasons()
 
     def _create_score_row(self, parent, display_key, entries):
         keys = [k for k, _ in entries]
