@@ -101,6 +101,7 @@ class SettingsPanel(tb.Toplevel):
         row = self._add_explanation(parent, row, "Allows for calling scanners directly from the game")
         row = self._add_field(parent, row, "Run automatic scanner", "keyboard_input_autoscanner")
         row = self._add_field(parent, row, "Run halfauto scanner", "keyboard_input_halfautoscanner")
+        row = self._add_field(parent, row, "Switch score mode", "keyboard_input_switch_score")
         row = self._add_explanation(parent, row, "Accepts letters and digits, alone or joined by + sign")
 
         row = self._add_separator(parent, row)

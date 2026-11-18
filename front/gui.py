@@ -60,7 +60,7 @@ class PipelineGUI:
         self.last_image = None
         self.last_path = None
         self.log_file_path = get_path("log_file.log")
-        self.score_mode = tk.StringVar(value=ScoreTable.get_key())
+        self.score_mode = None
         self._delayed_pathfinder_id = None
         self._icons = {}
         self._blink_state = False
@@ -211,6 +211,7 @@ class PipelineGUI:
         self.score_vars = {}
         self.score_labels = {}
         self._icons = {}
+        self.score_mode = tk.StringVar(value=ScoreTable.get_key())
 
         # real build
         panel = tb.Frame(parent)
@@ -812,10 +813,10 @@ class PipelineGUI:
         except Exception as e:
             self.log(f"Export error: {e}")
 
-    def _on_score_mode_change(self):
+    def _on_score_mode_change(self, active_table: int = None):
         season_key, table_index = self.score_mode.get().split(":")
         ScoreTable.active_season = season_key
-        ScoreTable.active_table = int(table_index)
+        ScoreTable.active_table = int(table_index) if active_table is None else active_table
         self.log(f"Score mode changed to: {ScoreTable.get_key()}")
         # rebuild UI completely
         self._build_score_table(self.score_table_container)
@@ -974,6 +975,7 @@ class PipelineGUI:
             ("auto", Settings.keyboard_input_autoscanner),
             ("halfauto", Settings.keyboard_input_halfautoscanner),
             ("fake_map", Settings.keyboard_input_fake_map),
+            ("switch_score", Settings.keyboard_input_switch_score),
         ]
         if Settings.keyboard_input:
             try:
@@ -998,6 +1000,9 @@ class PipelineGUI:
             self.start_halfauto_pipeline(from_key=True)
         elif action == "fake_map" and Settings.testmode:
             self.open_fake_map_window()
+        elif action == "switch_score":
+            next_table = ScoreTable.active_table % TABLES_PER_SEASON + 1
+            self._on_score_mode_change(next_table)
 
     def shutdown(self):
         if self._kb_listener:

@@ -41,6 +41,7 @@ class Settings:
     keyboard_input: bool = False
     keyboard_input_autoscanner: str = "s+1"
     keyboard_input_halfautoscanner: str = "s+2"
+    keyboard_input_switch_score:str = "q+1"
     keyboard_input_fake_map: str = "s+t"
     keyboard_input_fake_map_720: str = "4"
     keyboard_input_fake_map_1080: str = "5"
