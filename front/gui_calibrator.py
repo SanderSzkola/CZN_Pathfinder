@@ -272,7 +272,7 @@ class CalibrationPanel(tb.Toplevel):
         thr_frame.grid(row=row, column=1, sticky="w")
 
         tb.Entry(thr_frame, textvariable=self.threshold, width=8).pack(side="left")
-        self._spin_buttons(thr_frame, self.threshold, 0.005)
+        self._spin_buttons(thr_frame, self.threshold, 0.01)
 
         tb.Label(
             grid,

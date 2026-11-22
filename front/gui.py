@@ -3,6 +3,7 @@ import os
 import threading
 import time
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import filedialog
 import ttkbootstrap as tb
 import cv2
@@ -37,11 +38,15 @@ class PipelineGUI:
         self.is_admin = is_admin
         self.map_scale_normal = Settings.ui_map_image_scale_normal / 100  # as %
         self.map_scale_mini = Settings.ui_map_image_scale_mini / 100  # as %
-        self._is_mini = False
         self.left_panel_w = 1190
         self.left_panel_h = 490
         self.right_panel_w = 410
         self.right_panel_h = 490
+        self.mini_status_panel_w = 24
+        self._is_mini = False
+        self._mini_window_focused = False
+        self.root.bind("<FocusIn>", self._on_window_focus)
+        self.root.bind("<FocusOut>", self._on_window_focus)
 
         if self.low_res:
             big_left_panel_w = self.left_panel_w
@@ -101,7 +106,7 @@ class PipelineGUI:
             Settings.ui_window_offset_x_mini = int(self.root.winfo_screenwidth() / 2)
 
         if self._is_mini:
-            self.window_w = scaled_w
+            self.window_w = scaled_w + self.mini_status_panel_w
             self.window_h = scaled_h
             window_x = Settings.ui_window_offset_x_mini if Settings.ui_window_offset_x_mini >= 0 else 0
             window_y = Settings.ui_window_offset_y_mini if Settings.ui_window_offset_y_mini >= 0 else 0
@@ -111,16 +116,24 @@ class PipelineGUI:
             window_x = Settings.ui_window_offset_x if Settings.ui_window_offset_x >= 0 else 0
             window_y = Settings.ui_window_offset_y if Settings.ui_window_offset_y >= 0 else 0
 
+        if hasattr(self, "left_image_panel"):
+            self.left_image_panel.configure(width=scaled_w, height=scaled_h)
+            self.mini_status_panel.configure(width=self.mini_status_panel_w, height=scaled_h)
+            self._update_panel_visibility()
+
         self.root.geometry(f"{self.window_w}x{self.window_h}+{window_x}+{window_y}")
         self.root.update()
         if hasattr(self, "_last_pil") and self._last_pil is not None:
             self.display_image(self._last_pil)
+        if self._is_mini:
+            self._refresh_mini_status_focus()
 
     def _build_ui(self):
         main_frame = tb.Frame(self.root)
         main_frame.pack(fill="both", expand=True)
 
         self._build_left_image_panel(main_frame)
+        self._build_mini_status_panel(main_frame)
         self._build_right_panel(main_frame)
 
     def _build_left_image_panel(self, parent):
@@ -131,14 +144,93 @@ class PipelineGUI:
         )
         panel.pack(side="left", fill="both")
         panel.pack_propagate(False)
+        self.left_image_panel = panel
 
         self.image_label = tb.Label(panel)
         self.image_label.pack(fill="both", expand=True)
         self.image_label.bind("<Double-Button-1>", lambda e: self._update_geometry(change=True))
 
+    def _build_mini_status_panel(self, parent):
+        panel = tk.Frame(
+            parent,
+            width=self.mini_status_panel_w,
+            height=self._scale_to_ui_size(self.left_panel_h),
+            borderwidth=0,
+            highlightthickness=0,
+        )
+        panel.pack_propagate(False)
+        self.mini_status_panel = panel
+
+        default_family = tkfont.nametofont("TkDefaultFont").actual("family")
+        self._mini_status_score_font = tkfont.Font(root=self.root, family=default_family, size=1, weight="bold")
+        self._mini_status_focus_font = tkfont.Font(root=self.root, family=default_family, size=1, weight="bold")
+        self.mini_status_score = tk.Label(
+            panel,
+            text=str(ScoreTable.active_table),
+            font=self._mini_status_score_font,
+            anchor="center",
+            justify="center",
+            borderwidth=0,
+            highlightthickness=0,
+            padx=0,
+            pady=0,
+        )
+        self.mini_status_score.place(x=0, y=0, relwidth=1, relheight=0.5)
+        self.mini_status_focus = tk.Label(
+            panel,
+            font=self._mini_status_focus_font,
+            anchor="center",
+            justify="center",
+            borderwidth=0,
+            highlightthickness=0,
+            padx=0,
+            pady=0,
+        )
+        self.mini_status_focus.place(x=0, rely=0.5, relwidth=1, relheight=0.5)
+        panel.bind("<Configure>", self._fit_mini_status_fonts)
+        self._refresh_mini_status_focus()
+        self._fit_mini_status_fonts()
+
+    def _fit_mini_status_fonts(self, event=None):
+        panel = self.mini_status_panel
+        width = event.width if event is not None else max(panel.winfo_width(), panel.winfo_reqwidth())
+        height = event.height if event is not None else max(panel.winfo_height(), panel.winfo_reqheight())
+        available_width = max(1, width - 2)
+        available_height = max(1, height // 2 - 2)
+
+        for font, text in (
+                (self._mini_status_score_font, "1"),
+                (self._mini_status_focus_font, self.mini_status_focus.cget("text")),
+        ):
+            best_size = 1
+            for size in range(1, 257):
+                font.configure(size=size)
+                if font.measure(text) > available_width or font.metrics("linespace") > available_height:
+                    break
+                best_size = size
+            font.configure(size=best_size)
+
+    def _refresh_mini_status_focus(self):
+        is_ok = not self._is_mini or self._mini_window_focused
+        self.mini_status_focus.configure(
+            text="✓" if is_ok else "⚠",
+            background="green" if is_ok else "red",
+        )
+        if hasattr(self, "mini_status_panel"):
+            self._fit_mini_status_fonts()
+
+    def _update_panel_visibility(self):
+        if self._is_mini:
+            self.right_panel.pack_forget()
+            self.mini_status_panel.pack(side="left", fill="y")
+        else:
+            self.mini_status_panel.pack_forget()
+            self.right_panel.pack(side="left", fill="both")
+
     def _build_right_panel(self, parent):
         panel = tb.Frame(parent, width=self.right_panel_w, height=self.right_panel_h)
         panel.pack(side="left", fill="both")
+        self.right_panel = panel
         panel.pack_propagate(False)
 
         self._build_log_display(panel)
@@ -797,6 +889,7 @@ class PipelineGUI:
             if loaded:
                 self.score_mode.set(ScoreTable.get_key())
                 self._build_score_table(self.score_table_container)
+                self._refresh_mini_status_score()
                 self.log("Score Table imported")
                 self._schedule_pathfinder_rerun()
             elif not loaded and user_triggered:
@@ -953,6 +1046,16 @@ class PipelineGUI:
 
         self.root.after(interval, self._blink_loop)
 
+    def _on_window_focus(self, event=None):
+        if event is not None and event.widget != self.root:
+            return
+
+        focused = self.root.focus_displayof() is not None
+        if focused != self._mini_window_focused:
+            self._mini_window_focused = focused
+            if self._is_mini:
+                self._refresh_mini_status_focus()
+
     def _schedule_pathfinder_rerun(self, delay=600):
         if self.last_map is None:
             return
@@ -993,6 +1096,10 @@ class PipelineGUI:
     def _on_keyboard_action(self, action):
         self.root.after(0, lambda: self._handle_keyboard_action(action))
 
+    def _refresh_mini_status_score(self):
+        self.mini_status_score.configure(text=str(ScoreTable.active_table))
+        self._fit_mini_status_fonts()
+
     def _handle_keyboard_action(self, action):
         if action == "auto":
             self.start_automatic_pipeline(from_key=True)
@@ -1003,6 +1110,7 @@ class PipelineGUI:
         elif action == "switch_score":
             next_table = ScoreTable.active_table % TABLES_PER_SEASON + 1
             self._on_score_mode_change(next_table)
+            self._refresh_mini_status_score()
 
     def shutdown(self):
         if self._kb_listener:
