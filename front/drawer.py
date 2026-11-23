@@ -13,7 +13,8 @@ GRID = 70
 ICON_SCALE = 0.35
 MODIFIER_Y_OFFSET = -5
 MIN_COLS = 17
-MIN_ROWS = 8  # 5 from game map + 2 for counters + 1 for top / bottom padding
+MIN_UI_ROWS = 8  # 5 from game map + 2 for counters + 1 for top / bottom padding
+MAX_GAME_ROW_INDEX = 4 # 0-4 so 5 total, hardcoded so map stays consistent in case real map has less
 _BG_CACHE = None
 _LAST_IMAGE = None
 
@@ -244,13 +245,14 @@ def draw_map(
     cols = [n["col"] for n in nodes.values()]
     rows = [n["row"] for n in nodes.values()]
     min_col, max_col = min(cols), max(cols)
-    min_row, max_row = min(rows), max(rows)
+    min_row = min(rows)
+    max_row = MAX_GAME_ROW_INDEX
 
     col_shift = -min_col + 1
     row_shift = -min_row + 1
 
     col_span = max(max_col - min_col + 2, MIN_COLS)
-    row_span = max(max_row - min_row + 2, MIN_ROWS)
+    row_span = max(max_row - min_row + 2, MIN_UI_ROWS)
     width = col_span * GRID
     height = row_span * GRID
     canvas = np.zeros((height, width, 4), dtype=np.uint8)
