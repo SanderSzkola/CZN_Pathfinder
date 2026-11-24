@@ -13,10 +13,10 @@ More detailed instructions:
 Calibration: this will tell the script your game window size and how it should scale template images.
 You must perform it once, then every time you change game's resolution. It is saved in settings file, don't lose it.
 Instructions:
-	Open the game in windowed mode (not fullscreen), show chaos minimap somewhere in the middle, to see many different nodes and modifiers.
+	Open the game, show chaos minimap somewhere in the middle, to see many different nodes and modifiers.
 	Press Calibrator button on script gui. It will open new window with in-game screenshot.
 	Press Recalibrate button. It will mark every visible node with detected type, as in "NO" for NOrmal fight, or "RESH" for REst with a SHop.
-	Check help tab, it contains explanations for all labels.
+	Check Help tab, it contains explanations for all labels.
 	Confirm that every node has appropriate label. Default setting should be good in most cases.
 	If labels are missing, try lowering threshold, press recalibrate and check again. If there are too many labels, raise it.
     If that does not work, try modifying template scale value. It is calculated to match game window's size, so it should not be tweaked too far from initial value.
@@ -26,7 +26,7 @@ Check Help tab for more instructions, Overlays to draw preview in different way,
 Automatic scan: This will move the mouse programmatically and do all work for you.
 This is not a bot / cheat, it simply drags the map until it sees the boss. It will not play through the map instead of you.
 Requirements:
-	The game is opened in windowed mode, at the start of a chaos run, the minimap is shown and in default position (not moved left/right).
+	The game is opened, at the start of a chaos run, the minimap is shown and in default position (not moved left/right).
 	The script is running with admin privileges (game is also admin, so it will ignore signals sent by a non-admin process).
 	It takes about 1-2s for a screenshot, and 2-6 screenshots for the full map. You MUST observe it working, at least first few times, as it may break in some way.
 	If you see it misbehaving, quickly move mouse to the top left corner to stop it.
@@ -74,16 +74,18 @@ You may also customize what is drawn in Calibrator preview:
     Highlight paths between nodes
     Paint exclusion areas on screenshot
     Dim background to make script marks easier to spot
-
 Exclusion areas are marked by diagonal yellow and blue lines.
     Yellow is not processed at all, script does not see anything located there.
     Blue is processed in a special way. Nodes located there are discarded, as they may be recognized incorrectly or not recognized at all. Modifiers are processed in a normal way.
 
 
-Mini mode: script window may be minified by double-clicking map image, which together with 'always on top' option allows to always see map in a non-obstructive way.
+Mini mode: script window may be minified by double-clicking it, which together with 'always on top' option allows to always see map in a non-obstructive way.
+    It shows scanned map, active score mode and whether the window is currently focused (used for keyboard actions).
     You can customise the size and position of mini mode window in settings.
     Window can be moved freely. When you exit mini mode, the position of window will be saved for next use.
     Together with keyboard shortcuts, this allows for fast and seamless use of script, without the need to alt-tab between script and game windows.
+    Be careful when using keyboard shortcuts. If the game is focused instead of script window, some keys will trigger game actions,
+    like pressing 1 on chaos map making you move to top node. Only use key shortcuts when you see green ok tick.
 
 
 Main flow of the script is more or less done, but the error handling does not cover every possible way the script may break.

@@ -75,7 +75,7 @@ python app.py
 ```
 You can create your own exe by installing PyInstaller and running build.py from utils folder.
 
-### Please read instructions.txt before first use
+### App requires one-time calibration. Please read instructions.txt before first use
 
 ## Notes
 
@@ -90,4 +90,5 @@ the game displayed to the player.<br>
 It does not run the map for you. It does not modify or inject any code into the game. It does not have access to any
 hidden or unintentional data.<br>
 It does not provide any unfair account advantage compared to something like autofarmers.<br>
-It DOES emulate user input to scroll opened chaos map, but that action does not advance game's state. 
+It DOES emulate user input to scroll opened chaos map, but that action does not advance game's state.<br><br>
+If you have a bug report or feature request, you may open a github issue, or contact me on discord, @sander_sa
