@@ -21,10 +21,10 @@ TRIM_LEFT_PX = 150
 # color verify params
 MAX_LIGHTING_GAIN = 1.25
 MIN_LIGHTING_GAIN = 0.75
-TEMPLATE_LEVELS = [255, 90, 20]  # purest form of magic numbers, it just works™
+TEMPLATE_LEVELS = [255, 50, 15]  # purest form of magic numbers, it just works™
 IMAGE_LEVELS = [255, 90, 20]
 SHAPE_GRAY_THRESHOLDS = [180, 130, 80]
-COLOR_MAX_DIFF = 20
+COLOR_MAX_DIFF = 15
 
 
 # validate shape matches against color channels
@@ -89,10 +89,19 @@ def _verify_template_color(
     return passed
 
 
-def _threshold_gray(gray_image, levels):
+def threshold_gray(gray_image, levels, screenshot_index=-1):
+    height = gray_image.shape[0]
     grayscale_values = gray_image.astype(np.int16)
+
+    threshold_adjustment = np.zeros((height, 1), dtype=np.int16)
+    if height > 100:  # image only, templates are smaller
+        threshold_adjustment[int(height * 0.75):] += -20  # counter image darkening at the bottom
+        if screenshot_index == 0:
+            width = gray_image.shape[1]
+            threshold_adjustment[:int(width * 0.3)] += 40  # counter glow beam
+
     conditions = [
-        grayscale_values > threshold
+        grayscale_values > (threshold + threshold_adjustment)
         for threshold in SHAPE_GRAY_THRESHOLDS
     ]
     return np.select(conditions, levels, default=0).astype(np.uint8)
@@ -144,6 +153,36 @@ def _trim_map(map_image, trim):
     return grayscale_region, color_region
 
 
+def _get_active_templates(templates):
+    # look only for active mods
+    active_node_types = set()
+    active_modifier_types = set()
+
+    for combination in ScoreTable.current():
+        active_node_types.add(combination[:2])
+        if len(combination) > 2:
+            active_modifier_types.add(combination[2:4])
+
+    passthrough_node_types = PASSTHROUGH_NODES.get(
+        ScoreTable.active_season,
+        PASSTHROUGH_NODES["default"],
+    )
+
+    node_templates = {
+        name: template
+        for name, template in templates.node_templates_scaled.items()
+        if name[:2].upper() in active_node_types
+           or name[:2].upper() in passthrough_node_types
+    }
+    modifier_templates = {
+        name: template
+        for name, template in templates.modifier_templates_scaled.items()
+        if name[:2].upper() in active_modifier_types
+    }
+
+    return node_templates, modifier_templates
+
+
 def _non_max_suppression(points, result_shape, template_width, template_height):
     taken = []
     occupied = np.zeros(result_shape, dtype=np.uint8)
@@ -177,7 +216,7 @@ def _detect_templates(
     glow_passed_count = 0
     color_rejected_count = 0
 
-    thresholded_screenshot = _threshold_gray(screenshot_gray, IMAGE_LEVELS)
+    thresholded_screenshot = threshold_gray(screenshot_gray, IMAGE_LEVELS, screenshot_index)
 
     for template_name, template in templates.items():
         if template_name.endswith("_glow"):
@@ -185,12 +224,12 @@ def _detect_templates(
 
         template_gray, mask, _, _ = template
         template_height, template_width = template_gray.shape
-        thresholded_template = _threshold_gray(template_gray, TEMPLATE_LEVELS)
+        thresholded_template = threshold_gray(template_gray, TEMPLATE_LEVELS)
 
         match_scores = cv2.matchTemplate(
             thresholded_screenshot,
             thresholded_template,
-            cv2.TM_CCORR_NORMED,
+            cv2.TM_SQDIFF_NORMED,
             mask=mask,
         )
 
@@ -199,19 +238,18 @@ def _detect_templates(
             template_height // 2,
             template_width // 2,
         )
-        dilated_scores = cv2.dilate(
+        eroded_scores = cv2.erode(
             match_scores,
-            np.ones((neighborhood_size, neighborhood_size), dtype=np.float32),
+            np.ones((neighborhood_size, neighborhood_size), dtype=np.uint8),
         )
-        local_maxima = match_scores == dilated_scores
-
-        candidate_mask = (match_scores >= threshold) & local_maxima
+        local_minima = match_scores == eroded_scores
+        candidate_mask = (match_scores <= threshold) & local_minima
         candidate_y, candidate_x = np.where(candidate_mask)
         if candidate_y.size == 0:
             continue
 
         candidate_scores = match_scores[candidate_y, candidate_x]
-        score_order = np.argsort(candidate_scores)[::-1]
+        score_order = np.argsort(candidate_scores)
         candidate_x = candidate_x[score_order]
         candidate_y = candidate_y[score_order]
 
@@ -282,38 +320,8 @@ def _detect_templates(
     return detected_candidates
 
 
-def _get_active_templates(templates):
-    # look only for active mods
-    active_node_types = set()
-    active_modifier_types = set()
-
-    for combination in ScoreTable.current():
-        active_node_types.add(combination[:2])
-        if len(combination) > 2:
-            active_modifier_types.add(combination[2:4])
-
-    passthrough_node_types = PASSTHROUGH_NODES.get(
-        ScoreTable.active_season,
-        PASSTHROUGH_NODES["default"],
-    )
-
-    node_templates = {
-        name: template
-        for name, template in templates.node_templates_scaled.items()
-        if name[:2].upper() in active_node_types
-           or name[:2].upper() in passthrough_node_types
-    }
-    modifier_templates = {
-        name: template
-        for name, template in templates.modifier_templates_scaled.items()
-        if name[:2].upper() in active_modifier_types
-    }
-
-    return node_templates, modifier_templates
-
-
 def _create_nodes(node_candidates, screenshot_index, screenshot_scale):
-    node_candidates.sort(key=lambda candidate: candidate[3], reverse=True)
+    node_candidates.sort(key=lambda candidate: candidate[3], reverse=False)
 
     nodes = []
     # deduplicate nodes

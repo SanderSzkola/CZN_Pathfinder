@@ -16,7 +16,7 @@ class Settings:
     # template params
     template_scale: float = 1.0
     screenshot_scale: float = 1.0
-    threshold: float = 0.8  # mod symbols are getting complex, keep this low
+    threshold: float = 0.4  # inverse, lower is better
     calibration_done = False
 
     # preview draw flags
@@ -26,6 +26,8 @@ class Settings:
     preview_draw_node_icons: bool = False
     preview_draw_fringe_marks: bool = True
     preview_draw_trim_overlay: bool = True
+    preview_threshold_background:bool = False
+    preview_draw_template_images:bool = False
 
     # ui
     darkmode: bool = True

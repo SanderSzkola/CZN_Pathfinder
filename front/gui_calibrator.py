@@ -372,6 +372,8 @@ class CalibrationPanel(tb.Toplevel):
             "fringe": tk.BooleanVar(value=Settings.preview_draw_fringe_marks),
             "icons": tk.BooleanVar(value=Settings.preview_draw_node_icons),
             "trim": tk.BooleanVar(value=Settings.preview_draw_trim_overlay),
+            "thresh_background": tk.BooleanVar(value=Settings.preview_threshold_background),
+            "templates": tk.BooleanVar(value=Settings.preview_threshold_background),
         }
 
         preview_box = tb.Labelframe(
@@ -398,11 +400,13 @@ class CalibrationPanel(tb.Toplevel):
             ).pack(anchor="w")
 
         add_cb("Dim background", self._preview_vars["dim"], "preview_dim_background")
+        add_cb("Thresh background", self._preview_vars["thresh_background"], "preview_threshold_background")
         add_cb("Draw corridors", self._preview_vars["corridors"], "preview_draw_corridors")
         add_cb("Draw node text", self._preview_vars["nodes_text"], "preview_draw_nodes_text")
         add_cb("Draw node icons", self._preview_vars["icons"], "preview_draw_node_icons")
         add_cb("Draw fringe marks", self._preview_vars["fringe"], "preview_draw_fringe_marks")
         add_cb("Draw trim overlay", self._preview_vars["trim"], "preview_draw_trim_overlay")
+        add_cb("Draw templates", self._preview_vars["templates"], "preview_draw_template_images")
 
     def _build_folders_panel(self, parent):
         parent.pack_propagate(False)
@@ -621,7 +625,7 @@ class CalibrationPanel(tb.Toplevel):
     def _apply(self):
         base_np = cv2.cvtColor(np.array(self.scr_original_pil), cv2.COLOR_RGB2BGR)
         if self.preview is None:
-            self.preview = UnifiedPreview(base_np)
+            self.preview = UnifiedPreview(base_np, templates=self.templates)
         else:
             self.preview.base_img = base_np
         self.preview.scale = self.templates_scale.get() / self.screenshot_scale

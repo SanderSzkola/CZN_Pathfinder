@@ -4,12 +4,12 @@ import numpy as np
 
 from data.settings import Settings
 from processing.detect_connections import load_icon_map
-from processing.detect_nodes import get_trim
+from processing.detect_nodes import get_trim, threshold_gray, TEMPLATE_LEVELS, IMAGE_LEVELS
 
 CORRIDOR_ALPHA = 0.07
 
 class UnifiedPreview:
-    def __init__(self, base_img):
+    def __init__(self, base_img, templates=None):
         if base_img is not None:
             self.base_img = base_img.copy()
         self.scale = Settings.get_scale()
@@ -21,11 +21,14 @@ class UnifiedPreview:
         self.draw_node_icons = False
         self.draw_trim_overlay = False
         self.draw_mod_assign_range = False
+        self.threshold_background = False
+        self.draw_template_images = False
 
         self.nodes = []
         self.edges = []
         self.corridor_debug = []
         self._icon_map = None
+        self.templates = templates
 
     def set_nodes(self, nodes):
         self.nodes = nodes
@@ -291,8 +294,62 @@ class UnifiedPreview:
 
         return img
 
+    def _threshold_image(self, img, levels):
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        return cv2.cvtColor(
+            threshold_gray(gray, levels, 0),
+            cv2.COLOR_GRAY2BGR,
+        )
+
+    def _draw_threshold_background(self, img):
+        return self._threshold_image(img, IMAGE_LEVELS)
+
+    def _draw_templates(self, img):
+        if self.templates is None:
+            return img
+
+        x = 10
+        y = 10
+        gap = 8
+
+        collections = (
+            self.templates.node_templates_scaled,
+            self.templates.modifier_templates_scaled,
+        )
+
+        for collection in collections:
+            for name, template_data in sorted(collection.items()):
+                if template_data is None:
+                    continue
+
+                gray, mask, bgr, mask_idx = template_data
+
+                if self.threshold_background:
+                    template = cv2.cvtColor(
+                        threshold_gray(gray, TEMPLATE_LEVELS),
+                        cv2.COLOR_GRAY2BGR,
+                    )
+                    template[mask == 0] = img[0, 0]
+                else:
+                    template = bgr.copy()
+
+                h, w = template.shape[:2]
+
+                if y + h > img.shape[0]:
+                    return img
+
+                roi = img[y:y + h, x:x + w]
+                roi[mask > 0] = template[mask > 0]
+
+                y += h + gap
+
+        return img
+
     def render(self):
         img = self.base_img.copy()
+
+        if self.threshold_background:
+            img = self._draw_threshold_background(img)
 
         if self.dim_background:
             img = (img.astype(np.float32) * 0.6).astype(np.uint8)
@@ -315,6 +372,9 @@ class UnifiedPreview:
         if self.draw_mod_assign_range:
             img = self._draw_mod_assign_range(img)
 
+        if self.draw_template_images:
+            img = self._draw_templates(img)
+
         return img
 
     def apply_settings(self):
@@ -324,6 +384,8 @@ class UnifiedPreview:
         self.draw_fringe_marks = Settings.preview_draw_fringe_marks
         self.draw_node_icons = Settings.preview_draw_node_icons
         self.draw_trim_overlay = Settings.preview_draw_trim_overlay
+        self.threshold_background = Settings.preview_threshold_background
+        self.draw_template_images = Settings.preview_draw_template_images
 
     def save(self, filename):
         cv2.imwrite(filename, self.render())
