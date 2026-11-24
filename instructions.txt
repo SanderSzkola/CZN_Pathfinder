@@ -18,7 +18,7 @@ Instructions:
 	Press Recalibrate button. It will mark every visible node with detected type, as in "NO" for NOrmal fight, or "RESH" for REst with a SHop.
 	Check Help tab, it contains explanations for all labels.
 	Confirm that every node has appropriate label. Default setting should be good in most cases.
-	If labels are missing, try lowering threshold, press recalibrate and check again. If there are too many labels, raise it.
+	If labels are missing, try increasing threshold, press recalibrate and check again. If there are too many labels, lower it.
     If that does not work, try modifying template scale value. It is calculated to match game window's size, so it should not be tweaked too far from initial value.
 Check Help tab for more instructions, Overlays to draw preview in different way, or Folders to load map fragment image from chosen folder.
 

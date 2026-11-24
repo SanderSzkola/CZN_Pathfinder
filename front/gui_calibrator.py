@@ -255,7 +255,7 @@ class CalibrationPanel(tb.Toplevel):
 
         tb.Label(
             grid,
-            text="How accurate a valid match should be. Too high and it skips nodes, too low and it hallucinates them.",
+            text="How lenient a valid match should be. Too low and it skips nodes, too high and it hallucinates them.",
             wraplength=self.right_panel_width - 40,
             justify="left",
             style="info"
@@ -373,7 +373,7 @@ class CalibrationPanel(tb.Toplevel):
             "icons": tk.BooleanVar(value=Settings.preview_draw_node_icons),
             "trim": tk.BooleanVar(value=Settings.preview_draw_trim_overlay),
             "thresh_background": tk.BooleanVar(value=Settings.preview_threshold_background),
-            "templates": tk.BooleanVar(value=Settings.preview_threshold_background),
+            "templates": tk.BooleanVar(value=Settings.preview_draw_template_images),
         }
 
         preview_box = tb.Labelframe(
@@ -474,7 +474,7 @@ class CalibrationPanel(tb.Toplevel):
         help_text = (
             "General workflow:\n"
             "1. Open calibration panel, optionally select saved folder and image.\n"
-            "2. Lower THRESHOLD a few times until all nodes are labeled.\n"
+            "2. Raise THRESHOLD a few times until all nodes are labeled.\n"
             "3. If some node refuses to be labeled, try changing TEMPLATE SCALE.\n"
             "4. Confirm that every existing path between labeled nodes is highlighted.\n"
             "\n"
@@ -483,8 +483,8 @@ class CalibrationPanel(tb.Toplevel):
             "\n"
             "Tips:\n"
             "- Template scale is resolution-dependent; initial values are usually close.\n"
-            "- If nodes are missing, lower the threshold. Lowering it too much may affect performance. \n"
-            "- If extra modifiers appear, increase the threshold.\n"
+            "- If nodes are missing, raise the threshold. Raising it too much may affect performance. \n"
+            "- If extra modifiers appear, lower the threshold.\n"
             "- Yellow crossed area is excluded from detection due to game's ui elements potentially overlapping with nodes.\n"
             "- Blue crossed area is a safety margin, nodes located there are hard to read, so they are discarded, marked by X."
             " Modifiers are processed normally.\n"
