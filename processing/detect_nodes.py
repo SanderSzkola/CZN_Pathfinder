@@ -90,15 +90,14 @@ def _verify_template_color(
 
 
 def threshold_gray(gray_image, levels, screenshot_index=-1):
-    height = gray_image.shape[0]
+    height, width = gray_image.shape
     grayscale_values = gray_image.astype(np.int16)
 
-    threshold_adjustment = np.zeros((height, 1), dtype=np.int16)
+    threshold_adjustment = np.zeros((height, width), dtype=np.int16)
     if height > 100:  # image only, templates are smaller
-        threshold_adjustment[int(height * 0.75):] += -20  # counter image darkening at the bottom
+        threshold_adjustment[int(height * 0.75):, :] -= 20  # counter image darkening at the bottom
         if screenshot_index == 0:
-            width = gray_image.shape[1]
-            threshold_adjustment[:int(width * 0.3)] += 40  # counter glow beam
+            threshold_adjustment[:int(height * 0.75), :int(width * 0.3)] += 40  # counter glow beam
 
     conditions = [
         grayscale_values > (threshold + threshold_adjustment)
@@ -153,7 +152,7 @@ def _trim_map(map_image, trim):
     return grayscale_region, color_region
 
 
-def _get_active_templates(templates):
+def get_active_templates(templates):
     # look only for active mods
     active_node_types = set()
     active_modifier_types = set()
@@ -415,7 +414,7 @@ def detect_nodes(
 
     trim = get_trim(screenshot_scale, templates.last_scale)
     screenshot_gray, screenshot_bgr = _trim_map(screenshot, trim)
-    node_templates, modifier_templates = _get_active_templates(templates)
+    node_templates, modifier_templates = get_active_templates(templates)
 
     node_candidates = _detect_templates(
         screenshot_gray,

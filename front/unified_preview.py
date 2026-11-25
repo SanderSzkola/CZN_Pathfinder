@@ -4,7 +4,7 @@ import numpy as np
 
 from data.settings import Settings
 from processing.detect_connections import load_icon_map
-from processing.detect_nodes import get_trim, threshold_gray, TEMPLATE_LEVELS, IMAGE_LEVELS
+from processing.detect_nodes import get_trim, threshold_gray, get_active_templates, TEMPLATE_LEVELS, IMAGE_LEVELS
 
 CORRIDOR_ALPHA = 0.07
 
@@ -308,13 +308,15 @@ class UnifiedPreview:
         if self.templates is None:
             return img
 
+        node_templates, modifier_templates = get_active_templates(self.templates)
         x = 10
         y = 10
-        gap = 8
+        gap = 4
+        scale = 2.0
 
         collections = (
-            self.templates.node_templates_scaled,
-            self.templates.modifier_templates_scaled,
+            node_templates,
+            modifier_templates,
         )
 
         for collection in collections:
@@ -333,9 +335,18 @@ class UnifiedPreview:
                 else:
                     template = bgr.copy()
 
+                template = cv2.resize(
+                    template, None, fx=scale, fy=scale,
+                    interpolation=cv2.INTER_NEAREST,
+                )
+                mask = cv2.resize(
+                    mask, None, fx=scale, fy=scale,
+                    interpolation=cv2.INTER_NEAREST,
+                )
+
                 h, w = template.shape[:2]
 
-                if y + h > img.shape[0]:
+                if y + h > img.shape[0] or x + w > img.shape[1]:
                     return img
 
                 roi = img[y:y + h, x:x + w]

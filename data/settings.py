@@ -27,7 +27,7 @@ class Settings:
     preview_draw_fringe_marks: bool = True
     preview_draw_trim_overlay: bool = True
     preview_threshold_background:bool = False
-    preview_draw_template_images:bool = False
+    preview_draw_template_images:bool = True
 
     # ui
     darkmode: bool = True

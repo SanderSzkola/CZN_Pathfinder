@@ -6,6 +6,7 @@ import numpy as np
 from pathlib import Path
 import cv2
 
+from data.score_table import ScoreTable
 from data.settings import Settings
 from front.grabber import mock_screenshot
 from front.unified_preview import UnifiedPreview
@@ -188,6 +189,10 @@ class CalibrationPanel(tb.Toplevel):
 
         row += 1
 
+        tb.Label(grid, text=f"Active season: {ScoreTable.active_season}", anchor="w", width=16) \
+            .grid(row=row, column=0, padx=(5, 0), pady=2, sticky="w")
+        row += 1
+
         # ----------------------------
         # Resolution
         # ----------------------------
@@ -276,7 +281,7 @@ class CalibrationPanel(tb.Toplevel):
 
         tb.Label(
             grid,
-            text="Tweak TEMPLATE SCALE and THRESHOLD until every node and modifier is correctly labeled."
+            text="Tweak TEMPLATE SCALE and THRESHOLD until every node \nand modifier is correctly labeled."
                  "\nInitial values are likely close to ideal ones.",
             wraplength=self.right_panel_width - 40,
             justify="left",
