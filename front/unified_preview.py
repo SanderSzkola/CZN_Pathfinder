@@ -4,9 +4,11 @@ import numpy as np
 
 from data.settings import Settings
 from processing.detect_connections import load_icon_map
-from processing.detect_nodes import get_trim, threshold_gray, get_active_templates, TEMPLATE_LEVELS, IMAGE_LEVELS
+from processing.detect_nodes import get_trim, threshold_gray, get_active_templates, TEMPLATE_LEVELS, IMAGE_LEVELS, \
+    THRESH_TOP_PERCENT, THRESH_LEFT_PERCENT
 
 CORRIDOR_ALPHA = 0.07
+
 
 class UnifiedPreview:
     def __init__(self, base_img, templates=None):
@@ -22,6 +24,7 @@ class UnifiedPreview:
         self.draw_trim_overlay = False
         self.draw_mod_assign_range = False
         self.threshold_background = False
+        self.draw_threshold_guides = False
         self.draw_template_images = False
 
         self.nodes = []
@@ -29,6 +32,7 @@ class UnifiedPreview:
         self.corridor_debug = []
         self._icon_map = None
         self.templates = templates
+        self.screenshot_index_for_antiglow = -1
 
     def set_nodes(self, nodes):
         self.nodes = nodes
@@ -297,12 +301,24 @@ class UnifiedPreview:
     def _threshold_image(self, img, levels):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         return cv2.cvtColor(
-            threshold_gray(gray, levels, 0),
+            threshold_gray(gray, levels, self.screenshot_index_for_antiglow),
             cv2.COLOR_GRAY2BGR,
         )
 
     def _draw_threshold_background(self, img):
         return self._threshold_image(img, IMAGE_LEVELS)
+
+    def _draw_threshold_guides(self, img):
+        h, w = img.shape[:2]
+        color = (0, 165, 255)
+        thickness = 5
+
+        y = min(h - 1, max(0, int(round(h * THRESH_TOP_PERCENT))))
+        x = min(w - 1, max(0, int(round(w * THRESH_LEFT_PERCENT))))
+
+        cv2.line(img, (0, y), (w - 1, y), color, thickness, cv2.LINE_AA)
+        cv2.line(img, (x, 0), (x, h - 1), color, thickness, cv2.LINE_AA)
+        return img
 
     def _draw_templates(self, img):
         if self.templates is None:
@@ -383,6 +399,9 @@ class UnifiedPreview:
         if self.draw_mod_assign_range:
             img = self._draw_mod_assign_range(img)
 
+        if self.draw_threshold_guides:
+            img = self._draw_threshold_guides(img)
+
         if self.draw_template_images:
             img = self._draw_templates(img)
 
@@ -396,6 +415,7 @@ class UnifiedPreview:
         self.draw_node_icons = Settings.preview_draw_node_icons
         self.draw_trim_overlay = Settings.preview_draw_trim_overlay
         self.threshold_background = Settings.preview_threshold_background
+        self.draw_threshold_guides = Settings.preview_draw_threshold_guides
         self.draw_template_images = Settings.preview_draw_template_images
 
     def save(self, filename):

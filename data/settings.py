@@ -26,8 +26,9 @@ class Settings:
     preview_draw_node_icons: bool = False
     preview_draw_fringe_marks: bool = True
     preview_draw_trim_overlay: bool = True
-    preview_threshold_background:bool = False
-    preview_draw_template_images:bool = True
+    preview_threshold_background: bool = False
+    preview_draw_threshold_guides: bool = False
+    preview_draw_template_images: bool = True
 
     # ui
     darkmode: bool = True
@@ -43,7 +44,7 @@ class Settings:
     keyboard_input: bool = False
     keyboard_input_autoscanner: str = "s+1"
     keyboard_input_halfautoscanner: str = "s+2"
-    keyboard_input_switch_score:str = "q+1"
+    keyboard_input_switch_score: str = "q+1"
     keyboard_input_fake_map: str = "s+t"
     keyboard_input_fake_map_720: str = "4"
     keyboard_input_fake_map_1080: str = "5"

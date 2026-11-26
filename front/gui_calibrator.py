@@ -1,4 +1,5 @@
 # gui_calibrator.py
+import os.path
 import tkinter as tk
 import ttkbootstrap as tb
 from PIL import Image, ImageTk
@@ -83,6 +84,7 @@ class CalibrationPanel(tb.Toplevel):
         self.scr_original_pil = self._to_pil(scr)
         self.scr_display_pil = self.scr_original_pil.copy()
         self.preview = None
+        self.antiglow = tk.BooleanVar(value=False)
         self.templates = TemplateLibrary()
 
         screenshot_scale, initial_scale, initial_threshold, w, h = get_initial_params(scr)
@@ -100,6 +102,7 @@ class CalibrationPanel(tb.Toplevel):
         self._build_ui()
         self.templates_scale.trace_add("write", self._on_param_change)
         self.threshold.trace_add("write", self._on_param_change)
+        self.antiglow.trace_add("write", self._on_param_change)
         self._reload_preview()
         self._update_map_label()
         self._update_nav_buttons()
@@ -174,6 +177,11 @@ class CalibrationPanel(tb.Toplevel):
         # ----------------------------
         # Auto recalibrate
         # ----------------------------
+
+        tb.Label(grid, text=f"Active season: {ScoreTable.active_season}", anchor="w", width=16) \
+            .grid(row=row, column=0, padx=(5, 0), pady=2, sticky="w")
+        row += 1
+
         tb.Checkbutton(
             grid,
             text="Auto recalibrate on value change",
@@ -183,14 +191,23 @@ class CalibrationPanel(tb.Toplevel):
             column=0,
             columnspan=2,
             padx=10,
-            pady=(0, 10),
+            pady=(0, 2),
             sticky="w"
         )
-
         row += 1
 
-        tb.Label(grid, text=f"Active season: {ScoreTable.active_season}", anchor="w", width=16) \
-            .grid(row=row, column=0, padx=(5, 0), pady=2, sticky="w")
+        tb.Checkbutton(
+            grid,
+            text="Apply anti-glow effect (1st image only)",
+            variable=self.antiglow,
+        ).grid(
+            row=row,
+            column=0,
+            columnspan=2,
+            padx=10,
+            pady=(0, 2),
+            sticky="w"
+        )
         row += 1
 
         # ----------------------------
@@ -307,6 +324,7 @@ class CalibrationPanel(tb.Toplevel):
             recal_row,
             text="<",
             width=3,
+            padding=2,
             command=self._prev_image
         )
         self._btn_prev.pack(side="left", padx=4)
@@ -317,13 +335,14 @@ class CalibrationPanel(tb.Toplevel):
             width=18,
             bootstyle="warning",
             command=self._apply,
-            padding=4
+            padding=2
         ).pack(side="left")
 
         self._btn_next = tb.Button(
             recal_row,
             text=">",
             width=3,
+            padding=2,
             command=self._next_image
         )
         self._btn_next.pack(side="left", padx=4)
@@ -333,16 +352,24 @@ class CalibrationPanel(tb.Toplevel):
             text="Show original",
             width=18,
             command=self._show_original,
-            padding=4
-        ).pack(pady=4)
+            padding=2
+        ).pack(pady=2)
+
+        tb.Button(
+            btns,
+            text="Save",
+            width=18,
+            command=self._save,
+            padding=2
+        ).pack(pady=2)
 
         tb.Button(
             btns,
             text="Close",
             width=18,
             command=self.destroy,
-            padding=4
-        ).pack(pady=4)
+            padding=2
+        ).pack(pady=2)
 
     def _spin_buttons(self, parent, var, step):
         col = tb.Frame(parent)
@@ -378,6 +405,7 @@ class CalibrationPanel(tb.Toplevel):
             "icons": tk.BooleanVar(value=Settings.preview_draw_node_icons),
             "trim": tk.BooleanVar(value=Settings.preview_draw_trim_overlay),
             "thresh_background": tk.BooleanVar(value=Settings.preview_threshold_background),
+            "thresh_guides": tk.BooleanVar(value=Settings.preview_draw_threshold_guides),
             "templates": tk.BooleanVar(value=Settings.preview_draw_template_images),
         }
 
@@ -406,6 +434,7 @@ class CalibrationPanel(tb.Toplevel):
 
         add_cb("Dim background", self._preview_vars["dim"], "preview_dim_background")
         add_cb("Thresh background", self._preview_vars["thresh_background"], "preview_threshold_background")
+        add_cb("Draw thresh guides", self._preview_vars["thresh_guides"], "preview_draw_threshold_guides")
         add_cb("Draw corridors", self._preview_vars["corridors"], "preview_draw_corridors")
         add_cb("Draw node text", self._preview_vars["nodes_text"], "preview_draw_nodes_text")
         add_cb("Draw node icons", self._preview_vars["icons"], "preview_draw_node_icons")
@@ -461,6 +490,7 @@ class CalibrationPanel(tb.Toplevel):
 
         def update_scrollregion(_event=None):
             canvas.configure(scrollregion=canvas.bbox("all"))
+
         def resize_scrollable(event):
             canvas.itemconfigure(scroll_window, width=event.width)
 
@@ -638,6 +668,7 @@ class CalibrationPanel(tb.Toplevel):
         nodes = detect_nodes(
             self.preview.base_img,
             self.templates,
+            screenshot_index=0 if self.antiglow.get() else -1,
             screenshot_scale=self.screenshot_scale,
             threshold=self.threshold.get(),
             filter_fringe=False
@@ -655,6 +686,7 @@ class CalibrationPanel(tb.Toplevel):
         self.preview.set_nodes(nodes)
         self.preview.set_connections(edges, corridor_debug)
         self.preview.apply_settings()
+        self.preview.screenshot_index_for_antiglow = 0 if self.antiglow.get() else -1
 
         self.scr_display_pil = self._to_pil(self.preview.render())
         self._reload_preview()
@@ -746,3 +778,11 @@ class CalibrationPanel(tb.Toplevel):
         state = "normal" if self._from_folder else "disabled"
         self._btn_prev.config(state=state)
         self._btn_next.config(state=state)
+
+    def _save(self):
+        if self.preview is not None:
+            filename = "calibration_preview.png"
+            self.log(f"Image saved to {os.path.join(get_path(), filename)}")
+            self.preview.save(filename)
+        else:
+            self.log("Nothing to save, generate preview first")

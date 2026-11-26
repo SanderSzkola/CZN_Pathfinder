@@ -25,6 +25,8 @@ TEMPLATE_LEVELS = [255, 50, 15]  # purest form of magic numbers, it just worksâ„
 IMAGE_LEVELS = [255, 90, 20]
 SHAPE_GRAY_THRESHOLDS = [180, 130, 80]
 COLOR_MAX_DIFF = 15
+THRESH_TOP_PERCENT = 0.72  # below this % of image height, threshs are lowered, counteracting darkening towards bottom
+THRESH_LEFT_PERCENT = 0.33  # within this % of image width, threshs are penalized, counteracting glow beam
 
 
 # validate shape matches against color channels
@@ -95,9 +97,9 @@ def threshold_gray(gray_image, levels, screenshot_index=-1):
 
     threshold_adjustment = np.zeros((height, width), dtype=np.int16)
     if height > 100:  # image only, templates are smaller
-        threshold_adjustment[int(height * 0.75):, :] -= 20  # counter image darkening at the bottom
+        threshold_adjustment[int(height * THRESH_TOP_PERCENT):, :] -= 20  # counter image darkening at the bottom
         if screenshot_index == 0:
-            threshold_adjustment[:int(height * 0.75), :int(width * 0.3)] += 40  # counter glow beam
+            threshold_adjustment[:int(height * THRESH_TOP_PERCENT), :int(width * THRESH_LEFT_PERCENT)] += 40  # counter glow beam
 
     conditions = [
         grayscale_values > (threshold + threshold_adjustment)
@@ -201,7 +203,7 @@ def _non_max_suppression(points, result_shape, template_width, template_height):
 
 
 def _detect_templates(
-        screenshot_gray,
+        screenshot_thresholded,
         screenshot_bgr,
         templates,
         screenshot_index,
@@ -215,8 +217,6 @@ def _detect_templates(
     glow_passed_count = 0
     color_rejected_count = 0
 
-    thresholded_screenshot = threshold_gray(screenshot_gray, IMAGE_LEVELS, screenshot_index)
-
     for template_name, template in templates.items():
         if template_name.endswith("_glow"):
             continue
@@ -226,7 +226,7 @@ def _detect_templates(
         thresholded_template = threshold_gray(template_gray, TEMPLATE_LEVELS)
 
         match_scores = cv2.matchTemplate(
-            thresholded_screenshot,
+            screenshot_thresholded,
             thresholded_template,
             cv2.TM_SQDIFF_NORMED,
             mask=mask,
@@ -414,10 +414,11 @@ def detect_nodes(
 
     trim = get_trim(screenshot_scale, templates.last_scale)
     screenshot_gray, screenshot_bgr = _trim_map(screenshot, trim)
+    screenshot_thresholded = threshold_gray(screenshot_gray, IMAGE_LEVELS, screenshot_index)
     node_templates, modifier_templates = get_active_templates(templates)
 
     node_candidates = _detect_templates(
-        screenshot_gray,
+        screenshot_thresholded,
         screenshot_bgr,
         node_templates,
         screenshot_index,
@@ -432,7 +433,7 @@ def detect_nodes(
 
     # detect modifiers
     modifier_candidates = _detect_templates(
-        screenshot_gray,
+        screenshot_thresholded,
         screenshot_bgr,
         modifier_templates,
         screenshot_index,
